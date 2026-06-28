@@ -765,13 +765,15 @@ async function refreshTrapsAvailable() {
 // Mirrors the study walkthrough pattern: snapshot → fetch → set state →
 // view-only board → lazy per-step eval (guarded by studyEvalToken) → restore.
 
-// Build the trap step model from a full trap object (first variation).
-// Returns { id, name, mainLine, startFen, step, fens, lastUcis }.
+// Build the trap step model from a full trap object + a chosen variation index.
+// Returns { id, name, mainLine, startFen, step, fens, lastUcis, color, engineNote,
+//   raw, variations, variationIndex }.
 // fens[0] = startFen; fens[k] = FEN after replaying the first k UCIs from startFen.
 // lastUcis[k] = UCI of the move that led into fens[k] (undefined for k=0).
-function buildTrap(trapData) {
-  const variation = trapData.variations[0];
-  const mainLine = variation.mainLine;
+function buildTrap(trapData, variationIndex = 0) {
+  const variations = trapData.variations;
+  const idx = Math.max(0, Math.min(variationIndex, variations.length - 1));
+  const mainLine = variations[idx].mainLine;
   const startFen = trapData.startFen;
 
   const fens = [startFen];
@@ -793,6 +795,11 @@ function buildTrap(trapData) {
     max: mainLine.length,
     fens,
     lastUcis,
+    color: trapData.color,          // the TRAPPER (the side the user plays)
+    engineNote: trapData.engineNote || '',
+    raw: trapData,                  // kept so the variation picker can rebuild
+    variations,
+    variationIndex: idx,
   };
 }
 
@@ -819,10 +826,7 @@ async function enterTrap(trapId) {
     return;
   }
 
-  trap = buildTrap(trapData);
-  // Carry trap-aware context for practice-mode eval/notes.
-  trap.color = trapData.color;            // the TRAPPER (the side the user plays)
-  trap.engineNote = trapData.engineNote || '';
+  trap = buildTrap(trapData, 0);
   state.mode = 'trap-watch';
 
   // Show trap bar, hide play controls (same body-class pattern as study-mode).
@@ -830,9 +834,46 @@ async function enterTrap(trapId) {
 
   byId('trap-title').textContent = trap.name;
   byId('trap-mode-toggle').hidden = false; // watch ⇄ practice toggle available
+  populateVariationPicker();               // shows the picker only when >1 variation
   applyTrapModeUI();                       // show watch controls, hide practice ones
 
   goToTrapStep(0);
+}
+
+// Fill the variation <select> from the current trap. Hidden when a trap has only
+// one variation (nothing to choose). Each option's label comes from the data.
+function populateVariationPicker() {
+  const sel = byId('trap-variation');
+  if (!trap || trap.variations.length < 2) {
+    sel.hidden = true;
+    sel.innerHTML = '';
+    return;
+  }
+  sel.innerHTML = '';
+  trap.variations.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = v.label || `Variation ${i + 1}`;
+    sel.appendChild(opt);
+  });
+  sel.value = String(trap.variationIndex);
+  sel.hidden = false;
+}
+
+// Switch to a different variation of the SAME trap. Rebuilds from the raw data,
+// resets to step 0, and re-enters the current sub-mode (watch or practice) so the
+// played/unplayed boundary is unambiguous — same rule as the watch⇄practice toggle.
+function selectTrapVariation(index) {
+  if (!trap) return;
+  const wasPractice = state.mode === 'trap-practice';
+  trap = buildTrap(trap.raw, index);
+  byId('trap-variation').value = String(trap.variationIndex);
+  byId('trap-feedback').textContent = '';
+  if (wasPractice) {
+    startPractice();
+  } else {
+    goToTrapStep(0);
+  }
 }
 
 // Toggle the visible body class + controls for the active trap sub-mode.
@@ -964,7 +1005,10 @@ function renderTrapStep() {
 // only ensure both are cleared when the bar is hidden (on exit).
 function showTrapUI(on) {
   byId('trap-bar').hidden = !on;
-  if (!on) {
+  if (on) {
+    // Entering a trap: the play-mode "trap available" chip no longer applies.
+    byId('trap-chip').hidden = true;
+  } else {
     document.body.classList.remove('trap-watch-mode', 'trap-practice-mode');
   }
 }
@@ -1170,6 +1214,30 @@ function revealTrapMove() {
   setTrapFeedback(ply.note ? `${ply.san} — ${ply.note}` : `The move was ${ply.san}.`, 'good');
   renderPracticeNote();
   advancePractice();
+}
+
+// Take back: rewind to the user's PREVIOUS decision — undo their last move AND
+// the opponent's auto-reply, landing on the prior trapper ply so they can re-try.
+// Skips victim-only states so nothing auto-replays forward. No-op if there is no
+// earlier trapper move (already at the first decision).
+function trapBack() {
+  if (state.mode !== 'trap-practice' || !trap) return;
+  // Find the nearest trapper ply strictly before the current step.
+  let prev = -1;
+  for (let i = trap.step - 1; i >= 0; i--) {
+    if (trap.mainLine[i].side === 'trapper') { prev = i; break; }
+  }
+  if (prev < 0) {
+    setTrapFeedback('Already at the first move.', null);
+    return;
+  }
+  // Bump the eval/auto-play guard token so any in-flight victim timer (its
+  // stepAtSchedule will no longer match) and any stale eval are discarded.
+  studyEvalToken++;
+  trap.step = prev;
+  setTrapInteractive();          // re-arm the trapper's move at the prior position
+  renderPracticeNote();
+  setTrapFeedback('Took back your last move — try again.', null);
 }
 
 // Show-refutation: read-only preview of what the victim SHOULD have played
@@ -1426,6 +1494,8 @@ function init() {
 
   // Trap bar: practice-mode controls (TT6).
   byId('trap-mode-toggle').addEventListener('click', toggleTrapMode);
+  byId('trap-variation').addEventListener('change', (e) => selectTrapVariation(Number(e.target.value)));
+  byId('trap-back').addEventListener('click', trapBack);
   byId('trap-reveal-move').addEventListener('click', revealTrapMove);
   byId('trap-show-refutation').addEventListener('click', showTrapRefutation);
 
