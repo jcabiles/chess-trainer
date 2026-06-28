@@ -9,6 +9,9 @@ colors** freely, jump to any position by FEN, and get **live Stockfish feedback*
 All open-source, free, and local-first. No accounts. Runtime API calls stay on
 your machine; the page may fetch pinned frontend assets from a CDN on first load.
 
+![Stockfish Analysis Board — board with live evaluation, best line, opening
+repertoire tree, and trap catalog](docs/screenshot.png)
+
 ## Stack
 - **Backend:** FastAPI + Uvicorn, [python-chess](https://python-chess.readthedocs.io/) (engine driver + rules)
 - **Engine:** [Stockfish](https://stockfishchess.org/) (installed separately)
