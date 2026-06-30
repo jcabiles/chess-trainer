@@ -24,10 +24,15 @@ class FakeEngine:
     Returns a fixed, even evaluation regardless of position. That is enough to
     exercise the route wiring + response shapes; the *correctness* of the
     classification math is covered by tests/test_analysis.py.
+
+    ``analyze_call_count`` is incremented on every call to ``analyze`` so tests
+    can assert the engine was or was not consulted without touching any other
+    part of the fake's contract.
     """
 
     def __init__(self, cp: int = 20):
         self._cp = cp
+        self.analyze_call_count: int = 0
 
     @property
     def is_running(self) -> bool:
@@ -37,6 +42,7 @@ class FakeEngine:
         """No-op restart for test use."""
 
     async def analyze(self, fen: str, depth: int = 18) -> AnalysisResult:
+        self.analyze_call_count += 1
         board = chess.Board(fen)
         score = chess_engine.PovScore(chess_engine.Cp(self._cp), chess.WHITE)
         # Render a plausible best-move SAN from the position's first legal move.
@@ -50,6 +56,7 @@ def client():
     fake = FakeEngine()
     app.dependency_overrides[get_engine] = lambda: fake
     with TestClient(app) as c:
+        c.fake_engine = fake  # type: ignore[attr-defined]  # exposed for call-count assertions
         yield c
     app.dependency_overrides.clear()
 
@@ -170,3 +177,53 @@ def test_move_still_works_after_restart(client):
     body = r.json()
     assert body["legal"] is True
     assert body["lastMoveSan"] == "e4"
+
+
+# --- analyze=false flag ----------------------------------------------------
+
+# Use an endgame FEN (pawn promotion position) that is guaranteed to be outside
+# any opening book, so the book fast-path never fires and the new `analyze`
+# flag is the sole reason the engine is skipped.
+_ENDGAME_FEN = "8/4P3/8/8/8/8/k7/4K3 w - - 0 1"
+_ENDGAME_MOVE = "e7e8q"  # legal pawn promotion
+
+
+def test_move_analyze_false_skips_engine(client):
+    """POST /api/move with analyze:false must return legal move data but null
+    analysis, and must NOT call the engine at all.
+    """
+    calls_before = client.fake_engine.analyze_call_count
+    r = client.post(
+        "/api/move",
+        json={"fen": _ENDGAME_FEN, "move": _ENDGAME_MOVE, "analyze": False},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["legal"] is True
+    assert body["analysis"] is None
+    assert body["fen"] is not None
+    assert body["lastMoveSan"] is not None
+    # Engine must not have been called at all during this request.
+    assert client.fake_engine.analyze_call_count == calls_before
+
+
+def test_move_analyze_omitted_still_analyzes(client):
+    """When `analyze` is omitted the default (True) applies: analysis is present
+    and quality is labelled — identical to the existing happy-path behaviour.
+    """
+    r = client.post(
+        "/api/move",
+        json={"fen": _ENDGAME_FEN, "move": _ENDGAME_MOVE},
+        # `analyze` intentionally absent → server default True
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["legal"] is True
+    assert body["fen"] is not None
+    assert body["lastMoveSan"] is not None
+    assert body["analysis"] is not None
+    assert body["analysis"]["quality"] in {
+        "best", "good", "inaccuracy", "mistake", "blunder"
+    }
+    # Engine must have been called (before + after = 2 calls for this request).
+    assert client.fake_engine.analyze_call_count >= 2

@@ -750,6 +750,39 @@ body.trap-practice-mode #fen-error { display: none; }
 }
 
 /* ============================================================
+   Analyze color row (evaluate color selector)
+   ============================================================ */
+
+.analyze-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+}
+
+.analyze-color-select {
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.analyze-color-select:hover {
+  border-color: var(--accent);
+}
+
+.analyze-color-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* ============================================================
    Trap bar (drill study bar — stays in board column)
    ============================================================ */
 

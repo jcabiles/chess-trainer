@@ -22,8 +22,9 @@ import { Chess } from 'https://esm.sh/chessops@0.14.2/chess';
 import { parseFen, makeFen, INITIAL_FEN } from 'https://esm.sh/chessops@0.14.2/fen';
 import { chessgroundDests } from 'https://esm.sh/chessops@0.14.2/compat';
 import { parseSquare, parseUci } from 'https://esm.sh/chessops@0.14.2/util';
-import { initPanel, renderAnalysisPanel, renderBookMovePanel } from './panel.js';
+import { initPanel, renderAnalysisPanel, renderBookMovePanel, renderSkippedPanel } from './panel.js';
 import { formatEval } from './format.js';
+import { readUiPrefs, writeUiPref } from './prefs.js';
 import { initMovelist } from './movelist.js';
 import { initFeedback } from './feedback.js';
 import { initShortcuts } from './shortcuts.js';
@@ -75,6 +76,19 @@ let reviewSnapshot = null; // saved play state captured when entering review mod
 let analysisInFlight = false; // true while a refreshAnalysis fetch is in progress
 let analysisPending = false;  // true if another refresh was requested while in-flight
 let analysisToken = 0;        // monotonic counter; stale responses are dropped
+// Analyze-my-color preference: 'both' | 'white' | 'black'
+let analyzeColor = (readUiPrefs().analyzeColor) || 'both';
+
+function shouldAnalyzeMove(moverColor) {
+  return analyzeColor === 'both' || moverColor === analyzeColor;
+}
+
+function shouldAnalyzeCursor(cursor) {
+  if (analyzeColor === 'both') return true;
+  if (cursor === 0) return true; // cursor 0 EXEMPT — always show opening eval
+  const before = positionAt(cursor - 1);
+  return before.pos.turn === analyzeColor;
+}
 
 const byId = (id) => document.getElementById(id);
 
@@ -338,6 +352,7 @@ async function refreshAnalysis() {
   emit('analysis:start');
   setStatus('Analyzing…');
   try {
+    if (!shouldAnalyzeCursor(state.cursor)) { renderSkipped(); setStatus(''); emit('analysis:end'); return; }
     if (state.cursor === 0) {
       const data = await postJSON('/api/analyze', { fen: state.baseFen });
       if (myToken !== analysisToken) { emit('analysis:end'); return; } // stale — drop
@@ -395,11 +410,13 @@ async function onUserMove(orig, dest) {
   }
   const uci = orig + dest + promo;
   const fenBefore = fenOf(before.pos);
+  const moverColor = before.pos.turn;
+  const doAnalyze = shouldAnalyzeMove(moverColor);
 
   setStatus('Analyzing…');
   let data;
   try {
-    data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true });
+    data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true, analyze: doAnalyze });
   } catch (err) {
     setStatus(err.message, true);
     syncBoard();
@@ -418,11 +435,11 @@ async function onUserMove(orig, dest) {
   // Index-assign (not push): if moveQuality is shorter than the history — e.g. after a
   // restore/jump where prior moves have no recorded quality — this still lands the new
   // move's quality at the correct index (gaps stay undefined → render neutral).
-  state.moveQuality[state.cursor] = data.book ? 'book' : ((data.analysis && data.analysis.quality) || null);
+  state.moveQuality[state.cursor] = data.book ? 'book' : (doAnalyze ? ((data.analysis && data.analysis.quality) || null) : null);
   state.cursor += 1;
 
   syncBoard();
-  applyMoveResponse(data);
+  if (doAnalyze) applyMoveResponse(data); else renderSkipped();
   setStatus('');
   persist();
   refreshOpeningThenTraps(); // fire-and-forget: opening then traps check, sequential
@@ -474,6 +491,12 @@ function renderAnalysis(a, opts = {}) {
 // Delegates to the panel module — this wrapper keeps internal call sites stable.
 function renderBookMove(data) {
   renderBookMovePanel(data);
+}
+
+// Opponent's move was skipped per analyze-color preference — show neutral panel.
+// Delegates to the panel module — this wrapper keeps internal call sites stable.
+function renderSkipped() {
+  renderSkippedPanel();
 }
 
 // Render a play-mode /api/move response: a book move shows the badge (no engine
@@ -2021,6 +2044,17 @@ function init() {
         engineRestartBtn.disabled = false;
         engineRestartBtn.classList.remove('is-busy');
       }
+    });
+  }
+
+  // Analyze-my-color selector
+  const analyzeColorEl = byId('analyze-color');
+  if (analyzeColorEl) {
+    analyzeColorEl.value = analyzeColor;
+    analyzeColorEl.addEventListener('change', () => {
+      analyzeColor = analyzeColorEl.value;
+      writeUiPref('analyzeColor', analyzeColor);
+      refreshAnalysis();
     });
   }
 

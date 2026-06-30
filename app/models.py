@@ -89,6 +89,12 @@ class MoveRequest(BaseModel):
         "analysis=None. Only the play-mode client sets this; default False keeps "
         "every other caller (e.g. trap practice) on full analysis.",
     )
+    analyze: bool = Field(
+        default=True,
+        description="When false, skip engine analysis (e.g. to skip analysis for "
+        "the opponent's move). The move is still validated for legality. "
+        "Default True preserves current behavior.",
+    )
 
 
 class AnalyzeRequest(BaseModel):

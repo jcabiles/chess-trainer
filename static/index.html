@@ -170,6 +170,15 @@
         <div id="analysis-status" class="analysis-status"></div>
         <button id="engine-restart-btn" class="engine-restart-btn" type="button" title="Restart the Stockfish engine (keeps your game)">Restart engine</button>
 
+        <label class="analyze-color-row">
+          <span class="eval-label">Evaluate</span>
+          <select id="analyze-color" class="analyze-color-select">
+            <option value="both">Both colors</option>
+            <option value="white">White only</option>
+            <option value="black">Black only</option>
+          </select>
+        </label>
+
         <div class="eval-block">
           <div class="eval-label">Evaluation</div>
           <div id="eval" class="eval">—</div>

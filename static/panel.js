@@ -1,6 +1,6 @@
 // panel.js — Analysis panel rendering module.
 // Receives all dependencies via the injected `api` argument (no imports from app.js).
-// Exports: initPanel(api), renderAnalysisPanel(analysis, opts), renderBookMovePanel(data)
+// Exports: initPanel(api), renderAnalysisPanel(analysis, opts), renderBookMovePanel(data), renderSkippedPanel()
 
 import { formatEval } from './format.js';
 
@@ -84,10 +84,10 @@ function buildPvFragment(pvSan, fullMove, isWhite, depth) {
     // Prefix: move number + dot/ellipsis
     let prefix = '';
     if (curWhite) {
-      prefix = `${curMove}. `;
+      prefix = `${curMove}. `;
     } else if (idx === 0) {
       // Black to move on first PV token: show "N…"
-      prefix = `${curMove}… `;
+      prefix = `${curMove}… `;
     }
     // Subsequent black moves get no prefix (number already shown for White's ply above)
 
@@ -117,7 +117,7 @@ function buildPvFragment(pvSan, fullMove, isWhite, depth) {
   if (depth != null && depth > 0) {
     const cap = document.createElement('span');
     cap.className = 'pv-depth';
-    cap.textContent = `  depth ${depth}`;
+    cap.textContent = `  depth ${depth}`;
     frag.appendChild(cap);
   }
 
@@ -272,6 +272,35 @@ export function renderBookMovePanel(data) {
     label.className = 'quality-label';
     const name = data && data.openingName;
     label.textContent = name ? `Book Move · ${name}` : 'Book Move';
+    qEl.appendChild(label);
+  }
+
+  const bmEl = byId('best-move');
+  if (bmEl) bmEl.textContent = '—';
+
+  const pvEl = byId('pv');
+  if (pvEl) pvEl.textContent = '—';
+}
+
+// ---------------------------------------------------------------------------
+// renderSkippedPanel — skipped evaluation: opponent's move with eval skipped.
+// No engine eval/best/PV. Shows calm "Not evaluated" badge in quality slot.
+// Resets eval bar to neutral 50%.
+// ---------------------------------------------------------------------------
+export function renderSkippedPanel() {
+  // Eval bar → neutral
+  setEvalBar(50);
+
+  const evalEl = byId('eval');
+  if (evalEl) evalEl.textContent = '—';
+
+  const qEl = byId('quality');
+  if (qEl) {
+    qEl.className = 'quality';
+    qEl.textContent = '';
+    const label = document.createElement('span');
+    label.className = 'quality-label';
+    label.textContent = 'Not evaluated · opponent\'s move';
     qEl.appendChild(label);
   }
 

@@ -302,6 +302,17 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
             openingEco=opening["eco"] if opening else None,
         )
 
+    # Caller opted out of engine analysis (e.g. skipping the opponent's move):
+    # legality is already validated and the move is not in book — return without
+    # touching the engine.
+    if not req.analyze:
+        return MoveResponse(
+            legal=True,
+            fen=fen_after,
+            lastMoveSan=last_move_san,
+            analysis=None,
+        )
+
     review.note_interactive_start()
     try:
         before = await engine.analyze(fen_before)

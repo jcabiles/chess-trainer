@@ -7,22 +7,9 @@ import { Chess } from 'https://esm.sh/chessops@0.14.2/chess';
 import { parseFen } from 'https://esm.sh/chessops@0.14.2/fen';
 import { parseUci } from 'https://esm.sh/chessops@0.14.2/util';
 import { makeSanAndPlay } from 'https://esm.sh/chessops@0.14.2/san';
+import { readUiPrefs, writeUiPref } from './prefs.js';
 
 const byId = (id) => document.getElementById(id);
-
-const UI_PREFS_KEY = 'chess-training:ui:v1';
-
-function readUiPrefs() {
-  try { return JSON.parse(localStorage.getItem(UI_PREFS_KEY) || '{}') || {}; } catch (_) { return {}; }
-}
-
-function writeUiPref(key, val) {
-  try {
-    const prefs = readUiPrefs();
-    prefs[key] = val;
-    localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
-  } catch (_) { /* best-effort */ }
-}
 
 let _api = null;
 
