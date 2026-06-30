@@ -50,6 +50,7 @@ class OpeningsIndex:
 
 # Module-level singleton —initialised to an empty index so imports never raise.
 _index: OpeningsIndex = OpeningsIndex()
+_loaded_dir: Optional[str] = None  # resolved dir the current non-empty _index was built from
 
 
 # ---------------------------------------------------------------------------
@@ -162,10 +163,14 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
     This function is import-safe: if the directory is missing or empty, it
     logs one warning and returns an empty index without raising.
     """
-    global _index
+    global _index, _loaded_dir
 
     if data_dir is None:
         data_dir = os.environ.get("OPENINGS_DATA_DIR", "data/openings")
+
+    cache_key = str(Path(data_dir).resolve())
+    if _loaded_dir == cache_key and not _index.empty:
+        return _index
 
     dir_path = Path(data_dir)
     if not dir_path.is_dir():
@@ -174,6 +179,7 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
             dir_path,
         )
         _index = OpeningsIndex()
+        _loaded_dir = None
         return _index
 
     # Collect rows from all TSVs in the directory, sorted for determinism.
@@ -190,6 +196,7 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
             dir_path,
         )
         _index = OpeningsIndex()
+        _loaded_dir = None
         return _index
 
     # Build name_by_epd: each EPD along every line maps to its opening name, with
@@ -214,6 +221,7 @@ def load(data_dir: Optional[str] = None) -> OpeningsIndex:
                 name_by_epd[epd] = (row["eco"], row["name"])
 
     _index = OpeningsIndex(name_by_epd=name_by_epd, lines=lines)
+    _loaded_dir = cache_key
     logger.info("openings: loaded %d lines from '%s'", n_lines, dir_path)
     return _index
 
