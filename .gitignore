@@ -28,3 +28,7 @@ setup-mode.png
 # Local dev-server runtime (managed by scripts/serve.sh)
 .server.pid
 .server.log
+
+# Game-review feature: user data (never commit)
+data/games.db
+data/games/
