@@ -17,6 +17,7 @@ The server is stateless per request: move history / undo lives client-side.
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -90,11 +91,17 @@ GAMES_DIR = BASE_DIR / "data" / "games"
 async def lifespan(app: FastAPI):
     engine = StockfishEngine()
     app.state.engine = engine
-    try:
-        engine.start()
-        logger.info("Stockfish engine started.")
-    except EngineUnavailable as exc:
-        logger.warning("Stockfish unavailable at startup: %s", exc)
+    if os.environ.get("CHESS_SKIP_ENGINE_AUTOSTART"):
+        # Tests set this so each TestClient lifespan doesn't spawn a real Stockfish
+        # (they inject fake engines via dependency_overrides). Real-engine tests start
+        # their own engine directly and are unaffected. Never set in production.
+        logger.info("Engine autostart skipped (CHESS_SKIP_ENGINE_AUTOSTART set).")
+    else:
+        try:
+            engine.start()
+            logger.info("Stockfish engine started.")
+        except EngineUnavailable as exc:
+            logger.warning("Stockfish unavailable at startup: %s", exc)
 
     # Opening name detection + traps + repertoire (all degrade gracefully if absent).
     openings.init(str(OPENINGS_DIR))

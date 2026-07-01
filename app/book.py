@@ -47,6 +47,7 @@ class BookIndex:
 # Module-level singleton — initialised empty so imports never raise and a missing
 # config simply means "nothing is ever in book" (degrade to today's behavior).
 _index: BookIndex = BookIndex()
+_cache_sig = None  # signature of the inputs the current non-empty _index was built from
 
 
 # ---------------------------------------------------------------------------
@@ -132,10 +133,18 @@ def load(
         missing/invalid config yields an empty index (the fast-path simply never
         fires) without raising.
     """
-    global _index
+    global _index, _cache_sig
+
+    lines_list = [tuple(line) for line in lines]
+    traps_list = [tuple(t) for t in trap_ucis]
+    resolved_cfg = str(config_path if config_path is not None else os.environ.get("BOOK_FILE", "data/book.json"))
+    sig = (resolved_cfg, len(lines_list), len(traps_list), hash(tuple(lines_list)), hash(tuple(traps_list)))
+    if sig == _cache_sig and not _index.empty:
+        return _index
 
     cfg = _read_config(config_path)
     if not cfg:
+        _cache_sig = None
         _index = BookIndex()
         return _index
 
@@ -147,8 +156,7 @@ def load(
 
     # 1. Lichess DB lines, scoped by first move.
     n_db = 0
-    for uci_line in lines:
-        uci_line = list(uci_line)
+    for uci_line in lines_list:
         if not uci_line:
             continue
         if first_moves and uci_line[0] not in first_moves:
@@ -161,8 +169,8 @@ def load(
     # 2. Trap mainlines (already full from the start).
     n_trap = 0
     if include_traps:
-        for uci_line in trap_ucis:
-            epds = _epds_for_uci_line(list(uci_line))
+        for uci_line in traps_list:
+            epds = _epds_for_uci_line(uci_line)
             if epds:
                 book_epds.update(epds)
                 n_trap += 1
@@ -179,6 +187,7 @@ def load(
             n_extra += 1
 
     _index = BookIndex(book_epds=book_epds)
+    _cache_sig = sig
     logger.info(
         "book: %d positions (db lines=%d, trap lines=%d, extra=%d)",
         len(book_epds), n_db, n_trap, n_extra,
