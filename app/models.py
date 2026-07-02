@@ -14,6 +14,35 @@ from pydantic import BaseModel, Field
 Quality = Literal["best", "good", "inaccuracy", "mistake", "blunder"]
 
 
+class BestLine(BaseModel):
+    """A single ranked engine line (best-first). Used for the 2nd-best move and
+    the retrospective ("what the last mover should have played") entries.
+
+    ``evalCp`` / ``mate`` follow the same White-POV convention as
+    :class:`Analysis` (exactly one is set). ``pvSan`` carries the continuation
+    (populated for the retrospective *best* line; the compact 2nd-best entries
+    render move + eval only and may leave it empty)."""
+
+    moveSan: str | None = Field(
+        default=None, description="This line's first move in SAN; None if unavailable."
+    )
+    moveUci: str | None = Field(
+        default=None, description="This line's first move in UCI; None if unavailable."
+    )
+    pvSan: list[str] = Field(
+        default_factory=list,
+        description="Principal variation for this line, in SAN.",
+    )
+    evalCp: int | None = Field(
+        default=None,
+        description="Eval in centipawns from White's POV; None when a forced mate.",
+    )
+    mate: int | None = Field(
+        default=None,
+        description="Moves-to-mate (signed, White's POV); None when a cp score.",
+    )
+
+
 class Analysis(BaseModel):
     """The single shared analysis shape returned by every endpoint.
 
@@ -54,6 +83,21 @@ class Analysis(BaseModel):
         default=None,
         description="Move-quality label for the move just played; None when there "
         "is no prior move.",
+    )
+    secondLine: BestLine | None = Field(
+        default=None,
+        description="2nd-best line for the resulting (current) position; None when "
+        "the position has a single legal move or was not multipv-analyzed.",
+    )
+    retroBest: BestLine | None = Field(
+        default=None,
+        description="Best move the last mover SHOULD have played, from the position "
+        "before the move (carries its PV); None when there is no prior move.",
+    )
+    retroSecond: BestLine | None = Field(
+        default=None,
+        description="2nd-best line for the retrospective (pre-move) position; None "
+        "when unavailable.",
     )
 
     model_config = {

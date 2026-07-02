@@ -152,3 +152,12 @@ class ScriptedEngine:
 
         lines = _resolve(script_value, fen)
         return lines[:multipv] if multipv < len(lines) else lines
+
+    async def analyze_interactive_multi(
+        self,
+        fen: str,
+        depth: int = DEFAULT_DEPTH,
+        multipv: int = 1,
+    ) -> List[AnalysisResult]:
+        """Interactive multipv — scripted identically to ``analyze_multi``."""
+        return await self.analyze_multi(fen, depth=depth, multipv=multipv)

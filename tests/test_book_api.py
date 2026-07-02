@@ -23,12 +23,20 @@ FIXTURE = "tests/fixtures/book_sample.json"   # firstMoves = ["e2e4"]
 
 
 class BoomEngine:
-    """Any analyze() call means the book fast-path FAILED to skip the engine."""
+    """Any engine call means the book fast-path FAILED to skip the engine."""
 
     def __init__(self) -> None:
         self.calls = 0
 
     async def analyze(self, fen: str, depth: int = 18):
+        self.calls += 1
+        raise EngineUnavailable("engine was called")
+
+    async def analyze_interactive_multi(
+        self, fen: str, depth: int = 18, multipv: int = 1
+    ):
+        # make_move funnels through here now; still a "boom" — proves the book
+        # fast-path skipped the engine when calls stays 0.
         self.calls += 1
         raise EngineUnavailable("engine was called")
 

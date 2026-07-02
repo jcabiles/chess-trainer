@@ -47,6 +47,7 @@ from app.models import (
     AnalyzeRequest,
     AnalyzeResponse,
     AnalyzeStatusResponse,
+    BestLine,
     CoverageDict,
     EngineRestartResponse,
     EngineStatusResponse,
@@ -189,11 +190,45 @@ def get_engine(request: Request) -> StockfishEngine:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def _build_analysis(result: AnalysisResult, quality: str | None = None) -> Analysis:
+def _to_best_line(result: AnalysisResult | None) -> BestLine | None:
+    """Map a raw engine line to the compact :class:`BestLine` shape (White-POV).
+
+    Returns ``None`` when *result* is ``None`` so callers can pass an absent 2nd
+    line / retrospective straight through.
+    """
+    if result is None:
+        return None
+    white = result.score.white()
+    if white.is_mate():
+        eval_cp: int | None = None
+        mate: int | None = white.mate()
+    else:
+        eval_cp = int(white.score())
+        mate = None
+    pv_san = result.pv_san
+    return BestLine(
+        moveSan=pv_san[0] if pv_san else None,
+        moveUci=result.pv[0].uci() if result.pv else None,
+        pvSan=pv_san,
+        evalCp=eval_cp,
+        mate=mate,
+    )
+
+
+def _build_analysis(
+    result: AnalysisResult,
+    quality: str | None = None,
+    second_line: AnalysisResult | None = None,
+    retro_best: AnalysisResult | None = None,
+    retro_second: AnalysisResult | None = None,
+) -> Analysis:
     """Construct the shared ``Analysis`` object from a raw engine result.
 
     ``bestMoveSan`` / ``pvSan`` describe the analyzed (resulting) position;
-    ``quality`` is supplied only when a prior move exists.
+    ``quality`` is supplied only when a prior move exists. ``second_line`` is the
+    2nd-best line for *result*'s position; ``retro_best`` / ``retro_second`` are
+    the best / 2nd-best lines for the position BEFORE the move (what the mover
+    should have played) — all optional and ``None`` when unavailable.
     """
     white = result.score.white()
     if white.is_mate():
@@ -215,6 +250,9 @@ def _build_analysis(result: AnalysisResult, quality: str | None = None) -> Analy
         bestMoveUci=best_move_uci,
         pvSan=pv_san,
         quality=quality,
+        secondLine=_to_best_line(second_line),
+        retroBest=_to_best_line(retro_best),
+        retroSecond=_to_best_line(retro_second),
     )
 
 
@@ -324,12 +362,17 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
 
     review.note_interactive_start()
     try:
-        before = await engine.analyze(fen_before)
-        after = await engine.analyze(fen_after)
+        # multipv=2 surfaces a 2nd-best line for both positions WITHOUT adding an
+        # engine call (still exactly two). before_lines[0] is what the mover should
+        # have played (retrospective); after_lines[0] is the current best (unchanged).
+        before_lines = await engine.analyze_interactive_multi(fen_before, multipv=2)
+        after_lines = await engine.analyze_interactive_multi(fen_after, multipv=2)
     except EngineUnavailable:
         return _engine_unavailable_response()
     finally:
         review.note_interactive_end()
+
+    before, after = before_lines[0], after_lines[0]
 
     quality = classify(
         pov_score_to_white_cp(before.score),
@@ -341,7 +384,13 @@ async def make_move(req: MoveRequest, engine: StockfishEngine = Depends(get_engi
         legal=True,
         fen=fen_after,
         lastMoveSan=last_move_san,
-        analysis=_build_analysis(after, quality=quality),
+        analysis=_build_analysis(
+            after,
+            quality=quality,
+            second_line=after_lines[1] if len(after_lines) > 1 else None,
+            retro_best=before_lines[0],
+            retro_second=before_lines[1] if len(before_lines) > 1 else None,
+        ),
     )
 
 

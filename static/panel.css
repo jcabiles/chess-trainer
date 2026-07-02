@@ -106,3 +106,28 @@
 .best-move {
   color: var(--accent);
 }
+
+/* Retrospective block ("what you should have played") — separated from the
+   current-position best by a subtle divider. */
+.retro-block {
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Move + 2nd-best on one baseline-aligned row. */
+.best-move-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Compact "· or Nf3 (+0.2)" 2nd-best entry. */
+.best-second {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.best-second:empty {
+  display: none;
+}
