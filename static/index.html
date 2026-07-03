@@ -193,8 +193,24 @@
         </div>
 
         <div class="best-block">
-          <div class="eval-label">Best move</div>
-          <div id="best-move" class="best-move">—</div>
+          <!-- Retrospective: the best move the last mover should have played
+               (from the position BEFORE the move). Hidden until a prior move
+               exists; on an opponent's skipped ply it carries over the last
+               own-move's retrospective. -->
+          <div id="retro-block" class="retro-block" hidden>
+            <div class="eval-label" id="retro-label">Your move — best</div>
+            <div class="best-move-row">
+              <span id="retro-best" class="best-move">—</span>
+              <span id="retro-second" class="best-second"></span>
+            </div>
+            <div id="retro-pv" class="pv">—</div>
+          </div>
+          <!-- Current position best -->
+          <div class="eval-label">Best now</div>
+          <div class="best-move-row">
+            <span id="best-move" class="best-move">—</span>
+            <span id="best-second" class="best-second"></span>
+          </div>
           <div class="eval-label">Best line</div>
           <div id="pv" class="pv">—</div>
         </div>

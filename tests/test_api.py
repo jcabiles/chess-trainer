@@ -57,6 +57,23 @@ class FakeEngine:
         pv_san = [board.san(pv[0])] if pv else []
         return AnalysisResult(score=score, pv=pv, pv_san=pv_san, depth=depth)
 
+    async def analyze_interactive_multi(
+        self, fen: str, depth: int = 18, multipv: int = 1
+    ) -> list[AnalysisResult]:
+        # Counts as ONE engine call (like analyze) so call-count assertions hold.
+        self.analyze_call_count += 1
+        board = chess.Board(fen)
+        score = chess_engine.PovScore(chess_engine.Cp(self._cp), chess.WHITE)
+        # Distinct first move per line so a 2nd-best line is testable.
+        moves = list(board.legal_moves)[:multipv]
+        results = [
+            AnalysisResult(score=score, pv=[m], pv_san=[board.san(m)], depth=depth)
+            for m in moves
+        ]
+        return results or [
+            AnalysisResult(score=score, pv=[], pv_san=[], depth=depth)
+        ]
+
 
 @pytest.fixture
 def client():
@@ -112,6 +129,10 @@ def test_analyze_ok(client):
     assert analysis["mate"] is None
     assert analysis["quality"] is None  # no prior move
     assert analysis["bestMoveSan"]
+    # No prior move → no retrospective; single-PV endpoint → no 2nd line.
+    assert analysis["retroBest"] is None
+    assert analysis["retroSecond"] is None
+    assert analysis["secondLine"] is None
 
 
 def test_load_valid(client):
@@ -137,6 +158,37 @@ def test_move_legal_labels_quality(client):
         "best", "good", "inaccuracy", "mistake", "blunder"
     }
     assert body["analysis"]["quality"] == "best"
+
+
+def test_move_includes_retro_and_second(client):
+    """/api/move surfaces the retrospective best + a 2nd-best line for both spots,
+    without changing the top-level (current-position) best move."""
+    r = client.post("/api/move", json={"fen": START_FEN, "move": "e2e4"})
+    assert r.status_code == 200
+    a = r.json()["analysis"]
+    # Retrospective: what the mover (White) should have played, from the BEFORE
+    # position — carries a PV.
+    assert a["retroBest"] is not None
+    assert a["retroBest"]["moveSan"]
+    assert a["retroBest"]["pvSan"]  # non-empty continuation
+    assert a["retroSecond"] is not None
+    assert a["retroSecond"]["moveSan"]
+    # Current position (after e4): a 2nd-best line alongside the unchanged best.
+    assert a["secondLine"] is not None
+    assert a["secondLine"]["moveSan"]
+    assert a["bestMoveSan"]
+
+
+def test_move_forced_move_has_no_second_line(client):
+    """A position with a single legal move → no 2nd-best (len-guard, no crash).
+    White (Ka1) is in check from Ra8 with exactly one escape, Kb1."""
+    fen = "r6k/8/8/8/8/8/7r/K7 w - - 0 1"
+    r = client.post("/api/move", json={"fen": fen, "move": "a1b1"})
+    assert r.status_code == 200
+    a = r.json()["analysis"]
+    # Mover had one legal move → retroBest present, retroSecond absent.
+    assert a["retroBest"] is not None
+    assert a["retroSecond"] is None
 
 
 def test_move_promotion_uci_accepted(client):

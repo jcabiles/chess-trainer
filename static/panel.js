@@ -190,6 +190,77 @@ export function initPanel(api) {
 }
 
 // ---------------------------------------------------------------------------
+// Dual best-move helpers — current 2nd-best + the retrospective block.
+// ---------------------------------------------------------------------------
+
+// Keep the retrospective PV compact ("short PV" per spec): a few plies of context.
+const RETRO_PV_MAX = 6;
+
+// Format a BestLine's eval as " (+0.20)" / " (M+3)", or '' when unavailable.
+// BestLine carries the same {evalCp, mate} White-POV shape formatEval expects.
+function fmtLineEval(line) {
+  const s = formatEval(line);
+  return s === '—' ? '' : ` (${s})`;
+}
+
+// Render a compact "· or Nf3 (+0.2)" 2nd-best entry into `el`; blank when absent.
+function renderSecond(el, line) {
+  if (!el) return;
+  el.textContent = line && line.moveSan ? `· or ${line.moveSan}${fmtLineEval(line)}` : '';
+}
+
+// Render the retrospective block from a BestLine (+ optional 2nd). PV numbering
+// is computed from the position at `pvCursor` (the mover's own turn — a different
+// side-to-move than the current PV). `label` sets the block heading. Hides the
+// whole block when there's no move or `pvCursor` is out of range (guards cursor 0).
+function renderRetroBlock(retroBest, retroSecond, pvCursor, label) {
+  const block = byId('retro-block');
+  if (!block) return;
+  if (!retroBest || !retroBest.moveSan || pvCursor < 0) {
+    block.hidden = true;
+    return;
+  }
+  block.hidden = false;
+
+  const labelEl = byId('retro-label');
+  if (labelEl && label) labelEl.textContent = label;
+
+  const bmEl = byId('retro-best');
+  if (bmEl) bmEl.textContent = retroBest.moveSan;
+
+  renderSecond(byId('retro-second'), retroSecond);
+
+  const pvEl = byId('retro-pv');
+  if (pvEl) {
+    pvEl.textContent = '';
+    const pvSan = (retroBest.pvSan || []).slice(0, RETRO_PV_MAX);
+    if (pvSan.length) {
+      let fullMove = 1;
+      let isWhite = true;
+      const state = _api && _api.actions && _api.actions.getState ? _api.actions.getState() : null;
+      if (state) {
+        const info = fenSideAtCursor(state.baseFen, pvCursor);
+        fullMove = info.fullMove;
+        isWhite = info.isWhite;
+      }
+      pvEl.appendChild(buildPvFragment(pvSan, fullMove, isWhite, null));
+    } else {
+      pvEl.textContent = '—';
+    }
+  }
+}
+
+// Hide/clear ALL new dual-best DOM (retro block + both 2nd-best entries).
+function clearDualBest() {
+  const block = byId('retro-block');
+  if (block) block.hidden = true;
+  const bs = byId('best-second');
+  if (bs) bs.textContent = '';
+  const rs = byId('retro-second');
+  if (rs) rs.textContent = '';
+}
+
+// ---------------------------------------------------------------------------
 // renderAnalysisPanel — main analysis render.
 // `opts.suppressQuality` forces the quality label to '—' regardless of the
 // engine's verdict. Trap practice passes it so a real "Blunder!" on a
@@ -247,6 +318,18 @@ export function renderAnalysisPanel(a, opts = {}) {
       pvEl.textContent = '—';
     }
   }
+
+  // --- Dual best-move extras: current 2nd-best + retrospective block ---
+  // suppressRetro (trap-practice) hides ALL new DOM, leaving today's behavior.
+  if (opts.suppressRetro) {
+    clearDualBest();
+    return;
+  }
+  renderSecond(byId('best-second'), a && a.secondLine);
+  const st = _api && _api.actions && _api.actions.getState ? _api.actions.getState() : null;
+  const cursor = st ? st.cursor : 0;
+  // Retro PV is from the mover's own turn → the position at cursor - 1.
+  renderRetroBlock(a && a.retroBest, a && a.retroSecond, cursor - 1, 'Your move — best');
 }
 
 // ---------------------------------------------------------------------------
@@ -280,14 +363,20 @@ export function renderBookMovePanel(data) {
 
   const pvEl = byId('pv');
   if (pvEl) pvEl.textContent = '—';
+
+  // Book move = no engine analysis → no retrospective / 2nd-best.
+  clearDualBest();
 }
 
 // ---------------------------------------------------------------------------
 // renderSkippedPanel — skipped evaluation: opponent's move with eval skipped.
-// No engine eval/best/PV. Shows calm "Not evaluated" badge in quality slot.
-// Resets eval bar to neutral 50%.
+// No engine eval/best/PV for the CURRENT position. Shows a calm "Not evaluated"
+// badge in the quality slot, and — when available — CARRIES OVER the last
+// own-move retrospective (`carriedRetro = { retroBest, retroSecond }`) so the
+// panel isn't blank about your play. `pvCursor` is the position index of that
+// prior own move (its own turn) for correct PV numbering.
 // ---------------------------------------------------------------------------
-export function renderSkippedPanel() {
+export function renderSkippedPanel(carriedRetro = null, pvCursor = -1) {
   // Eval bar → neutral
   setEvalBar(50);
 
@@ -304,9 +393,26 @@ export function renderSkippedPanel() {
     qEl.appendChild(label);
   }
 
+  // Current position best is unknown on a skipped ply.
   const bmEl = byId('best-move');
   if (bmEl) bmEl.textContent = '—';
 
   const pvEl = byId('pv');
   if (pvEl) pvEl.textContent = '—';
+
+  const bs = byId('best-second');
+  if (bs) bs.textContent = '';
+
+  // Carry over your last analyzed move's retrospective, if cached.
+  if (carriedRetro && carriedRetro.retroBest) {
+    renderRetroBlock(
+      carriedRetro.retroBest,
+      carriedRetro.retroSecond,
+      pvCursor,
+      'Your last move — best',
+    );
+  } else {
+    const block = byId('retro-block');
+    if (block) block.hidden = true;
+  }
 }

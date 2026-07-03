@@ -53,6 +53,7 @@ const state = {
   moves: [],        // UCI strings applied from baseFen
   cursor: 0,        // how many of `moves` are currently applied
   moveQuality: [],  // quality label per played move (transient; NOT persisted)
+  moveRetro: [],    // { retroBest, retroSecond } per played move — carry-over cache (transient; NOT persisted)
   orientation: 'white',
   setupColor: 'white', // side-to-move while in setup mode
 };
@@ -367,6 +368,10 @@ async function refreshAnalysis() {
       });
       if (myToken !== analysisToken) { emit('analysis:end'); return; } // stale — drop
       applyMoveResponse(data);
+      // Refresh the retro cache for this already-played move (index = cursor - 1).
+      state.moveRetro[state.cursor - 1] = (!data.book && data.analysis)
+        ? { retroBest: data.analysis.retroBest, retroSecond: data.analysis.retroSecond }
+        : null;
     }
     setStatus('');
     emit('analysis:end');
@@ -432,11 +437,17 @@ async function onUserMove(orig, dest) {
 
   state.moves = state.moves.slice(0, state.cursor);
   state.moveQuality = state.moveQuality.slice(0, state.cursor);
+  state.moveRetro = state.moveRetro.slice(0, state.cursor);  // lockstep with moveQuality
   state.moves.push(uci);
   // Index-assign (not push): if moveQuality is shorter than the history — e.g. after a
   // restore/jump where prior moves have no recorded quality — this still lands the new
   // move's quality at the correct index (gaps stay undefined → render neutral).
   state.moveQuality[state.cursor] = data.book ? 'book' : (doAnalyze ? ((data.analysis && data.analysis.quality) || null) : null);
+  // Cache the retrospective (what the mover should have played) at the same index;
+  // null on book/skipped moves so the carry-over scan walks past them.
+  state.moveRetro[state.cursor] = (!data.book && doAnalyze && data.analysis)
+    ? { retroBest: data.analysis.retroBest, retroSecond: data.analysis.retroSecond }
+    : null;
   state.cursor += 1;
 
   syncBoard();
@@ -494,10 +505,17 @@ function renderBookMove(data) {
   renderBookMovePanel(data);
 }
 
-// Opponent's move was skipped per analyze-color preference — show neutral panel.
-// Delegates to the panel module — this wrapper keeps internal call sites stable.
+// Opponent's move was skipped per analyze-color preference — show neutral panel,
+// but carry over your last analyzed move's retrospective so it isn't fully blank.
+// Scan down from the current move index for the nearest cached retro (the literal
+// test is "cache entry exists" — book/skipped plies leave a falsy hole to walk past).
 function renderSkipped() {
-  renderSkippedPanel();
+  let carried = null;
+  let pvCursor = -1;
+  for (let j = state.cursor - 1; j >= 0; j--) {
+    if (state.moveRetro[j]) { carried = state.moveRetro[j]; pvCursor = j; break; }
+  }
+  renderSkippedPanel(carried, pvCursor);
 }
 
 // Render a play-mode /api/move response: a book move shows the badge (no engine
@@ -563,6 +581,7 @@ function reset() {
   state.baseFen = INITIAL_FEN;
   state.moves = [];
   state.moveQuality = [];
+  state.moveRetro = [];
   state.cursor = 0;
   byId('fen-error').hidden = true;
   syncBoard();
@@ -603,6 +622,7 @@ async function loadFen() {
   state.baseFen = data.fen;
   state.moves = [];
   state.moveQuality = [];
+  state.moveRetro = [];
   state.cursor = 0;
   syncBoard();
   renderAnalysis(data.analysis);
@@ -669,7 +689,7 @@ function startPosition() { ground.set({ fen: INITIAL_PLACEMENT }); persist(); }
 
 function enterSetup() {
   // Non-destructive: snapshot the current game so Cancel can restore it.
-  playSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), cursor: state.cursor };
+  playSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), moveRetro: state.moveRetro.slice(), cursor: state.cursor };
   const { pos } = positionAt(state.cursor);
   setMode('setup');
   state.setupColor = pos.turn;
@@ -737,6 +757,7 @@ function beginGame() {
   state.baseFen = fen;
   state.moves = [];
   state.moveQuality = [];
+  state.moveRetro = [];
   state.cursor = 0;
   setMode('play');
   playSnapshot = null;
@@ -748,6 +769,7 @@ function cancelSetup() {
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
   state.moveQuality = snap.moveQuality || [];
+  state.moveRetro = snap.moveRetro || [];
   state.cursor = snap.cursor;
   setMode('play');
   playSnapshot = null;
@@ -942,7 +964,7 @@ function buildTrap(trapData, variationIndex = 0) {
 async function enterTrap(trapId) {
   // Snapshot only if coming from play mode (not already in a trap).
   if (state.mode === 'play') {
-    studySnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), cursor: state.cursor };
+    studySnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), moveRetro: state.moveRetro.slice(), cursor: state.cursor };
   }
 
   // Fetch the full trap.
@@ -1153,6 +1175,7 @@ function exitTrap() {
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
   state.moveQuality = snap.moveQuality || [];
+  state.moveRetro = snap.moveRetro || [];
   state.cursor = snap.cursor;
   setMode('play');
   studySnapshot = null;
@@ -1431,7 +1454,7 @@ function renderPracticeNote() {
       .then((d) => {
         if (token !== studyEvalToken) return;
         if (state.mode !== 'trap-practice') return;
-        renderAnalysis(d && d.legal ? d.analysis : null, { suppressQuality: true });
+        renderAnalysis(d && d.legal ? d.analysis : null, { suppressQuality: true, suppressRetro: true });
       })
       .catch(() => { /* eval is best-effort */ });
   } else {
@@ -1439,7 +1462,7 @@ function renderPracticeNote() {
       .then((d) => {
         if (token !== studyEvalToken) return;
         if (state.mode !== 'trap-practice') return;
-        renderAnalysis(d && d.analysis, { suppressQuality: true });
+        renderAnalysis(d && d.analysis, { suppressQuality: true, suppressRetro: true });
       })
       .catch(() => { /* eval is best-effort */ });
   }
@@ -1557,6 +1580,7 @@ function repJump(line, color) {
   state.baseFen = INITIAL_FEN;
   state.moves = line.ucis.slice();
   state.moveQuality = [];
+  state.moveRetro = [];
   state.cursor = line.ucis.length;
   state.orientation = color;
   ground.set({ orientation: color });
@@ -1641,7 +1665,7 @@ function startRepPractice(scopeIds, color, label) {
   if (!repTree || !repTree[color]) return;
   ensurePlay();
   repEngineToken++;            // invalidate any in-flight engine reply
-  repSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), cursor: state.cursor };
+  repSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), moveRetro: state.moveRetro.slice(), cursor: state.cursor };
   setMode('rep-practice');
   state.orientation = color;
   rep = {
@@ -1686,6 +1710,7 @@ function exitRepPractice() {
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
   state.moveQuality = snap.moveQuality || [];
+  state.moveRetro = snap.moveRetro || [];
   state.cursor = snap.cursor;
   setMode('play');
   repSnapshot = null;
@@ -1855,6 +1880,7 @@ function enterReview(gameDetail) {
       baseFen: state.baseFen,
       moves: state.moves.slice(),
       moveQuality: state.moveQuality.slice(),
+      moveRetro: state.moveRetro.slice(),
       cursor: state.cursor,
     };
   }
@@ -1867,6 +1893,7 @@ function enterReview(gameDetail) {
   state.baseFen = baseFen;
   state.moves = moves;
   state.moveQuality = [];
+  state.moveRetro = [];
   state.cursor = 0;
 
   setMode('review');
@@ -1909,6 +1936,7 @@ function exitReview() {
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
   state.moveQuality = snap.moveQuality || [];
+  state.moveRetro = snap.moveRetro || [];
   state.cursor = snap.cursor;
   setMode('play');
   reviewSnapshot = null;

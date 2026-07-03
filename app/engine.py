@@ -438,6 +438,71 @@ class StockfishEngine:
 
         return results
 
+    async def analyze_interactive_multi(
+        self,
+        fen: str,
+        depth: int = DEFAULT_DEPTH,
+        multipv: int = 1,
+    ) -> List[AnalysisResult]:
+        """Interactive multi-line analysis: up to *multipv* ranked lines.
+
+        Same soft-time-capped limit as :meth:`analyze` (``INTERACTIVE_SOFT_TIME_S``)
+        so latency stays bounded on sharp positions — unlike :meth:`analyze_multi`,
+        which is depth-only for background reviews. Used by ``/api/move`` to surface
+        a 2nd-best line without adding an engine call.
+
+        Args:
+            fen: The position to analyze, in Forsyth-Edwards Notation.
+            depth: Fixed search depth (target; the soft time cap may fire first).
+            multipv: Number of distinct lines to return (best-first).
+
+        Returns:
+            A list of :class:`AnalysisResult`, index 0 = best line, length ≤ *multipv*
+            (fewer when the position has fewer legal moves than *multipv*).
+
+        Raises:
+            EngineUnavailable: if the binary is missing or the engine cannot run.
+            ValueError: if ``fen`` is not a valid FEN.
+        """
+        try:
+            board = chess.Board(fen)
+        except ValueError as exc:
+            raise ValueError(f"Invalid FEN: {fen!r} ({exc})") from exc
+
+        # Interactive: soft time cap (bounded UI latency) + depth target.
+        infos = await self._run_analyse(
+            board,
+            chess_engine.Limit(depth=depth, time=INTERACTIVE_SOFT_TIME_S),
+            multipv=multipv,
+        )
+
+        # --- post-processing (outside the lock; pure, no engine access) ---
+
+        results: List[AnalysisResult] = []
+        for info in infos:
+            score: chess_engine.PovScore = info["score"]
+            pv: List[chess.Move] = list(info.get("pv", []))
+
+            pv_san: List[str] = []
+            san_board = board.copy()
+            for move in pv:
+                try:
+                    pv_san.append(san_board.san(move))
+                    san_board.push(move)
+                except (AssertionError, ValueError):
+                    break
+
+            results.append(
+                AnalysisResult(
+                    score=score,
+                    pv=pv,
+                    pv_san=pv_san,
+                    depth=info.get("depth"),
+                )
+            )
+
+        return results
+
     async def analyze(self, fen: str, depth: int = DEFAULT_DEPTH) -> AnalysisResult:
         """Analyze a position to a fixed depth.
 

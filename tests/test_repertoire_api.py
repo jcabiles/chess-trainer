@@ -29,6 +29,18 @@ class FakeEngine:
         pv_san = [board.san(pv[0])] if pv else []
         return AnalysisResult(score=score, pv=pv, pv_san=pv_san, depth=depth)
 
+    async def analyze_interactive_multi(
+        self, fen: str, depth: int = 18, multipv: int = 1
+    ) -> list[AnalysisResult]:
+        board = chess.Board(fen)
+        score = chess_engine.PovScore(chess_engine.Cp(10), chess.WHITE)
+        moves = list(board.legal_moves)[:multipv]
+        results = [
+            AnalysisResult(score=score, pv=[m], pv_san=[board.san(m)], depth=depth)
+            for m in moves
+        ]
+        return results or [AnalysisResult(score=score, pv=[], pv_san=[], depth=depth)]
+
 
 class NoPvEngine:
     """Returns an empty PV (no best move) — terminal-ish."""
@@ -36,6 +48,12 @@ class NoPvEngine:
     async def analyze(self, fen: str, depth: int = 18) -> AnalysisResult:
         score = chess_engine.PovScore(chess_engine.Cp(0), chess.WHITE)
         return AnalysisResult(score=score, pv=[], pv_san=[], depth=depth)
+
+    async def analyze_interactive_multi(
+        self, fen: str, depth: int = 18, multipv: int = 1
+    ) -> list[AnalysisResult]:
+        score = chess_engine.PovScore(chess_engine.Cp(0), chess.WHITE)
+        return [AnalysisResult(score=score, pv=[], pv_san=[], depth=depth)]
 
 
 @pytest.fixture
