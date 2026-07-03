@@ -19,7 +19,14 @@ import pytest
 import app.storage as storage
 from app import book, repertoire
 from app.accuracy import summarize
-from app.insights import MIN_SAMPLE, build_openings_insights, gated
+from app.insights import (
+    CLUSTER_GATE,
+    MIN_SAMPLE,
+    build_mistakes_insights,
+    build_openings_insights,
+    gated,
+)
+from app.storage import LeakRecord
 
 BOOK_FIXTURE = "tests/fixtures/book_sample.json"  # firstMoves = ["e2e4"]
 MISSING = "tests/fixtures/does_not_exist.json"
@@ -49,12 +56,13 @@ def _insert_game(
     eco: str | None = None,
     result: str | None = "1-0",
     analysis_status: str = "done",
+    imported_at: str = "2026-01-15T10:00:00",
 ) -> int:
     return storage.insert_game(
         {
             "content_hash": content_hash,
             "pgn": '[Event "?"]\n1. e4 e5 *',
-            "imported_at": "2026-01-15T10:00:00",
+            "imported_at": imported_at,
             "white": "Alice",
             "black": "Bob",
             "result": result,
@@ -66,7 +74,11 @@ def _insert_game(
     )
 
 
-def _plies_from_san(sans: list[str], evals: list[int] | None = None) -> list[dict]:
+def _plies_from_san(
+    sans: list[str],
+    evals: list[int] | None = None,
+    win_probs: list[float] | None = None,
+) -> list[dict]:
     """Replay SAN moves from the start into game_plies-shaped dicts (1-based)."""
     board = chess.Board()
     rows = []
@@ -79,9 +91,35 @@ def _plies_from_san(sans: list[str], evals: list[int] | None = None) -> list[dic
             "uci": move.uci(),
             "fen_before": fen_before,
             "eval_cp_white": evals[i] if evals else 0,
+            "win_prob": win_probs[i] if win_probs else None,
         })
         board.push(move)
     return rows
+
+
+def _make_leak(
+    game_id: int,
+    *,
+    ply: int = 20,
+    color: str = "white",
+    category: str = "hanging",
+    phase: str = "middlegame",
+    lead_in_ply: int | None = None,
+    threat_motif: str | None = None,
+) -> LeakRecord:
+    return LeakRecord(
+        game_id=game_id,
+        ply=ply,
+        color=color,
+        severity="blunder",
+        category=category,
+        phase=phase,
+        win_prob_before=0.65,
+        win_prob_after=0.35,
+        win_prob_drop=0.30,
+        lead_in_ply=lead_in_ply,
+        threat_motif=threat_motif,
+    )
 
 
 def _load_repertoire(tmp_path: Path) -> None:
@@ -326,6 +364,215 @@ class TestTheory:
 
 
 # ---------------------------------------------------------------------------
+# Recurring-mistake clusters (T2.1)
+# ---------------------------------------------------------------------------
+
+
+class TestClusters:
+    def _seed(self):
+        # Game A is older; game B is the most recent import.
+        gid_a = _insert_game(content_hash="ca", imported_at="2026-01-10T10:00:00")
+        gid_b = _insert_game(content_hash="cb", imported_at="2026-01-20T10:00:00")
+        storage.write_leaks(gid_a, [
+            _make_leak(gid_a, ply=10), _make_leak(gid_a, ply=12),
+            _make_leak(gid_a, ply=14),
+        ])  # 3× hanging/middlegame
+        storage.write_leaks(gid_b, [
+            _make_leak(gid_b, ply=20), _make_leak(gid_b, ply=22),  # +2 hanging
+            _make_leak(gid_b, ply=2, category="knight_fork", phase="opening"),
+            _make_leak(gid_b, ply=4, category="knight_fork", phase="opening"),
+            _make_leak(gid_b, ply=6, category="knight_fork", phase="opening"),
+            _make_leak(gid_b, ply=8, category="knight_fork", phase="opening"),
+            _make_leak(gid_b, ply=30, category="pin", phase="endgame"),
+            _make_leak(gid_b, ply=32, category="pin", phase="endgame"),
+        ])
+        return gid_a, gid_b
+
+    def test_ranking_and_gate(self):
+        self._seed()
+        clusters = build_mistakes_insights()["clusters"]
+        assert clusters["n_leaks"] == 11
+        items = clusters["items"]
+        # hanging (5) ranks above knight_fork (4); pin (2) is below CLUSTER_GATE.
+        assert [(i["category"], i["phase"], i["count"]) for i in items] == [
+            ("hanging", "middlegame", 5), ("knight_fork", "opening", 4)]
+        assert all(i["count"] >= CLUSTER_GATE for i in items)
+        assert clusters["suppressed"] == {
+            "cells": 1, "leaks": 2, "gate": CLUSTER_GATE}
+
+    def test_cluster_names_are_human(self):
+        self._seed()
+        for item in build_mistakes_insights()["clusters"]["items"]:
+            assert item["name"]  # non-empty human name via coaching.name_cluster
+
+    def test_example_is_most_recent_leak(self):
+        _, gid_b = self._seed()
+        items = build_mistakes_insights()["clusters"]["items"]
+        hanging = next(i for i in items if i["category"] == "hanging")
+        # Most recent import (game B), highest ply within it.
+        assert hanging["example"] == {"game_id": gid_b, "ply": 22}
+
+    def test_generic_missed_threat_labeled_honestly(self):
+        gid = _insert_game(content_hash="mt")
+        storage.write_leaks(gid, [
+            _make_leak(gid, ply=p, category="missed_threat", phase="middlegame")
+            for p in (10, 12, 14, 16)
+        ])
+        items = build_mistakes_insights()["clusters"]["items"]
+        assert items[0]["name"] == "Other tactical misses in the middlegame"
+
+    def test_unqualified_games_leaks_excluded(self):
+        gid = _insert_game(content_hash="cu", my_color=None)
+        storage.write_leaks(gid, [_make_leak(gid, ply=p) for p in (2, 4, 6, 8)])
+        clusters = build_mistakes_insights()["clusters"]
+        assert clusters["n_leaks"] == 0
+        assert clusters["items"] == []
+
+
+# ---------------------------------------------------------------------------
+# Foreseeable-rate (T2.2)
+# ---------------------------------------------------------------------------
+
+
+class TestForeseeable:
+    def test_rate_and_dominant_motif(self):
+        gid = _insert_game(content_hash="f1")
+        storage.write_leaks(gid, [
+            _make_leak(gid, ply=20, lead_in_ply=18, threat_motif="knight_fork"),
+            _make_leak(gid, ply=22, lead_in_ply=20, threat_motif="knight_fork"),
+            _make_leak(gid, ply=24, lead_in_ply=24, threat_motif="pin"),  # not <
+            _make_leak(gid, ply=26),  # no lead-in at all
+        ])
+        fore = build_mistakes_insights()["foreseeable"]
+        assert fore["rate"] == {"value": 0.5, "n": 4, "sufficient": False}
+        assert fore["dominant_motif"] == "knight_fork"
+        assert "narrow definition" in fore["note"]
+
+    def test_default_lead_in_ply_not_counted(self):
+        """lead_in_ply == ply - 1 is the pipeline's display-timing default —
+        it must NOT count as foreseeable; ply - 2 must."""
+        gid = _insert_game(content_hash="f3")
+        storage.write_leaks(gid, [
+            _make_leak(gid, ply=20, lead_in_ply=19, threat_motif="pin"),   # default
+            _make_leak(gid, ply=30, lead_in_ply=28, threat_motif="fork"),  # genuine
+        ])
+        fore = build_mistakes_insights()["foreseeable"]
+        assert fore["rate"] == {"value": 0.5, "n": 2, "sufficient": False}
+        # The excluded default leak's motif must not leak into the mode.
+        assert fore["dominant_motif"] == "fork"
+
+    def test_dominant_motif_tie_breaks_alphabetically(self):
+        gid = _insert_game(content_hash="f4")
+        storage.write_leaks(gid, [
+            _make_leak(gid, ply=20, lead_in_ply=18, threat_motif="pin"),
+            _make_leak(gid, ply=22, lead_in_ply=20, threat_motif="fork"),
+        ])
+        fore = build_mistakes_insights()["foreseeable"]
+        assert fore["dominant_motif"] == "fork"  # 1-1 tie → alphabetical
+
+    def test_no_motifs_gives_none(self):
+        gid = _insert_game(content_hash="f2")
+        storage.write_leaks(gid, [_make_leak(gid, ply=20, lead_in_ply=18)])
+        fore = build_mistakes_insights()["foreseeable"]
+        assert fore["rate"]["value"] == 1.0
+        assert fore["dominant_motif"] is None
+
+
+# ---------------------------------------------------------------------------
+# Time-trouble (T2.3)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeTrouble:
+    def test_buckets_baseline_and_unclocked_note(self):
+        gid_a = _insert_game(content_hash="tt1")  # clocked game
+        storage.write_plies(gid_a, [
+            {"ply": 1, "is_user_move": True, "clock_centis": 500},   # <10s, leak
+            {"ply": 2, "is_user_move": False, "clock_centis": 800},  # opponent
+            {"ply": 3, "is_user_move": True, "clock_centis": 900},   # <10s
+            {"ply": 5, "is_user_move": True, "clock_centis": 20000},  # >2m
+        ])
+        storage.write_leaks(gid_a, [_make_leak(gid_a, ply=1)])
+        gid_b = _insert_game(content_hash="tt2")  # unclocked game
+        storage.write_plies(gid_b, [{"ply": 1, "is_user_move": True}])
+
+        tt = build_mistakes_insights()["time_trouble"]
+        assert tt["clocked_games"] == 1
+        assert tt["unclocked_games"] == 1
+        assert "1 of 2" in tt["note"]
+        # 3 clocked user moves, 1 is a leak.
+        assert tt["baseline_rate"] == {
+            "value": pytest.approx(0.333), "n": 3, "sufficient": False}
+        by_label = {b["bucket"]: b for b in tt["buckets"]}
+        assert set(by_label) == {"<10s", "10s-30s", "30s-2m", ">2m"}
+        assert (by_label["<10s"]["moves"], by_label["<10s"]["leaks"]) == (2, 1)
+        assert by_label["<10s"]["rate"] == pytest.approx(0.5)
+        assert by_label["<10s"]["sufficient"] is False
+        assert (by_label[">2m"]["moves"], by_label[">2m"]["leaks"]) == (1, 0)
+        assert by_label["10s-30s"] == {
+            "bucket": "10s-30s", "moves": 0, "leaks": 0, "rate": None,
+            "sufficient": False}
+
+    def test_bucket_boundaries(self):
+        """Edges land on the right side: lo inclusive, hi exclusive."""
+        gid = _insert_game(content_hash="tt3")
+        centis = [999, 1000, 2999, 3000, 11999, 12000] + [500] * 5
+        storage.write_plies(gid, [
+            {"ply": i + 1, "is_user_move": True, "clock_centis": c}
+            for i, c in enumerate(centis)
+        ])
+        tt = build_mistakes_insights()["time_trouble"]
+        by_label = {b["bucket"]: b for b in tt["buckets"]}
+        assert by_label["<10s"]["moves"] == 6       # 999 + five 500s
+        assert by_label["<10s"]["sufficient"] is True
+        assert by_label["10s-30s"]["moves"] == 2    # 1000, 2999
+        assert by_label["30s-2m"]["moves"] == 2     # 3000, 11999
+        assert by_label[">2m"]["moves"] == 1        # 12000
+
+
+# ---------------------------------------------------------------------------
+# Advantage capitalization (T2.4)
+# ---------------------------------------------------------------------------
+
+
+class TestCapitalization:
+    def test_sustained_stretch_counted_spike_ignored(self):
+        # Sustained: user (White) holds >=0.8 for 5 consecutive plies but LOSES.
+        gid_s = _insert_game(content_hash="cap1", result="0-1")
+        storage.write_plies(gid_s, _plies_from_san(
+            ["e4", "e5", "Nf3", "Nc6", "Bb5"],
+            # win_prob is mover-POV: 0.9 on White's moves = 0.1 on Black's.
+            win_probs=[0.9, 0.1, 0.9, 0.1, 0.9]))
+        # Spike: a single winning ply must NOT count as a winning game.
+        gid_p = _insert_game(content_hash="cap2", result="1-0")
+        storage.write_plies(gid_p, _plies_from_san(
+            ["d4", "d5", "c4", "e6", "Nc3"],
+            win_probs=[0.5, 0.5, 0.9, 0.5, 0.5]))
+
+        cap = build_mistakes_insights()["capitalization"]
+        assert cap["winning_games"] == 1
+        assert cap["converted"] == 0
+        assert cap["rate"] == {"value": 0.0, "n": 1, "sufficient": False}
+        assert "single-ply" in cap["note"]
+
+    def test_converted_win_counts(self):
+        gid = _insert_game(content_hash="cap3", result="1-0")
+        storage.write_plies(gid, _plies_from_san(
+            ["e4", "e5", "Nf3", "Nc6"], win_probs=[0.9, 0.1, 0.9, 0.1]))
+        cap = build_mistakes_insights()["capitalization"]
+        assert (cap["winning_games"], cap["converted"]) == (1, 1)
+        assert cap["rate"]["value"] == 1.0
+
+    def test_unknown_result_game_excluded(self):
+        gid = _insert_game(content_hash="cap4", result="*")
+        storage.write_plies(gid, _plies_from_san(
+            ["e4", "e5", "Nf3", "Nc6"], win_probs=[0.9, 0.1, 0.9, 0.1]))
+        cap = build_mistakes_insights()["capitalization"]
+        assert (cap["winning_games"], cap["converted"]) == (0, 0)
+        assert cap["rate"] == {"value": None, "n": 0, "sufficient": False}
+
+
+# ---------------------------------------------------------------------------
 # Empty-DB safety
 # ---------------------------------------------------------------------------
 
@@ -361,3 +608,24 @@ class TestEmptyDB:
         assert result["win_rates"]["families"] == []
         assert result["adherence"]["n"] == 0
         assert result["theory"]["n"] == 0
+
+    def test_mistakes_empty_db_returns_empty_safe_shapes(self):
+        result = build_mistakes_insights()
+        assert result["coverage"]["qualified"] == 0
+        clusters = result["clusters"]
+        assert clusters["n_leaks"] == 0
+        assert clusters["items"] == []
+        assert clusters["suppressed"] == {
+            "cells": 0, "leaks": 0, "gate": CLUSTER_GATE}
+        fore = result["foreseeable"]
+        assert fore["rate"] == {"value": None, "n": 0, "sufficient": False}
+        assert fore["dominant_motif"] is None
+        tt = result["time_trouble"]
+        assert tt["clocked_games"] == 0
+        assert tt["unclocked_games"] == 0
+        assert tt["baseline_rate"] == {"value": None, "n": 0, "sufficient": False}
+        assert len(tt["buckets"]) == 4
+        assert all(b["moves"] == 0 and b["rate"] is None for b in tt["buckets"])
+        cap = result["capitalization"]
+        assert (cap["winning_games"], cap["converted"]) == (0, 0)
+        assert cap["rate"] == {"value": None, "n": 0, "sufficient": False}
