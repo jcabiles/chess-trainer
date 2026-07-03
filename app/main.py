@@ -31,6 +31,7 @@ from app import (
     accuracy,
     book,
     coaching,
+    insights,
     openings,
     pgn,
     profile,
@@ -61,6 +62,7 @@ from app.models import (
     MoveResponse,
     NarratedLeak,
     OpeningRequest,
+    OpeningsInsightsResponse,
     PlyDetail,
     ProfileResponse,
     RetagRequest,
@@ -803,6 +805,41 @@ async def get_profile():
         data.setdefault("games_total", 0)
         data.setdefault("games_tagged", 0)
     return ProfileResponse(**data)
+
+
+# ---------------------------------------------------------------------------
+# Insights (additive; namespaced for /api/insights/{openings,mistakes,endgames})
+# ---------------------------------------------------------------------------
+
+@app.get("/api/insights/openings", response_model=OpeningsInsightsResponse)
+async def get_insights_openings():
+    """Return the Openings insights read-model (win%, repertoire adherence, theory)."""
+    try:
+        data = insights.build_openings_insights()
+    except RuntimeError:
+        # Storage not initialised (edge case in tests or first boot before init).
+        empty_metric = {"value": None, "n": 0, "sufficient": False}
+        data = {
+            "coverage": {
+                "total": 0, "tagged": 0, "analyzed": 0, "pending": 0,
+                "qualified": 0, "on_repertoire": 0, "off_repertoire": 0,
+            },
+            "win_rates": {"families": [], "lines": []},
+            "adherence": {
+                "n": 0, "avg_followed_prep_depth": empty_metric,
+                "lines": [], "games": [],
+            },
+            "theory": {
+                "n": 0, "avg_book_exit_ply": empty_metric,
+                "avg_opening_accuracy": empty_metric,
+                "games": [],
+                "note": (
+                    "'In book' means the line has a name in the openings database "
+                    "— named theory is not the same as moves endorsed by masters."
+                ),
+            },
+        }
+    return OpeningsInsightsResponse(**data)
 
 
 # ---------------------------------------------------------------------------

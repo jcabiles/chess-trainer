@@ -38,7 +38,7 @@ the exact position to study — honest about thin data, with no per-game vanity 
   `rook`, `two-rook`, `opposite-bishops`, `same-bishops`, `knight`, `queen`, `R+minor`, …;
   bishop square color via `(rank+file)%2`) + phase-filter helpers.
 - **Reuse (do not rebuild):** `repertoire.py` (`tree()`, deviation semantics),
-  `book.py::is_in_book` (book.py:208), `openings.py::identify`, `accuracy.py::summarize`
+  `book.py::is_book_move` (book.py:207), `openings.py::identify`, `accuracy.py::summarize`
   (filterable to a phase subset), `analysis.py` (`game_phase`, `win_prob_white`,
   `win_prob_from_cp`, `pov_score_to_white_cp`, `leak_severity`), `coaching.name_cluster`,
   `profile.py` patterns, and `storage.py` tables `games` / `game_plies` / `leaks` + `coverage()`.

@@ -1,0 +1,145 @@
+/* ============================================================
+   Insights tab — triage-router dashboard (openings / mistakes /
+   endgames diagnostics over persisted game-review data).
+   Design tokens only (style.css:8-83) — no raw hex.
+   Foundation (T0) ships the tab scaffold + the shared honesty/
+   min-sample convention; panel sections land in Phase 1-3.
+   ============================================================ */
+
+.insights-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ---- Honesty / min-sample gate (T0.3) ----
+   Muted "not enough games yet" line for any section below the min-sample
+   gate (backend default: 5 — app/insights.py). */
+.insights-thin-data {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ---- De-emphasized long-run trend slot (T0.3) ----
+   The spec allows exactly one long-run trend, always visually secondary to
+   the honest per-family/per-cluster diagnostics above it. */
+.insights-trend {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+/* ============================================================
+   Openings panel (T1.5)
+   ============================================================ */
+
+.insights-loading,
+.insights-empty-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Honest caveat text (e.g. "named theory ≠ endorsed") — secondary, not muted
+   enough to look disabled; distinct from the min-sample gate above. */
+.insights-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+.insights-coverage {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.insights-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.insights-fam-list,
+.insights-fam-lines,
+.insights-adherence-lines,
+.insights-adherence-games,
+.insights-theory-games {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.insights-fam-lines {
+  padding-left: var(--space-4);
+}
+
+/* ---- Row styling shared by family toggles, line rows, and game rows ---- */
+.insights-fam-toggle,
+.insights-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.insights-fam-toggle {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.insights-fam-toggle:hover {
+  border-color: var(--border);
+}
+
+.insights-fam-toggle:focus-visible,
+.insights-deep-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.insights-row-name {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Muted modifier for any row/toggle whose backing sample is sub-min. */
+.insights-row-thin {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.insights-metric-line {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.insights-deep-link {
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.insights-deep-link:hover {
+  border-color: var(--accent);
+}

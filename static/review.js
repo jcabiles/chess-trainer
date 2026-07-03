@@ -486,7 +486,7 @@ async function deleteAndRefresh(gameId) {
 // Open a game → enter review mode
 // ---------------------------------------------------------------------------
 
-async function openGame(gameId) {
+export async function openGame(gameId) {
   let gameDetail;
   try {
     gameDetail = await fetchJSON(`/api/games/${gameId}`);
@@ -512,7 +512,7 @@ async function openGame(gameId) {
       b.setAttribute('aria-selected', String(on));
     });
   }
-  ['analysis', 'opening', 'traps', 'repertoire', 'review'].forEach((name) => {
+  ['analysis', 'opening', 'traps', 'repertoire', 'review', 'insights'].forEach((name) => {
     const panel = byId(`tab-${name}`);
     if (panel) panel.classList.toggle('is-active', name === 'analysis');
   });

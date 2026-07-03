@@ -6,7 +6,7 @@ Spec: `docs/ai-dlc/specs/insights-dashboard.md`. Research:
 **Shared contract (all tickets agree):**
 - New pure modules `app/insights.py` + `app/endgame.py` — no engine, no DB migration;
   post-processing of stored `games` / `game_plies` / `leaks` rows. Reuse `analysis.*`,
-  `accuracy.summarize`, `repertoire.tree()`, `book.is_in_book`, `openings.identify`,
+  `accuracy.summarize`, `repertoire.tree()`, `book.is_book_move`, `openings.identify`,
   `coaching.name_cluster`, `profile.py` patterns.
 - Builders return `{value, n, sufficient}`-style records; min-sample gate default = 5
   (prefer ECO-family aggregation); cluster naming gate = 4.
@@ -31,7 +31,7 @@ Spec: `docs/ai-dlc/specs/insights-dashboard.md`. Research:
 |---|--------|-------------|----------------|------|
 | T1.1 | Win% by opening (pure): group games by ECO family + deep name; score from `games.result` vs `games.my_color`; sample counts; per-line min-sample gate. | `app/insights.py` | Per-family + per-line `{opening, color, w/d/l, score, n, sufficient}`; color from the user's perspective. | T0.3 |
 | T1.2 | Repertoire adherence (pure): for games matching a prepared line, walk vs `repertoire.tree()`; emit `followed_prep_depth`, `deviation_ply`, `deviation_move` per line + aggregated. | `app/insights.py` | Deviation ply/move correct on a follow-then-deviate fixture; off-repertoire games excluded here. | T0.3 |
-| T1.3 | Theory fallback (pure): off-repertoire games → named-theory book-exit ply via `book.is_in_book` + opening-phase accuracy (`accuracy.summarize` filtered to opening plies). | `app/insights.py` | Book-exit ply = last in-theory move; accuracy restricted to opening phase; "named ≠ endorsed" copy. | T0.3 |
+| T1.3 | Theory fallback (pure): off-repertoire games → named-theory book-exit ply via `book.is_book_move` + opening-phase accuracy (`accuracy.summarize` filtered to opening plies). | `app/insights.py` | Book-exit ply = last in-theory move; accuracy restricted to opening phase; "named ≠ endorsed" copy. | T0.3 |
 | T1.4 | Openings API: `GET /api/insights/openings` typed response bundling T1.1–T1.3 + coverage. | `app/main.py`, `app/models.py` | 200 with populated sections on analyzed games; empty-safe; no engine/migration. | T1.1–T1.3 |
 | T1.5 | Openings panel UI: win% (family default, expand to lines, muted sub-min rows), repertoire adherence (prep-depth bar + earliest-deviation), theory/soundness section; row deep-links (deviation → `openGameAtPly`). | `static/insights.js`, `static/insights.css` | Renders from the API; deep-link opens the right game+ply; honest empty/thin states. | T0.2, T1.4 |
 

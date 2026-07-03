@@ -28,7 +28,8 @@ import { readUiPrefs, writeUiPref } from './prefs.js';
 import { initMovelist } from './movelist.js';
 import { initFeedback } from './feedback.js';
 import { initShortcuts } from './shortcuts.js';
-import { initReview } from './review.js';
+import { initReview, openGame } from './review.js';
+import { initInsights } from './insights.js';
 
 const EMPTY_PLACEMENT = '8/8/8/8/8/8/8/8';
 const INITIAL_PLACEMENT = INITIAL_FEN.split(' ')[0];
@@ -1894,6 +1895,14 @@ function enterReview(gameDetail) {
   emit('review:ply', 0);
 }
 
+// Deep-link action for feature modules (e.g. insights.js): open a saved game
+// in review-replay mode, then jump straight to a given ply. Wraps review.js's
+// openGame (fetch + enterReview, which lands on ply 0) + the goto seam.
+async function openGameAtPly(gameId, ply) {
+  await openGame(gameId);
+  goto(ply);
+}
+
 // Exit review mode and restore the saved play snapshot.
 function exitReview() {
   const snap = reviewSnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
@@ -1969,6 +1978,7 @@ function init() {
       closeAnyDialog,
       enterReview,           // called by review.js when the user opens a saved game
       exitReview,            // called by review.js "Return to my game"
+      openGameAtPly,         // deep-link seam: insights.js → game+ply in review mode
     },
     on,
     emit,
@@ -1996,7 +2006,7 @@ function init() {
         b.classList.toggle('is-active', on);
         b.setAttribute('aria-selected', String(on));
       });
-      ['analysis', 'opening', 'traps', 'repertoire', 'review'].forEach((name) => {
+      ['analysis', 'opening', 'traps', 'repertoire', 'review', 'insights'].forEach((name) => {
         const panel = byId(`tab-${name}`);
         if (panel) panel.classList.toggle('is-active', name === tabName);
       });
@@ -2009,6 +2019,7 @@ function init() {
   initFeedback(api);
   initShortcuts(api);
   initReview(api);
+  initInsights(api);
 
   // Own board clicks for setup stamping (capture phase, before chessground).
   const boardEl = byId('board');

@@ -355,6 +355,156 @@ class ProfileResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Insights — Openings slice (additive; app/insights.py::build_openings_insights)
+# ---------------------------------------------------------------------------
+
+
+class InsightsGatedMetric(BaseModel):
+    """An aggregate wrapped with its sample size (the honesty gate, T0.3).
+
+    ``sufficient`` is False when ``n`` is below the min-sample threshold (5);
+    the UI mutes those instead of hiding or overselling them.
+    """
+
+    value: float | None = Field(description="The aggregate value, or None with n=0.")
+    n: int = Field(description="Sample size backing this aggregate.")
+    sufficient: bool = Field(description="True when n meets the min-sample threshold.")
+
+
+class InsightsCoverage(BaseModel):
+    """How many games feed the Openings insights, and how they were routed."""
+
+    total: int = Field(description="Total number of game rows.")
+    tagged: int = Field(description="Games with my_color set.")
+    analyzed: int = Field(description="Games with analysis_status='done'.")
+    pending: int = Field(description="Games with analysis_status='pending'.")
+    qualified: int = Field(
+        description="Games with my_color set AND analysis_status='done' — the "
+        "population every Openings section is computed from."
+    )
+    on_repertoire: int = Field(
+        description="Qualified games that matched the user's prepared repertoire "
+        "for at least one ply (feed the adherence section)."
+    )
+    off_repertoire: int = Field(
+        description="Qualified games that never matched the repertoire (feed the "
+        "theory fallback section)."
+    )
+
+
+class InsightsFamilyWinRecord(BaseModel):
+    """Win-rate row grouped by opening family (name before the first ':')."""
+
+    opening: str = Field(description="Family display name (or ECO/'Unknown' fallback).")
+    color: str = Field(description="User's color for these games ('white'/'black').")
+    wins: int
+    draws: int
+    losses: int
+    n: int = Field(description="wins + draws + losses.")
+    score: float = Field(description="(wins + 0.5*draws) / n, from the user's perspective.")
+    sufficient: bool = Field(description="True when n >= the min-sample threshold.")
+
+
+class InsightsLineWinRecord(InsightsFamilyWinRecord):
+    """Win-rate row grouped by full opening/line name; also carries its family."""
+
+    family: str = Field(description="The opening family this line belongs to.")
+
+
+class InsightsWinRates(BaseModel):
+    """Win% by opening, grouped both by family (default view) and by full line."""
+
+    families: list[InsightsFamilyWinRecord] = Field(default_factory=list)
+    lines: list[InsightsLineWinRecord] = Field(default_factory=list)
+
+
+class InsightsAdherenceLine(BaseModel):
+    """Per-prepared-line aggregate adherence."""
+
+    line_id: str
+    name: str = Field(description="Human-readable line name from the repertoire catalog.")
+    color: str | None = Field(
+        default=None, description="'white'/'black'; None if the line_id is unknown."
+    )
+    n: int = Field(description="Number of games credited to this line.")
+    avg_followed_prep_depth: float = Field(
+        description="Average number of plies the user's moves matched this line's prep."
+    )
+    deviations: int = Field(description="Number of games where the user left prep first.")
+    sufficient: bool = Field(description="True when n >= the min-sample threshold.")
+
+
+class InsightsAdherenceGame(BaseModel):
+    """One on-repertoire game's prep-following detail, for UI deep-links."""
+
+    game_id: int
+    followed_prep_depth: int = Field(description="Plies the user's moves matched prep.")
+    deviation_ply: int | None = Field(
+        default=None, description="1-based ply where the user left prep; None if none."
+    )
+    deviation_move: str | None = Field(
+        default=None, description="SAN of the move the user played instead of prep."
+    )
+    prepared_san: str | None = Field(
+        default=None, description="SAN of the prepared move the user deviated from."
+    )
+    line_ids: list[str] = Field(
+        default_factory=list,
+        description="Prepared line(s) still consistent with the deepest matched node.",
+    )
+
+
+class InsightsAdherence(BaseModel):
+    """Repertoire-adherence section (on-repertoire games only)."""
+
+    n: int = Field(description="Number of on-repertoire games.")
+    avg_followed_prep_depth: InsightsGatedMetric
+    lines: list[InsightsAdherenceLine] = Field(default_factory=list)
+    games: list[InsightsAdherenceGame] = Field(
+        default_factory=list,
+        description="Uncapped per-game list, kept for UI deep-links (openGameAtPly).",
+    )
+
+
+class InsightsTheoryGame(BaseModel):
+    """One off-repertoire game's named-theory detail, for UI deep-links."""
+
+    game_id: int
+    book_exit_ply: int = Field(
+        description="Last ply of the initial in-book run; 0 if never in book."
+    )
+    opening_accuracy: float | None = Field(
+        default=None, description="Accuracy % restricted to opening-phase plies; "
+        "None when it could not be computed."
+    )
+
+
+class InsightsTheory(BaseModel):
+    """Named-theory fallback section for off-repertoire games."""
+
+    n: int = Field(description="Number of off-repertoire games.")
+    avg_book_exit_ply: InsightsGatedMetric
+    avg_opening_accuracy: InsightsGatedMetric = Field(
+        description="Gated on the count of games with a *computable* accuracy, "
+        "which can be less than theory.n."
+    )
+    games: list[InsightsTheoryGame] = Field(
+        default_factory=list,
+        description="Uncapped per-game list, kept for UI deep-links (openGameAtPly).",
+    )
+    note: str = Field(description="Caveat: named theory is not the same as endorsed moves.")
+
+
+class OpeningsInsightsResponse(BaseModel):
+    """Response for ``GET /api/insights/openings``."""
+
+    coverage: InsightsCoverage
+    win_rates: InsightsWinRates
+    adherence: InsightsAdherence
+    theory: InsightsTheory
+
+
+# ---------------------------------------------------------------------------
 # Color-tagging + bulk-analyze models (additive)
 # ---------------------------------------------------------------------------
 
