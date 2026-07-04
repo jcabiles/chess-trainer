@@ -1,9 +1,16 @@
 /* ============================================================
-   Insights tab — triage-router dashboard (openings / mistakes /
-   endgames diagnostics over persisted game-review data).
-   Design tokens only (style.css:8-83) — no raw hex.
-   Foundation (T0) ships the tab scaffold + the shared honesty/
-   min-sample convention; panel sections land in Phase 1-3.
+   Insights tab — the app's analytics surface.
+   Electric Azure Dark data-viz identity: JetBrains Mono tabular
+   figures, CSS-only azure bars (values always duplicated as
+   text), ranked severity-striped cluster cards (foresight-card
+   precedent). Design tokens only (style.css) — no raw colors.
+
+   Signature motion (the app's one showpiece): .insights-enter,
+   added by insights.js playEntrance() on the FIRST build of each
+   sub-panel only and removed after the animation window, staggers
+   the sections in and sweeps bar fills 0 → value. Sub-tab
+   switches (display:none toggles) can never replay it because
+   the class is gone by then. Reduced-motion: instant, bars full.
    ============================================================ */
 
 .insights-root {
@@ -12,13 +19,41 @@
   gap: var(--space-4);
 }
 
+/* Generous vertical rhythm between sections — grouping by spacing +
+   elevation, not boxes (border diet). */
+.insights-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ---- Section headers — small caps, tracked, hairline underneath
+   (house .review-section-hdr precedent). ---- */
+.insights-hdr {
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.insights-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* ---- Honesty / min-sample gate (T0.3) ----
    Muted "not enough games yet" line for any section below the min-sample
-   gate (backend default: 5 — app/insights.py). */
+   gate (backend default: 5 — app/insights.py). Deliberately quiet: thin
+   data is a fact, never an alarm. */
 .insights-thin-data {
   margin: 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 /* ---- De-emphasized long-run trend slot (T0.3) ----
@@ -31,10 +66,6 @@
   font-size: 0.8rem;
   opacity: 0.85;
 }
-
-/* ============================================================
-   Openings panel (T1.5)
-   ============================================================ */
 
 .insights-loading,
 .insights-empty-note {
@@ -52,17 +83,164 @@
   font-style: italic;
 }
 
-.insights-coverage {
+/* ============================================================
+   Stat blocks — big tabular-nums figure + tracked label + sub
+   (coverage, foreseeable, capitalization).
+   ============================================================ */
+
+.insights-stat-row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.insights-stat {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border-radius: var(--radius-md);
+}
+
+.insights-stat-value {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--accent);
+}
+
+.insights-stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.insights-stat-sub {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* Coverage strip reads as chrome, not content — slightly recessed. */
+.insights-coverage .insights-stat {
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  padding: var(--space-2) var(--space-3);
+}
+
+.insights-coverage .insights-stat-value {
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+/* ============================================================
+   Compact metric rows (adherence / theory gated metrics):
+   label · big mono value · n= count.
+   ============================================================ */
+
+.insights-metric {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.insights-metric-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.insights-metric-value {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.insights-metric-n {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* Sentence-style metric lines (foreseeable motif note etc.). */
+.insights-metric-line {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
-.insights-section {
+/* ============================================================
+   Horizontal bars — win% per family/line, time-trouble buckets.
+   CSS-only: token-colored fill at an inline width %; every value
+   the bar encodes is always also visible as text (a11y).
+   ============================================================ */
+
+.insights-bar-row {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
+
+.insights-bar-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.insights-bar-head .insights-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.insights-bar-wdl,
+.insights-bar-pct,
+.insights-bar-n {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.insights-bar-wdl { color: var(--text-secondary); }
+
+.insights-bar-pct {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.insights-bar-n { color: var(--muted); }
+
+.insights-bar-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-overlay);
+  overflow: hidden;
+}
+
+.insights-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+/* ============================================================
+   Win% by opening — expandable family rows.
+   ============================================================ */
 
 .insights-fam-list,
 .insights-fam-lines,
@@ -76,34 +254,32 @@
   gap: var(--space-2);
 }
 
+/* Per-line rows nest under their family — indented behind a hairline
+   (grouping fails on spacing alone here). */
 .insights-fam-lines {
-  padding-left: var(--space-4);
-}
-
-/* ---- Row styling shared by family toggles, line rows, and game rows ---- */
-.insights-fam-toggle,
-.insights-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+  margin-left: var(--space-3);
+  padding: var(--space-1) 0 var(--space-1) var(--space-4);
+  border-left: 2px solid var(--border-subtle);
 }
 
 .insights-fam-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   width: 100%;
+  padding: var(--space-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font: inherit;
   text-align: left;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color var(--motion-fast) var(--ease-out);
+  transition: background-color var(--motion-fast) var(--ease-out);
 }
 
 .insights-fam-toggle:hover {
-  border-color: var(--border);
+  background: var(--surface-raised);
 }
 
 .insights-fam-toggle:focus-visible,
@@ -112,9 +288,43 @@
   outline-offset: 2px;
 }
 
+/* Disclosure caret (inline Lucide chevron-right) — rotates when open. */
+.insights-caret {
+  flex: none;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-self: center;
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.insights-caret svg {
+  width: 100%;
+  height: 100%;
+}
+
+.insights-fam-toggle[aria-expanded="true"] .insights-caret {
+  transform: rotate(90deg);
+}
+
+/* Color-of-play tag on family rows ("white" / "black"). */
+.insights-fam-color {
+  flex: none;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
 .insights-row-name {
   color: var(--text);
   font-weight: 500;
+  font-size: 0.8rem;
 }
 
 /* Muted modifier for any row/toggle whose backing sample is sub-min. */
@@ -123,27 +333,161 @@
   opacity: 0.85;
 }
 
-.insights-metric-line {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
+.insights-row-thin .insights-row-name,
+.insights-row-thin .insights-bar-pct {
+  color: var(--muted);
 }
 
+.insights-row-thin .insights-bar-fill {
+  opacity: 0.45;
+}
+
+/* ============================================================
+   Game / line rows (adherence, theory) — elevation, no box-lines.
+   ============================================================ */
+
+.insights-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.insights-row-game {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.insights-row-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+/* ============================================================
+   Recurring-mistake clusters — ranked cards with a severity
+   stripe (review foresight-card precedent): the top leak is the
+   loudest, the ramp cools with rank.
+   ============================================================ */
+
+.insights-cluster-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border);
+}
+
+.insights-cluster-list > .insights-cluster-card:nth-child(1) { border-left-color: var(--q-blunder); }
+.insights-cluster-list > .insights-cluster-card:nth-child(2) { border-left-color: var(--q-mistake); }
+.insights-cluster-list > .insights-cluster-card:nth-child(3) { border-left-color: var(--q-inaccuracy); }
+
+.insights-cluster-rank {
+  flex: none;
+  min-width: 1.5ch;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1;
+  text-align: right;
+  color: var(--muted);
+}
+
+.insights-cluster-list > .insights-cluster-card:nth-child(1) .insights-cluster-rank { color: var(--q-blunder); }
+.insights-cluster-list > .insights-cluster-card:nth-child(2) .insights-cluster-rank { color: var(--q-mistake); }
+.insights-cluster-list > .insights-cluster-card:nth-child(3) .insights-cluster-rank { color: var(--q-inaccuracy); }
+
+.insights-cluster-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.insights-cluster-count {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* ============================================================
+   Deep-link buttons — the sole path from an insight into the
+   game; prominent, obviously clickable, ≥24px target.
+   ============================================================ */
+
 .insights-deep-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   padding: var(--space-1) var(--space-3);
-  background: var(--surface-overlay);
-  border: 1px solid var(--border);
+  background: var(--accent-dim);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
   transition:
-    color var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out),
     border-color var(--motion-fast) var(--ease-out);
 }
 
 .insights-deep-link:hover {
+  background: var(--accent-dim-hover);
   border-color: var(--accent);
+}
+
+/* ============================================================
+   Time trouble — payoff callout + mini bar per bucket with a
+   baseline tick.
+   ============================================================ */
+
+/* Prominent "<10s vs baseline" comparison — the payoff line, louder than
+   the metric rows around it (accent stripe, tinted bg — no full box). */
+.insights-highlight {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bucket labels ("<10s", "10-30s") are notation — mono. */
+.insights-tt-bucket {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+}
+
+/* Leak-rate fills use the quality ramp: these bars encode mistakes. */
+.insights-tt-track .insights-bar-fill {
+  background: var(--q-mistake);
+}
+
+/* Overall-baseline tick, positioned by inline left:% from JS. */
+.insights-tt-baseline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text-secondary);
 }
 
 /* ============================================================
@@ -161,6 +505,7 @@
 }
 
 .insights-subtab {
+  min-height: 24px;
   padding: var(--space-2) var(--space-3);
   border: none;
   border-bottom: 2px solid transparent;
@@ -190,22 +535,48 @@
   outline-offset: -2px;
 }
 
-.insights-subpanel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+/* ============================================================
+   Signature motion — one-shot entrance (see header comment).
+   Durations are keyframe-animation literals per house precedent
+   (spinner-rotate etc.); easings use the motion tokens.
+   ============================================================ */
+
+@keyframes insights-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-/* ---- Mistakes: prominent "<10s vs baseline" comparison (T2.5) ----
-   The payoff line of the time-trouble card — visually louder than the
-   regular .insights-metric-line rows around it. */
-.insights-highlight {
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-size: 0.9rem;
-  font-weight: 600;
+/* Sweeps from 0 to the element's inline width:% value. */
+@keyframes insights-bar-sweep {
+  from { width: 0; }
+}
+
+.insights-enter > * {
+  animation: insights-rise 0.36s var(--ease-out) backwards;
+}
+
+.insights-enter > *:nth-child(2) { animation-delay: 55ms; }
+.insights-enter > *:nth-child(3) { animation-delay: 110ms; }
+.insights-enter > *:nth-child(4) { animation-delay: 165ms; }
+.insights-enter > *:nth-child(5) { animation-delay: 220ms; }
+.insights-enter > *:nth-child(n+6) { animation-delay: 275ms; }
+
+.insights-enter .insights-bar-fill {
+  animation: insights-bar-sweep 0.45s var(--ease-out) 0.28s backwards;
+}
+
+/* Reduced motion: everything instant, bars at full value. (The global
+   duration-zeroing rule in style.css also covers this — explicit here
+   per the house per-file-override convention.) */
+@media (prefers-reduced-motion: reduce) {
+  .insights-enter > *,
+  .insights-enter .insights-bar-fill {
+    animation: none;
+  }
 }

@@ -71,16 +71,71 @@ function renderThinData(n, minSample = 5) {
   ]);
 }
 
-// A gated {value, n, sufficient} metric rendered as "label: value (n=N)",
-// muted with renderThinData() when insufficient. `value` is a plain number
-// (e.g. a ply count or a percentage already on a 0-100 scale) — formatted
-// via fmt1. Fraction-based rates (0-1) are rendered inline with scorePct()
-// instead, since their surrounding sentence needs more than "label: value".
+// A gated {value, n, sufficient} metric rendered as a compact metric row
+// (label · big mono value · n=N), muted with renderThinData() when
+// insufficient — the per-metric gating line renders exactly as before.
+// `value` is a plain number (e.g. a ply count or a percentage already on a
+// 0-100 scale) — formatted via fmt1. Fraction-based rates (0-1) are rendered
+// inline with scorePct() instead, since their surrounding sentence needs
+// more than "label: value".
 function renderGatedLine(label, metric, unit = '') {
   const frag = document.createDocumentFragment();
-  frag.appendChild(el('p', { className: 'insights-metric-line' }, [`${label}: ${fmt1(metric.value, unit)} (n=${metric.n})`]));
+  frag.appendChild(el('div', { className: 'insights-metric' }, [
+    el('span', { className: 'insights-metric-label' }, [label]),
+    el('span', { className: 'insights-metric-value' }, [fmt1(metric.value, unit)]),
+    el('span', { className: 'insights-metric-n' }, [`n=${metric.n}`]),
+  ]));
   if (!metric.sufficient) frag.appendChild(renderThinData(metric.n));
   return frag;
+}
+
+// ---------------------------------------------------------------------------
+// Presentation helpers (markup only — no data reads)
+// ---------------------------------------------------------------------------
+
+// Lucide chevron-right, inlined (theme.js precedent) — disclosure caret.
+const CARET_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+
+function caretIcon() {
+  const s = el('span', { className: 'insights-caret', 'aria-hidden': 'true' });
+  s.innerHTML = CARET_SVG;
+  return s;
+}
+
+// 0-1 score → clamped integer percent for bar widths (null-safe).
+function pctOf(score) {
+  return score == null ? null : Math.max(0, Math.min(100, Math.round(score * 100)));
+}
+
+// CSS-only horizontal bar: token-colored fill at an inline width %. The bar
+// is an enhancement — every value it encodes is also always visible as text.
+function barTrack(pct, extraClass = '') {
+  const track = el('div', { className: 'insights-bar-track' + (extraClass ? ` ${extraClass}` : '') });
+  if (pct != null) track.appendChild(el('div', { className: 'insights-bar-fill', style: `width: ${pct}%` }));
+  return track;
+}
+
+// Stat block: big tabular-nums figure + tracked label + context sub-line.
+function statBlock(value, label, sub) {
+  const box = el('div', { className: 'insights-stat' });
+  box.appendChild(el('span', { className: 'insights-stat-value' }, [value]));
+  box.appendChild(el('span', { className: 'insights-stat-label' }, [label]));
+  if (sub) box.appendChild(el('span', { className: 'insights-stat-sub' }, [sub]));
+  return box;
+}
+
+// Signature motion, one-shot: adds .insights-enter (staggered section rise +
+// bar-fill sweep, see insights.css) and removes it once the animation window
+// has passed. Removal is the replay guard — sub-tab switches toggle
+// display:none, which would otherwise restart CSS animations. Called only
+// from the full panel renders, which run exactly once per page load (the
+// _shellBuilt/_mistakesLoaded guards). Reduced-motion zeroes all durations
+// globally (style.css) + insights.css disables these animations explicitly.
+function playEntrance(root) {
+  if (!root) return;
+  root.classList.add('insights-enter');
+  window.setTimeout(() => root.classList.remove('insights-enter'), 1100);
 }
 
 // ---------------------------------------------------------------------------
@@ -125,11 +180,14 @@ function renderDeepLinkButton(gameId, ply, label) {
 // ---------------------------------------------------------------------------
 
 function renderLineRow(line) {
-  const row = el('div', { className: 'insights-row' + (line.sufficient ? '' : ' insights-row-thin') });
-  row.appendChild(el('span', { className: 'insights-row-name' }, [line.opening]));
-  row.appendChild(el('span', {}, [`${line.wins}-${line.draws}-${line.losses}`]));
-  row.appendChild(el('span', {}, [scorePct(line.score)]));
-  row.appendChild(el('span', {}, [`n=${line.n}`]));
+  const row = el('div', { className: 'insights-bar-row' + (line.sufficient ? '' : ' insights-row-thin') });
+  row.appendChild(el('div', { className: 'insights-bar-head' }, [
+    el('span', { className: 'insights-row-name' }, [line.opening]),
+    el('span', { className: 'insights-bar-wdl' }, [`${line.wins}-${line.draws}-${line.losses}`]),
+    el('span', { className: 'insights-bar-pct' }, [scorePct(line.score)]),
+    el('span', { className: 'insights-bar-n' }, [`n=${line.n}`]),
+  ]));
+  row.appendChild(barTrack(pctOf(line.score)));
   return row;
 }
 
@@ -145,10 +203,15 @@ function renderFamilyRow(fam, allLines, idx) {
     'data-family': fam.opening,
     'data-color': fam.color,
   }, [
-    el('span', { className: 'insights-row-name' }, [`${fam.opening} · ${fam.color}`]),
-    el('span', {}, [`${fam.wins}-${fam.draws}-${fam.losses}`]),
-    el('span', {}, [scorePct(fam.score)]),
-    el('span', {}, [`n=${fam.n}`]),
+    el('div', { className: 'insights-bar-head' }, [
+      caretIcon(),
+      el('span', { className: 'insights-row-name' }, [fam.opening]),
+      el('span', { className: 'insights-fam-color' }, [fam.color]),
+      el('span', { className: 'insights-bar-wdl' }, [`${fam.wins}-${fam.draws}-${fam.losses}`]),
+      el('span', { className: 'insights-bar-pct' }, [scorePct(fam.score)]),
+      el('span', { className: 'insights-bar-n' }, [`n=${fam.n}`]),
+    ]),
+    barTrack(pctOf(fam.score)),
   ]);
 
   const lines = allLines.filter((l) => l.family === fam.opening && l.color === fam.color);
@@ -172,7 +235,7 @@ function renderFamilyRow(fam, allLines, idx) {
 
 function renderWinRates(winRates) {
   const section = el('section', { className: 'insights-section', 'data-section': 'win-rates' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Win% by Opening']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Win% by Opening']));
 
   const families = (winRates && winRates.families) || [];
   if (!families.length) {
@@ -193,16 +256,16 @@ function renderWinRates(winRates) {
 function renderAdherenceLineRow(line) {
   const row = el('div', { className: 'insights-row' + (line.sufficient ? '' : ' insights-row-thin') });
   row.appendChild(el('span', { className: 'insights-row-name' }, [line.name + (line.color ? ` (${line.color})` : '')]));
-  row.appendChild(el('span', {}, [`prep depth ${fmt1(line.avg_followed_prep_depth)}`]));
-  row.appendChild(el('span', {}, [`${line.deviations} deviation${line.deviations === 1 ? '' : 's'}`]));
-  row.appendChild(el('span', {}, [`n=${line.n}`]));
+  row.appendChild(el('span', { className: 'insights-row-mono' }, [`prep depth ${fmt1(line.avg_followed_prep_depth)}`]));
+  row.appendChild(el('span', { className: 'insights-row-mono' }, [`${line.deviations} deviation${line.deviations === 1 ? '' : 's'}`]));
+  row.appendChild(el('span', { className: 'insights-bar-n' }, [`n=${line.n}`]));
   return row;
 }
 
 function renderAdherenceGameRow(game) {
   const row = el('div', { className: 'insights-row' });
-  row.appendChild(el('span', {}, [`Game #${game.game_id}`]));
-  row.appendChild(el('span', {}, [`followed ${game.followed_prep_depth} plies`]));
+  row.appendChild(el('span', { className: 'insights-row-game' }, [`Game #${game.game_id}`]));
+  row.appendChild(el('span', { className: 'insights-row-mono' }, [`followed ${game.followed_prep_depth} plies`]));
   if (game.deviation_ply != null) {
     const detail = game.deviation_move
       ? `deviated at ply ${game.deviation_ply} (${game.deviation_move}${game.prepared_san ? ` vs prep ${game.prepared_san}` : ''})`
@@ -217,7 +280,7 @@ function renderAdherenceGameRow(game) {
 
 function renderAdherence(adherence) {
   const section = el('section', { className: 'insights-section', 'data-section': 'adherence' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Repertoire Adherence']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Repertoire Adherence']));
 
   if (!adherence || !adherence.n) {
     section.appendChild(el('p', { className: 'insights-empty-note' }, ['No games matched your prepared repertoire yet.']));
@@ -249,12 +312,12 @@ function renderAdherence(adherence) {
 
 function renderTheoryGameRow(game) {
   const row = el('div', { className: 'insights-row' });
-  row.appendChild(el('span', {}, [`Game #${game.game_id}`]));
+  row.appendChild(el('span', { className: 'insights-row-game' }, [`Game #${game.game_id}`]));
   // book_exit_ply === 0 means the game never entered book — "book-exit ply 0" /
   // "Open at book exit (ply 0)" would wrongly imply an exit event happened.
   const neverInBook = game.book_exit_ply === 0;
-  row.appendChild(el('span', {}, [neverInBook ? 'never reached named theory' : `book-exit ply ${game.book_exit_ply}`]));
-  row.appendChild(el('span', {}, [game.opening_accuracy != null ? `accuracy ${fmt1(game.opening_accuracy, '%')}` : 'accuracy —']));
+  row.appendChild(el('span', { className: 'insights-row-mono' }, [neverInBook ? 'never reached named theory' : `book-exit ply ${game.book_exit_ply}`]));
+  row.appendChild(el('span', { className: 'insights-row-mono' }, [game.opening_accuracy != null ? `accuracy ${fmt1(game.opening_accuracy, '%')}` : 'accuracy —']));
   const label = neverInBook ? 'Open game (no book moves)' : `Open at book exit (ply ${game.book_exit_ply})`;
   row.appendChild(renderDeepLinkButton(game.game_id, game.book_exit_ply, label));
   return row;
@@ -262,7 +325,7 @@ function renderTheoryGameRow(game) {
 
 function renderTheory(theory) {
   const section = el('section', { className: 'insights-section', 'data-section': 'theory' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Theory / Soundness']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Theory / Soundness']));
 
   if (!theory || !theory.n) {
     section.appendChild(el('p', { className: 'insights-empty-note' }, ['No off-repertoire games yet.']));
@@ -294,16 +357,20 @@ function clusterDisplayName(item) {
   return item.name.replace(/\s*\(\d+× so far\)\s*$/, '');
 }
 
-function renderClusterRow(item) {
-  const row = el('div', { className: 'insights-row', 'data-category': item.category, 'data-phase': item.phase });
-  row.appendChild(el('span', { className: 'insights-row-name' }, [`${clusterDisplayName(item)} — ${item.count}×`]));
+function renderClusterRow(item, rank) {
+  const row = el('div', { className: 'insights-cluster-card', 'data-category': item.category, 'data-phase': item.phase });
+  row.appendChild(el('span', { className: 'insights-cluster-rank', 'aria-hidden': 'true' }, [String(rank)]));
+  row.appendChild(el('div', { className: 'insights-cluster-body' }, [
+    el('span', { className: 'insights-row-name' }, [clusterDisplayName(item)]),
+    el('span', { className: 'insights-cluster-count' }, [`${item.count}× recorded`]),
+  ]));
   row.appendChild(renderDeepLinkButton(item.example.game_id, item.example.ply, `Open example (ply ${item.example.ply})`));
   return row;
 }
 
 function renderClusters(clusters) {
   const section = el('section', { className: 'insights-section', 'data-section': 'clusters' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Recurring Mistakes']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Recurring Mistakes']));
 
   const items = (clusters && clusters.items) || [];
   if (!items.length) {
@@ -312,7 +379,7 @@ function renderClusters(clusters) {
   }
 
   const list = el('div', { className: 'insights-cluster-list' });
-  items.forEach((item) => list.appendChild(renderClusterRow(item)));
+  items.forEach((item, idx) => list.appendChild(renderClusterRow(item, idx + 1)));
   section.appendChild(list);
 
   const supp = clusters.suppressed;
@@ -334,7 +401,7 @@ function renderClusters(clusters) {
 
 function renderForeseeable(foreseeable) {
   const section = el('section', { className: 'insights-section', 'data-section': 'foreseeable' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Foreseeable Mistakes']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Foreseeable Mistakes']));
 
   if (!foreseeable || !foreseeable.rate) {
     section.appendChild(el('p', { className: 'insights-empty-note' }, ['No foreseeable-rate data yet.']));
@@ -342,7 +409,9 @@ function renderForeseeable(foreseeable) {
   }
 
   const rate = foreseeable.rate;
-  section.appendChild(el('p', { className: 'insights-metric-line' }, [`Foreseeable: ${scorePct(rate.value)} of mistakes had a warning sign (n=${rate.n}).`]));
+  section.appendChild(el('div', { className: 'insights-stat-row' }, [
+    statBlock(scorePct(rate.value), 'foreseeable', `of mistakes had a warning sign (n=${rate.n})`),
+  ]));
   if (!rate.sufficient) section.appendChild(renderThinData(rate.n));
 
   if (foreseeable.dominant_motif) {
@@ -357,17 +426,28 @@ function renderForeseeable(foreseeable) {
 // Mistakes — time-trouble card
 // ---------------------------------------------------------------------------
 
-function renderTimeTroubleBucketRow(bucket) {
-  const row = el('div', { className: 'insights-row' + (bucket.sufficient ? '' : ' insights-row-thin'), 'data-bucket': bucket.bucket });
-  row.appendChild(el('span', { className: 'insights-row-name' }, [bucket.bucket]));
-  row.appendChild(el('span', {}, [scorePct(bucket.rate)]));
-  row.appendChild(el('span', {}, [`${bucket.leaks}/${bucket.moves} moves`]));
+function renderTimeTroubleBucketRow(bucket, baselinePct) {
+  const row = el('div', { className: 'insights-bar-row' + (bucket.sufficient ? '' : ' insights-row-thin'), 'data-bucket': bucket.bucket });
+  row.appendChild(el('div', { className: 'insights-bar-head' }, [
+    el('span', { className: 'insights-row-name insights-tt-bucket' }, [bucket.bucket]),
+    el('span', { className: 'insights-bar-pct' }, [scorePct(bucket.rate)]),
+    el('span', { className: 'insights-bar-n' }, [`${bucket.leaks}/${bucket.moves} moves`]),
+  ]));
+  const track = barTrack(pctOf(bucket.rate), 'insights-tt-track');
+  if (baselinePct != null) {
+    track.appendChild(el('span', {
+      className: 'insights-tt-baseline',
+      style: `left: ${baselinePct}%`,
+      'aria-hidden': 'true',
+    }));
+  }
+  row.appendChild(track);
   return row;
 }
 
 function renderTimeTrouble(tt) {
   const section = el('section', { className: 'insights-section', 'data-section': 'time-trouble' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Time Trouble']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Time Trouble']));
 
   if (!tt) {
     section.appendChild(el('p', { className: 'insights-empty-note' }, ['No clock data yet.']));
@@ -390,7 +470,9 @@ function renderTimeTrouble(tt) {
   const buckets = tt.buckets || [];
   if (buckets.length) {
     const list = el('div', { className: 'insights-tt-buckets' });
-    buckets.forEach((b) => list.appendChild(renderTimeTroubleBucketRow(b)));
+    // Baseline tick position for each bucket's mini bar (already-read metric).
+    const baselinePct = baseline && baseline.value != null ? pctOf(baseline.value) : null;
+    buckets.forEach((b) => list.appendChild(renderTimeTroubleBucketRow(b, baselinePct)));
     section.appendChild(list);
   }
 
@@ -405,15 +487,15 @@ function renderTimeTrouble(tt) {
 
 function renderCapitalization(cap) {
   const section = el('section', { className: 'insights-section', 'data-section': 'capitalization' });
-  section.appendChild(el('h3', { className: 'eval-label' }, ['Advantage Capitalization']));
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Advantage Capitalization']));
 
   if (!cap || !cap.winning_games) {
     section.appendChild(el('p', { className: 'insights-empty-note' }, ['No sustained-advantage games yet.']));
     return section;
   }
 
-  section.appendChild(el('p', { className: 'insights-metric-line' }, [
-    `Converted ${cap.converted} of ${cap.winning_games} winning games (${scorePct(cap.rate.value)}).`,
+  section.appendChild(el('div', { className: 'insights-stat-row' }, [
+    statBlock(scorePct(cap.rate.value), 'converted', `${cap.converted} of ${cap.winning_games} winning games`),
   ]));
   if (!cap.rate.sufficient) section.appendChild(renderThinData(cap.rate.n));
   if (cap.note) section.appendChild(el('p', { className: 'insights-note' }, [cap.note]));
@@ -426,8 +508,8 @@ function renderCapitalization(cap) {
 // ---------------------------------------------------------------------------
 
 function renderCoverage(coverage) {
-  return el('p', { className: 'insights-coverage', id: 'insights-coverage' }, [
-    `${coverage.qualified} of ${coverage.total} games analyzed + color-tagged.`,
+  return el('div', { className: 'insights-coverage insights-stat-row', id: 'insights-coverage' }, [
+    statBlock(`${coverage.qualified} / ${coverage.total}`, 'games qualified', 'analyzed + color-tagged'),
   ]);
 }
 
@@ -447,6 +529,7 @@ function renderOpeningsPanel(data) {
     renderAdherence(data.adherence),
     renderTheory(data.theory),
   );
+  playEntrance(root);
 }
 
 async function loadOpenings() {
@@ -483,6 +566,7 @@ function renderMistakesPanel(data) {
     renderTimeTrouble(data.time_trouble),
     renderCapitalization(data.capitalization),
   );
+  playEntrance(root);
 }
 
 async function loadMistakes() {
