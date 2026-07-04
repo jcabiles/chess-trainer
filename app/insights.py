@@ -4,9 +4,10 @@ insights.py — Pure read-model builders for the Insights dashboard.
 Openings slice: win% by opening, repertoire adherence, and a named-theory
 fallback for off-repertoire games. Mistakes slice: recurring-mistake
 clusters, foreseeable-rate, time-trouble, and advantage capitalization.
-Post-processing of stored ``games`` / ``game_plies`` / ``leaks`` rows only —
-no engine, no asyncio, no schema change. Mirrors the SQL-then-shape idiom of
-:mod:`app.profile`.
+Endgames slice: per-material-type accuracy and conversion over the stable
+endgame suffix of every analyzed game. Post-processing of stored ``games``
+/ ``game_plies`` / ``leaks`` rows only — no engine, no asyncio, no schema
+change. Mirrors the SQL-then-shape idiom of :mod:`app.profile`.
 
 All sections are gated on games WHERE ``my_color IS NOT NULL`` AND
 ``analysis_status = 'done'`` (same rule as ``profile.build_profile``).
@@ -26,6 +27,7 @@ Public API
 ----------
 build_openings_insights() -> dict
 build_mistakes_insights() -> dict
+build_endgame_insights() -> dict
 
 build_openings_insights() return shape (JSON example)::
 
@@ -122,6 +124,33 @@ build_mistakes_insights() return shape (JSON example)::
       }
     }
 
+build_endgame_insights() return shape (JSON example)::
+
+    {
+      "coverage": {
+        "total": 12, "tagged": 10, "analyzed": 9, "pending": 1,
+        "qualified": 8, "reached_endgame": 5
+      },
+      "types": [
+        {"signature": "rook", "games": 6,
+         "accuracy": {"value": 78.4, "n": 6, "sufficient": true},
+         "conversion": {"winning": 3, "converted": 1,
+                        "rate": {"value": 0.333, "n": 3, "sufficient": false}},
+         "example": {"game_id": 9, "ply": 41}},
+        {"signature": "pawn", "games": 2,
+         "accuracy": {"value": 92.0, "n": 2, "sufficient": false},
+         "conversion": {"winning": 0, "converted": 0,
+                        "rate": {"value": null, "n": 0, "sufficient": false}},
+         "example": {"game_id": 3, "ply": 55}}
+      ],
+      "weakest": "rook",
+      "note": "3 of 8 qualified games never reach a stable endgame phase and
+               are excluded from every count below. 1 game(s) that do reach
+               one have fewer than 4 scored moves in the endgame suffix — too
+               short to be meaningful — and are excluded from the accuracy
+               average only; they still count toward games and conversion."
+    }
+
 Notes on semantics
 ------------------
 - ``win_rates``: score is from the user's perspective (``games.result`` vs
@@ -169,6 +198,26 @@ Notes on semantics
   mover-POV; flipped via the side to move in ``fen_before``) stayed >= 0.8
   for >= 4 consecutive plies; ``rate`` = fraction of those games the user
   actually won.
+- ``endgames``: for each qualified game, the endgame slice is the STABLE
+  suffix found by ``endgame.endgame_start_index`` (games whose final ply
+  isn't endgame-phase have no slice and are excluded from every count).
+  A game is bucketed under the ``endgame.endgame_signature`` of the FIRST
+  ply of that suffix (its "entry type") — a morphing endgame (e.g. R+minor
+  reducing to a pure rook ending) counts entirely under the entry bucket,
+  a documented limitation. ``accuracy`` is the per-signature average of
+  each contributing game's ``accuracy.summarize`` result over its suffix
+  (the ``f"{my_color}_accuracy"`` key), included only when the suffix has
+  >= 4 scored moves for the user's side (a 2-3-ply forced finish is noise);
+  short-suffix exclusions are counted in ``note``, not silently dropped.
+  ``conversion`` reuses the ``capitalization`` "sustained >= 0.8 win-prob
+  for >= 4 consecutive plies" rule scoped to the suffix only. ``example``
+  is the most recent game reaching that signature (by ``imported_at``,
+  then game id, both descending), for deep-linking to the suffix's entry
+  ply. ``weakest`` is the signature with the lowest ``sufficient`` accuracy
+  value; ``None`` when no signature has enough contributing games. ``types``
+  is sorted worst-accuracy-first among sufficient signatures, then every
+  insufficient signature, ties broken by games count (descending) then
+  signature name (ascending).
 """
 
 from __future__ import annotations
@@ -179,7 +228,7 @@ from typing import Any, Optional
 
 import chess
 
-from app import book, coaching, repertoire, storage
+from app import book, coaching, endgame, repertoire, storage
 from app.accuracy import summarize
 from app.analysis import game_phase
 
@@ -735,4 +784,168 @@ def build_mistakes_insights() -> dict:
         "foreseeable": _foreseeable(leaks),
         "time_trouble": _time_trouble(len(games), leaks),
         "capitalization": _capitalization(games),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Endgames slice (T3.1–T3.3)
+# ---------------------------------------------------------------------------
+
+# Endgame accuracy floor: a game's accuracy only joins its signature's
+# average once the endgame suffix has at least this many scored user moves
+# (mirrors _CAP_SUSTAIN_PLIES — a 2-3-ply forced finish is noise, not signal).
+_EG_MIN_MOVES = 4
+
+_ENDGAME_NOTE_TEMPLATE = (
+    "{no_endgame} of {qualified} qualified games never reach a stable "
+    "endgame phase and are excluded from every count below. {short_suffix} "
+    "game(s) that do reach one have fewer than {floor} scored moves in the "
+    "endgame suffix — too short to be meaningful — and are excluded from "
+    "the accuracy average only; they still count toward games and "
+    "conversion."
+)
+
+
+def _endgame_types(games: list[dict]) -> dict:
+    """Bucket qualified games by entry endgame signature.
+
+    *games* must already be sorted ``(imported_at DESC, id DESC)`` — the
+    first game seen per signature becomes its deep-link example (decision 6,
+    docs/ai-dlc/specs/insights-endgames.md).
+
+    Returns ``{"types", "weakest", "note", "reached_endgame"}`` —
+    ``reached_endgame`` is spliced into ``coverage`` by the caller, the rest
+    map straight onto :func:`build_endgame_insights`'s shape.
+    """
+    buckets: dict[str, dict] = {}
+    no_endgame = 0
+    short_suffix = 0
+
+    for game in games:
+        plies = storage.get_plies(game["id"])
+        k = endgame.endgame_start_index(plies)
+        if k is None:
+            no_endgame += 1
+            continue
+        entry_fen = plies[k].get("fen_before")
+        if not entry_fen:
+            # Guaranteed classifiable by construction — endgame_start_index
+            # only returns an index whose ply proved endgame-phase — but
+            # every chess.Board() call site guards fen anyway (contracts
+            # risk #2).
+            no_endgame += 1
+            continue
+        try:
+            entry_board = chess.Board(entry_fen)
+        except ValueError:
+            no_endgame += 1
+            continue
+
+        my_color = game["my_color"]
+        suffix = plies[k:]  # contiguous slice only (risk #1) — never a filter.
+        signature = endgame.endgame_signature(entry_board)
+
+        bucket = buckets.setdefault(signature, {
+            "games": 0,
+            "acc_values": [],
+            "winning": 0,
+            "converted": 0,
+            "example": {"game_id": game["id"], "ply": plies[k]["ply"]},
+        })
+        bucket["games"] += 1
+
+        summary = summarize(suffix, my_color)
+        if summary is not None:
+            my_moves = summary[f"{my_color}_moves"]
+            if my_moves >= _EG_MIN_MOVES:
+                bucket["acc_values"].append(summary[f"{my_color}_accuracy"])
+            else:
+                short_suffix += 1
+
+        score = _user_score(game.get("result"), my_color)
+        if score is not None:
+            run = 0
+            sustained = False
+            for row in suffix:
+                user_wp = _user_win_prob(row, my_color)
+                if user_wp is not None and user_wp >= _CAP_WIN_PROB:
+                    run += 1
+                    if run >= _CAP_SUSTAIN_PLIES:
+                        sustained = True
+                        break
+                else:
+                    run = 0
+            if sustained:
+                bucket["winning"] += 1
+                bucket["converted"] += score == 1.0
+
+    types = []
+    for signature, bucket in buckets.items():
+        acc_values = bucket["acc_values"]
+        accuracy = gated(
+            round(mean(acc_values), 1) if acc_values else None, len(acc_values))
+        winning = bucket["winning"]
+        converted = bucket["converted"]
+        types.append({
+            "signature": signature,
+            "games": bucket["games"],
+            "accuracy": accuracy,
+            "conversion": {
+                "winning": winning,
+                "converted": converted,
+                "rate": gated(
+                    round(converted / winning, 3) if winning else None, winning),
+            },
+            "example": bucket["example"],
+        })
+
+    # Worst (lowest) accuracy first among sufficient signatures, then every
+    # insufficient signature; ties broken by games count desc, signature asc
+    # (decision 7).
+    types.sort(key=lambda t: (
+        0 if t["accuracy"]["sufficient"] else 1,
+        t["accuracy"]["value"] if t["accuracy"]["sufficient"] else 0.0,
+        -t["games"],
+        t["signature"],
+    ))
+    weakest = (
+        types[0]["signature"]
+        if types and types[0]["accuracy"]["sufficient"]
+        else None
+    )
+
+    note = _ENDGAME_NOTE_TEMPLATE.format(
+        no_endgame=no_endgame, qualified=len(games),
+        short_suffix=short_suffix, floor=_EG_MIN_MOVES)
+
+    return {
+        "types": types,
+        "weakest": weakest,
+        "note": note,
+        "reached_endgame": len(games) - no_endgame,
+    }
+
+
+def build_endgame_insights() -> dict:
+    """Build the Endgames insights read-model (see module docstring for shape).
+
+    Pure post-processing of stored rows: no engine, no writes. Raises
+    RuntimeError when storage has not been initialised (same as profile.py).
+    """
+    games = _qualified_games()
+    # _qualified_games() has no ORDER BY — sort explicitly so the first game
+    # seen per signature is deterministically the most recent (decision 6).
+    games.sort(key=lambda g: (g["imported_at"], g["id"]), reverse=True)
+
+    section = _endgame_types(games)
+
+    coverage = storage.coverage()
+    coverage["qualified"] = len(games)
+    coverage["reached_endgame"] = section["reached_endgame"]
+
+    return {
+        "coverage": coverage,
+        "types": section["types"],
+        "weakest": section["weakest"],
+        "note": section["note"],
     }
