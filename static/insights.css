@@ -81,6 +81,8 @@
   color: var(--text-secondary);
   font-size: 0.78rem;
   font-style: italic;
+  /* Long notes (endgames) read badly at full panel width — cap the measure. */
+  max-width: 68ch;
 }
 
 /* ============================================================
@@ -491,7 +493,80 @@
 }
 
 /* ============================================================
-   Sub-tab shell (Openings / Mistakes) — T2.5
+   Endgame type cards — T3.4. Same elevation-card recipe as the
+   cluster cards (surface-raised, left stripe), but the stripe is
+   neutral by default and turns --q-blunder only on the single
+   weakest type: one loud element per screen. Accuracy bars reuse
+   the shared insights-bar-* recipe, so they join the entrance
+   sweep for free.
+   ============================================================ */
+
+.insights-eg-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.insights-eg-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border);
+}
+
+.insights-eg-weakest {
+  border-left-color: var(--q-blunder);
+}
+
+.insights-eg-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.insights-eg-head .insights-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* "Weakest type" tag — quality-ramp tint pair (badge precedent). */
+.insights-eg-tag {
+  flex: none;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--q-blunder-dim);
+  color: var(--q-blunder);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Conversion sentence + mono rate (rate span reuses .insights-bar-pct). */
+.insights-eg-conv {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* Column-flex parent would stretch the deep-link button full-width. */
+.insights-eg-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* ============================================================
+   Sub-tab shell (Openings / Mistakes / Endgames) — T2.5
    Sub-panels use role="tabpanel" + .is-active, which style.css's generic
    `[role="tabpanel"]:not(.is-active) { display: none }` (style.css:435)
    already hides/shows — no display rule needed here for .insights-subpanel.

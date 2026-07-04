@@ -6,27 +6,28 @@
 // (el()) as module-private helpers rather than importing them from review.js.
 //
 // Layout: the Insights tab hosts one internal sub-tab bar ("Openings" /
-// "Mistakes", Endgames to follow in Phase 3) rather than stacking all three
-// slices' full panels in one long scroll. Each slice has its own /api/insights/*
-// coverage line, so stacking would repeat "X of Y games analyzed…" once per
-// slice — a sub-tab switcher avoids that and scales cleanly as more phases
-// land. The sub-tabs are built lazily (see wireLazyLoad/buildShell below).
+// "Mistakes" / "Endgames") rather than stacking all three slices' full panels
+// in one long scroll. Each slice has its own /api/insights/* coverage line,
+// so stacking would repeat "X of Y games analyzed…" once per slice — a
+// sub-tab switcher avoids that and scales cleanly as more phases land. The
+// sub-tabs are built lazily (see wireLazyLoad/buildShell below).
 //
 // Fetch strategy: per-section lazy, not "fetch everything on first open".
 // GET /api/insights/openings fires the first time the OUTER Insights tab is
 // shown (Openings is the default active sub-tab); GET /api/insights/mistakes
-// fires the first time the Mistakes sub-tab itself is clicked. Each fetch
-// happens at most once per page load.
+// and /api/insights/endgames each fire the first time their own sub-tab is
+// clicked. Each fetch happens at most once per page load.
 //
 // Deep-links reuse api.actions.openGameAtPly (T0.2). renderThinData() + the
 // .insights-trend CSS class are the shared honesty/min-sample convention
-// (T0.3) reused across every section below and by the upcoming Endgames slice.
+// (T0.3) reused across every section below, Endgames included.
 
 const byId = (id) => document.getElementById(id);
 
 let _api = null;
-let _shellBuilt = false;   // true once the Openings/Mistakes sub-tab shell exists
+let _shellBuilt = false;   // true once the Openings/Mistakes/Endgames sub-tab shell exists
 let _mistakesLoaded = false;
+let _endgamesLoaded = false;
 
 function el(tag, attrs = {}, children = []) {
   const e = document.createElement(tag);
@@ -581,14 +582,138 @@ async function loadMistakes() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-tab shell (Openings / Mistakes) + lazy fetch wiring
+// Panel assembly + fetch — Endgames
 // ---------------------------------------------------------------------------
 
-// Builds the Openings/Mistakes sub-tab bar once, the first time the outer
-// Insights tab is shown. Sub-panels use role="tabpanel" + the `.is-active`
-// class specifically so they're hidden by style.css's existing generic rule
-// (`[role="tabpanel"]:not(.is-active) { display: none }`, style.css:435) —
-// no new show/hide CSS needed in insights.css.
+// Backend material signatures (app/endgame.py) → plain-English labels.
+// Anything unmapped (e.g. 'rook', 'queen', 'knight', 'minor', 'mixed') just
+// gets its first letter capitalized.
+const EG_SIGNATURE_NAMES = {
+  'pawn': 'King + pawn',
+  'two-rook': 'Double rook',
+  'R+minor': 'Rook + minor',
+  'Q+piece': 'Queen + piece',
+  'same-bishops': 'Same-color bishops',
+  'opposite-bishops': 'Opposite-color bishops',
+};
+
+function humanizeSignature(sig) {
+  if (Object.prototype.hasOwnProperty.call(EG_SIGNATURE_NAMES, sig)) return EG_SIGNATURE_NAMES[sig];
+  return sig ? sig.charAt(0).toUpperCase() + sig.slice(1) : sig;
+}
+
+// Endgames-specific coverage strip: same recessed chrome treatment as
+// renderCoverage(), but the extra population step ("qualified game may never
+// stably reach an endgame") is the number that matters here.
+function renderEndgamesCoverage(coverage) {
+  return el('div', { className: 'insights-coverage insights-stat-row' }, [
+    statBlock(
+      `${coverage.reached_endgame} / ${coverage.qualified}`,
+      'reach a stable endgame',
+      'of analyzed, color-tagged games'
+    ),
+  ]);
+}
+
+// One material-signature card: name + games count, accuracy as an azure bar
+// (accuracy.value is already on the 0-100 scale — rescale for pctOf), then
+// conversion as a sentence + mono rate. The API's weakest signature carries
+// the severity stripe (cluster-card precedent) + a small tag; each metric
+// gates its own thin-data line independently.
+function renderEndgameTypeRow(t, weakest) {
+  const isWeakest = weakest != null && t.signature === weakest;
+  const row = el('div', {
+    className: 'insights-eg-row' + (isWeakest ? ' insights-eg-weakest' : ''),
+    'data-signature': t.signature,
+  });
+
+  const head = el('div', { className: 'insights-eg-head' }, [
+    el('span', { className: 'insights-row-name' }, [humanizeSignature(t.signature)]),
+  ]);
+  if (isWeakest) head.appendChild(el('span', { className: 'insights-eg-tag' }, ['weakest type']));
+  head.appendChild(el('span', { className: 'insights-bar-n' }, [`${t.games} game${t.games === 1 ? '' : 's'}`]));
+  row.appendChild(head);
+
+  const acc = t.accuracy || { value: null, n: 0, sufficient: false };
+  const accRow = el('div', { className: 'insights-bar-row' + (acc.sufficient ? '' : ' insights-row-thin') });
+  accRow.appendChild(el('div', { className: 'insights-bar-head' }, [
+    el('span', { className: 'insights-metric-label' }, ['Accuracy in this endgame']),
+    el('span', { className: 'insights-bar-pct' }, [fmt1(acc.value, '%')]),
+    el('span', { className: 'insights-bar-n' }, [`n=${acc.n}`]),
+  ]));
+  accRow.appendChild(barTrack(pctOf(acc.value != null ? acc.value / 100 : null)));
+  row.appendChild(accRow);
+  if (!acc.sufficient) row.appendChild(renderThinData(acc.n));
+
+  const conv = t.conversion;
+  if (conv && conv.winning) {
+    row.appendChild(el('p', { className: 'insights-eg-conv' }, [
+      `Converted ${conv.converted} of ${conv.winning} winning`,
+      el('span', { className: 'insights-bar-pct' }, [scorePct(conv.rate.value)]),
+    ]));
+    if (!conv.rate.sufficient) row.appendChild(renderThinData(conv.rate.n));
+  } else {
+    row.appendChild(el('p', { className: 'insights-empty-note' }, ['No clearly winning positions in these endgames yet.']));
+  }
+
+  if (t.example) {
+    row.appendChild(el('div', { className: 'insights-eg-actions' }, [
+      renderDeepLinkButton(t.example.game_id, t.example.ply, `Open example (ply ${t.example.ply})`),
+    ]));
+  }
+
+  return row;
+}
+
+function renderEndgamesPanel(root, data) {
+  if (!root) return;
+
+  const coverage = data && data.coverage;
+  if (!coverage || !coverage.qualified) {
+    renderEmptyState(root, 'No analyzed, color-tagged games yet — analyze + tag a game to see endgame insights.');
+    return;
+  }
+
+  // Qualified games exist but none stably reach an endgame — the API note
+  // explains exactly why the panel is empty; show it verbatim (honesty gate).
+  const types = (data && data.types) || [];
+  if (!coverage.reached_endgame || !types.length) {
+    renderEmptyState(root, data.note || 'No games reach a stable endgame yet.');
+    return;
+  }
+
+  const section = el('section', { className: 'insights-section', 'data-section': 'endgame-types' });
+  section.appendChild(el('h2', { className: 'insights-hdr' }, ['Endgame Types']));
+  const list = el('div', { className: 'insights-eg-list' });
+  types.forEach((t) => list.appendChild(renderEndgameTypeRow(t, data.weakest)));
+  section.appendChild(list);
+
+  const children = [renderEndgamesCoverage(coverage), section];
+  if (data.note) children.push(el('p', { className: 'insights-note' }, [data.note]));
+  root.replaceChildren(...children);
+  playEntrance(root);
+}
+
+async function loadEndgames() {
+  const root = byId('insights-panel-endgames');
+  renderLoading(root);
+  try {
+    const data = await fetchJSON('/api/insights/endgames');
+    renderEndgamesPanel(root, data);
+  } catch (_) {
+    renderEmptyState(root, "Couldn't load insights right now.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-tab shell (Openings / Mistakes / Endgames) + lazy fetch wiring
+// ---------------------------------------------------------------------------
+
+// Builds the Openings/Mistakes/Endgames sub-tab bar once, the first time the
+// outer Insights tab is shown. Sub-panels use role="tabpanel" + the
+// `.is-active` class specifically so they're hidden by style.css's existing
+// generic rule (`[role="tabpanel"]:not(.is-active) { display: none }`,
+// style.css:435) — no new show/hide CSS needed in insights.css.
 function buildShell() {
   const root = byId('insights-root');
   if (!root) return;
@@ -602,7 +727,11 @@ function buildShell() {
     type: 'button', className: 'insights-subtab', role: 'tab', 'data-subtab': 'mistakes',
     'aria-selected': 'false', 'aria-controls': 'insights-panel-mistakes', id: 'insights-subtab-mistakes',
   }, ['Mistakes']);
-  tabs.append(openingsTab, mistakesTab);
+  const endgamesTab = el('button', {
+    type: 'button', className: 'insights-subtab', role: 'tab', 'data-subtab': 'endgames',
+    'aria-selected': 'false', 'aria-controls': 'insights-panel-endgames', id: 'insights-subtab-endgames',
+  }, ['Endgames']);
+  tabs.append(openingsTab, mistakesTab, endgamesTab);
 
   const openingsPanel = el('div', {
     className: 'insights-subpanel is-active', role: 'tabpanel', id: 'insights-panel-openings',
@@ -612,7 +741,12 @@ function buildShell() {
     className: 'insights-subpanel', role: 'tabpanel', id: 'insights-panel-mistakes',
     'aria-labelledby': 'insights-subtab-mistakes',
   });
+  const endgamesPanel = el('div', {
+    className: 'insights-subpanel', role: 'tabpanel', id: 'insights-panel-endgames',
+    'aria-labelledby': 'insights-subtab-endgames',
+  });
   renderEmptyState(mistakesPanel, 'Click "Mistakes" to load mistake diagnostics.');
+  renderEmptyState(endgamesPanel, 'Click "Endgames" to load endgame diagnostics.');
 
   tabs.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-subtab]');
@@ -621,18 +755,24 @@ function buildShell() {
     tabs.querySelectorAll('button[data-subtab]').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
     openingsPanel.classList.toggle('is-active', name === 'openings');
     mistakesPanel.classList.toggle('is-active', name === 'mistakes');
+    endgamesPanel.classList.toggle('is-active', name === 'endgames');
     if (name === 'mistakes' && !_mistakesLoaded) {
       _mistakesLoaded = true;
       loadMistakes();
     }
+    if (name === 'endgames' && !_endgamesLoaded) {
+      _endgamesLoaded = true;
+      loadEndgames();
+    }
   });
 
-  root.replaceChildren(tabs, openingsPanel, mistakesPanel);
+  root.replaceChildren(tabs, openingsPanel, mistakesPanel, endgamesPanel);
 }
 
 // First activation of the OUTER Insights tab: build the sub-tab shell and
-// kick off the Openings fetch (the default active sub-tab). Mistakes fetches
-// separately, lazily, on its own first sub-tab click (see buildShell above).
+// kick off the Openings fetch (the default active sub-tab). Mistakes and
+// Endgames fetch separately, lazily, on their own first sub-tab click (see
+// buildShell above).
 function activateInsightsTab() {
   if (_shellBuilt) return;
   _shellBuilt = true;
