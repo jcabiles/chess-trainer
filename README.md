@@ -14,8 +14,31 @@ move *before* each blunder.
 All open-source, free, and local-first. No accounts. Runtime API calls stay on
 your machine; the page may fetch pinned frontend assets from a CDN on first load.
 
-![Stockfish Analysis Board — board with live evaluation, best line, opening
-repertoire tree, and trap catalog](docs/screenshot.png)
+![Stockfish Analysis Board — the analysis board after 5…Nxe4?, showing the eval
+jump to +3.53, a **Blunder** label, the retrospective best move (5…exd4) with a
+runner-up, Stockfish's best line, and the clickable move list](docs/screenshot.png)
+
+<table>
+<tr>
+<td width="60%" valign="top">
+
+**Repertoire trainer** — your prepared lines per color (Italian, Open Sicilian,
+Scandinavian…), each browsable move-by-move or drillable in practice with
+live deviation-checking.
+
+![Repertoire trainer — prepared lines for White and Black beside the board](docs/feature-repertoire.png)
+
+</td>
+<td width="40%" valign="top">
+
+**Opening-traps trainer** — a curated catalog with watch + practice modes and
+per-move coaching notes.
+
+![Opening-traps trainer — the Fried Liver Attack walkthrough with commentary](docs/feature-traps.png)
+
+</td>
+</tr>
+</table>
 
 ## Stack
 - **Backend:** FastAPI + Uvicorn, [python-chess](https://python-chess.readthedocs.io/) (engine driver + rules)
