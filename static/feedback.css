@@ -38,7 +38,8 @@
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent); /* info accent by default */
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  /* Same elevation token as the review toast — one shadow story for toasts. */
+  box-shadow: var(--shadow-toast);
 
   /* Typography */
   color: var(--text);

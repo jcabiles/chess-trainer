@@ -9,6 +9,24 @@
   <meta name="color-scheme" content="dark light" />
   <title>Stockfish Analysis Board</title>
 
+  <!-- Pre-paint theme resolution — MUST run before style.css loads so a stored
+       light preference never flashes dark (and vice versa). Duplicates the
+       prefs.js storage key by design: modules can't be imported this early.
+       Keep the key in sync with prefs.js. theme.js owns everything after paint. -->
+  <script>
+    (function () {
+      var theme = 'system';
+      try {
+        var prefs = JSON.parse(localStorage.getItem('chess-training:ui:v1') || '{}') || {};
+        if (prefs.theme === 'light' || prefs.theme === 'dark') theme = prefs.theme;
+      } catch (e) { /* malformed JSON → system */ }
+      if (theme === 'system') {
+        theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
+
   <!-- Inter + JetBrains Mono via Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,23 +41,38 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.base.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.brown.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css" />
-  <link rel="stylesheet" href="/static/style.css" />
-  <link rel="stylesheet" href="/static/panel.css" />
-  <link rel="stylesheet" href="/static/feedback.css" />
-  <link rel="stylesheet" href="/static/movelist.css" />
-  <link rel="stylesheet" href="/static/review.css" />
-  <link rel="stylesheet" href="/static/insights.css" />
+  <!-- ?v= cache-buster: bump the date when shipping CSS/JS changes — static
+       assets carry no Cache-Control header, so stale styles bite otherwise.
+       Only direct references can be versioned; app.js's own bare relative
+       sub-imports (panel.js, feedback.js, …) are untouched by design. -->
+  <link rel="stylesheet" href="/static/style.css?v=20260703" />
+  <link rel="stylesheet" href="/static/panel.css?v=20260703" />
+  <link rel="stylesheet" href="/static/feedback.css?v=20260703" />
+  <link rel="stylesheet" href="/static/movelist.css?v=20260703" />
+  <link rel="stylesheet" href="/static/review.css?v=20260703" />
+  <link rel="stylesheet" href="/static/insights.css?v=20260703" />
 
   <!-- Lucide icons via esm.sh — replaces HTML-entity glyphs on nav buttons -->
   <script type="module">
-    import { createIcons, Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2 } from 'https://esm.sh/lucide@1.22.0';
-    createIcons({ icons: { Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2 } });
+    import {
+      createIcons,
+      Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2,
+      Move, Eraser, X, ChevronDown,
+      ChevronFirst, ChevronLeft, ChevronRight, ChevronLast,
+    } from 'https://esm.sh/lucide@1.22.0';
+    createIcons({ icons: {
+      Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2,
+      Move, Eraser, X, ChevronDown,
+      ChevronFirst, ChevronLeft, ChevronRight, ChevronLast,
+    } });
   </script>
 </head>
 <body>
   <header>
     <h1>Stockfish Analysis Board</h1>
     <p class="sub">Move both colors freely. Stockfish evaluates every move.</p>
+    <!-- Icon + label injected by theme.js (cycles system → light → dark) -->
+    <button id="theme-toggle" type="button" aria-label="Theme: system"></button>
   </header>
 
   <main>
@@ -58,7 +91,7 @@
       </div>
 
       <div class="fen-row">
-        <input id="fen-input" type="text" placeholder="Paste a FEN to jump to a position…" />
+        <input id="fen-input" type="text" aria-label="FEN position" placeholder="Paste a FEN to jump to a position…" />
         <button id="load-fen">Load</button>
       </div>
       <div id="fen-error" class="error" hidden></div>
@@ -68,7 +101,7 @@
         <div class="setup-hint">Drag pieces to rearrange · drag off-board to delete · pick a piece below to stamp it onto squares</div>
 
         <div id="palette" class="palette">
-          <button data-tool="move" class="tool active" title="Move / drag pieces">&#10021; Move</button>
+          <button data-tool="move" class="tool active" title="Move / drag pieces"><i data-lucide="move"></i> Move</button>
           <span class="palette-set">
             <button data-piece="wK" title="White king">&#9812;</button>
             <button data-piece="wQ" title="White queen">&#9813;</button>
@@ -85,7 +118,7 @@
             <button data-piece="bN" title="Black knight">&#9822;</button>
             <button data-piece="bP" title="Black pawn">&#9823;</button>
           </span>
-          <button data-tool="erase" class="tool" title="Erase pieces">&#9003; Erase</button>
+          <button data-tool="erase" class="tool" title="Erase pieces"><i data-lucide="eraser"></i> Erase</button>
         </div>
 
         <div class="setup-row">
@@ -111,20 +144,22 @@
           <button id="trap-return">Return to my game</button>
         </div>
         <div class="trap-controls">
-          <button id="trap-mode-toggle">Watch ⇄ Practice</button>
-          <select id="trap-variation" class="trap-variation" title="Choose a variation" hidden></select>
+          <!-- Label is rewritten by app.js (applyTrapModeUI → textContent), so this
+               static text must stay plain — an inline icon here would be destroyed. -->
+          <button id="trap-mode-toggle">Switch to Practice</button>
+          <select id="trap-variation" class="trap-variation" title="Choose a variation" aria-label="Choose a variation" hidden></select>
         </div>
         <div id="trap-stepper" class="trap-stepper">
-          <button id="trap-first" title="First">&#9198;</button>
-          <button id="trap-prev">&#9664; Prev</button>
-          <button id="trap-next">Next &#9654;</button>
-          <button id="trap-last" title="Last">&#9197;</button>
+          <button id="trap-first" title="First" aria-label="First move"><i data-lucide="chevron-first"></i></button>
+          <button id="trap-prev"><i data-lucide="chevron-left"></i> Prev</button>
+          <button id="trap-next">Next <i data-lucide="chevron-right"></i></button>
+          <button id="trap-last" title="Last" aria-label="Last move"><i data-lucide="chevron-last"></i></button>
         </div>
         <div id="trap-move" class="trap-move"></div>
         <div id="trap-note" class="trap-note"></div>
         <div id="trap-feedback" class="trap-feedback" hidden></div>
         <div id="trap-reveal" class="trap-reveal" hidden>
-          <button id="trap-back" title="Undo your last move and the opponent's reply">&#9664; Take back</button>
+          <button id="trap-back" title="Undo your last move and the opponent's reply"><i data-lucide="undo-2"></i> Take back</button>
           <button id="trap-reveal-move" title="Play the next correct move for me">Reveal move</button>
           <button id="trap-show-refutation" title="Show what the opponent should have played">Show refutation</button>
         </div>
@@ -150,7 +185,7 @@
         <div id="rep-note" class="rep-note"></div>
         <div id="rep-feedback" class="rep-feedback" hidden></div>
         <div class="rep-controls">
-          <button id="rep-back" title="Undo your last move and the opponent's reply">&#9664; Take back</button>
+          <button id="rep-back" title="Undo your last move and the opponent's reply"><i data-lucide="undo-2"></i> Take back</button>
           <button id="rep-reveal" title="Play the prepared move for me">Reveal move</button>
           <button id="rep-restart" title="Restart this line from the beginning"><i data-lucide="rotate-ccw"></i> Restart</button>
         </div>
@@ -200,7 +235,7 @@
         </div>
 
         <div class="movelist-block">
-          <button id="movelist-toggle" class="movelist-toggle eval-label" aria-expanded="true" aria-controls="move-list">Moves <span class="movelist-chevron" aria-hidden="true">▾</span></button>
+          <button id="movelist-toggle" class="movelist-toggle eval-label" aria-expanded="true" aria-controls="move-list">Moves <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
           <div id="move-list" class="move-list"></div>
         </div>
 
@@ -210,7 +245,7 @@
         <div id="trap-chip" class="trap-chip" hidden>
           <span id="trap-chip-text" class="trap-chip-text"></span>
           <button id="trap-chip-drill" class="trap-chip-drill">Drill it</button>
-          <button id="trap-chip-dismiss" class="trap-chip-dismiss" title="Dismiss">&#10005;</button>
+          <button id="trap-chip-dismiss" class="trap-chip-dismiss" title="Dismiss" aria-label="Dismiss"><i data-lucide="x"></i></button>
         </div>
       </div>
 
@@ -227,8 +262,8 @@
         <div id="traps-section" class="traps-section">
           <div class="eval-label">Opening Traps</div>
           <div class="traps-filters">
-            <input id="traps-name-filter" type="text" placeholder="Filter by name…" />
-            <select id="traps-color-filter">
+            <input id="traps-name-filter" type="text" aria-label="Filter traps by name" placeholder="Filter by name…" />
+            <select id="traps-color-filter" aria-label="Filter traps by color">
               <option value="">All colors</option>
               <option value="white">White</option>
               <option value="black">Black</option>
@@ -279,6 +314,7 @@
     </div>
   </dialog>
 
-  <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/theme.js?v=20260703"></script>
+  <script type="module" src="/static/app.js?v=20260703"></script>
 </body>
 </html>

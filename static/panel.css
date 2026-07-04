@@ -17,7 +17,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: oklch(18% 0.01 248); /* near-black, matches board dark theme */
+  background: var(--eval-bar-black); /* chess-semantic near-black, theme-independent */
 }
 
 /* White fill: grows from the bottom according to --fill (0–100%) */
@@ -28,7 +28,7 @@
   left: 0;
   right: 0;
   height: var(--fill, 50%);
-  background: oklch(94% 0.004 248); /* near-white with cool tint */
+  background: var(--eval-bar-white); /* chess-semantic near-white, theme-independent */
   transition: height var(--motion-base) var(--ease-out);
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }

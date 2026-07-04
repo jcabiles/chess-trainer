@@ -121,3 +121,18 @@ button.movelist-move:focus-visible {
   color: var(--muted);
   cursor: default;
 }
+
+/* ---- Mobile hit-boxes — WCAG 2.2 AA (SC 2.5.8) ----
+   Rows are flush (no gap), so the spacing exception does not apply:
+   each control itself must be ≥24px tall. Desktop density unchanged. */
+@media (max-width: 820px) {
+  .movelist-toggle {
+    min-height: 24px;
+  }
+
+  .movelist-move {
+    min-height: 24px;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+}

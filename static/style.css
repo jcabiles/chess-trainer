@@ -24,21 +24,19 @@
   /* Border subtle — hairlines */
   --border-subtle:   oklch(25% 0.013 248); /* #2a3342 */
 
-  /* Legacy aliases (keep the old var names pointing to new tokens) */
-  --bg:       var(--surface-base);
-  --panel-bg: var(--surface-panel);
-
   /* ---- Text hierarchy ---- */
   /* Primary — nearly white, cool tint, ≥7:1 on surface-base */
   --text:         oklch(94% 0.008 248); /* #e8edf4 */
   /* Secondary — label text, slightly dimmed, ≥4.5:1 on surface-panel */
   --text-secondary: oklch(74% 0.012 248); /* #a8b4c8 */
-  /* Muted — very dim metadata, ≥4.5:1 on surface-raised */
-  --muted:        oklch(63% 0.014 248); /* ≥4.5:1 on every surface incl. raised */
+  /* Muted — very dim metadata, ≥4.5:1 on EVERY surface incl. overlay
+     (64%: 5.93 base / 5.60 panel / 5.15 raised / 4.62 overlay) */
+  --muted:        oklch(64% 0.014 248); /* #868d94 */
 
   /* ---- Accent — electric azure ---- */
   --accent:        oklch(72% 0.19 231);  /* #38bdf8  sky-400-ish */
   --accent-dim:    oklch(30% 0.09 231);  /* #0c2a40 — subtle tinted bg */
+  --accent-dim-hover: oklch(25% 0.09 231); /* #062338 — accent-dim, one step deeper on hover */
   --accent-on:     oklch(13% 0.03 248);  /* near-black text on accent bg */
 
   /* ---- Semantic error ---- */
@@ -51,6 +49,17 @@
   --q-mistake:    oklch(75% 0.16 55);  /* #fb923c */
   --q-blunder:    oklch(65% 0.18 22);  /* #f87171 */
   --q-book:       var(--accent);
+
+  /* ---- Quality tinted backgrounds (badge/button fills, pair with --q-*) ---- */
+  --q-best-dim:       oklch(18% 0.05 145); /* dark green tint  — pairs --q-best */
+  --q-inaccuracy-dim: oklch(18% 0.05 85);  /* dark amber tint  — pairs --q-inaccuracy */
+  --q-blunder-dim:    oklch(18% 0.05 22);  /* dark red tint    — pairs --q-blunder */
+  --q-blunder-border: oklch(32% 0.07 22);  /* danger button border */
+
+  /* ---- Eval bar (chess-semantic: Black/White advantage — theme-INDEPENDENT,
+          identical in both themes; do not retune for light) ---- */
+  --eval-bar-black: oklch(18% 0.01 248);  /* near-black, matches board dark theme */
+  --eval-bar-white: oklch(94% 0.004 248); /* near-white with cool tint */
 
   /* ---- Spacing scale (4px base) ---- */
   --space-1:  4px;
@@ -71,6 +80,7 @@
   --shadow-sm:  0 1px 3px oklch(0% 0 0 / 0.3), 0 1px 2px oklch(0% 0 0 / 0.2);
   --shadow-md:  0 4px 12px oklch(0% 0 0 / 0.35), 0 2px 4px oklch(0% 0 0 / 0.2);
   --shadow-lg:  0 8px 24px oklch(0% 0 0 / 0.45), 0 4px 8px oklch(0% 0 0 / 0.25);
+  --shadow-toast: 0 2px 8px oklch(0% 0 0 / 0.35);
 
   /* ---- Scrim (modal backdrop) ---- */
   --scrim: oklch(0% 0 0 / 0.65);
@@ -80,6 +90,68 @@
   --motion-base: 200ms;
   --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================
+   Light theme — same Electric Azure system on cool paper.
+   Applied via html[data-theme="light"], set pre-paint by the
+   inline <head> script (theme.js keeps it live). Overrides
+   TOKENS ONLY; component rules never change per theme.
+   Elevation inverts: base is lightest, panel/raised/overlay
+   step DOWN in lightness (deeper = closer to the desk).
+   All pairs verified ≥4.5:1 text / ≥3:1 UI (see each comment).
+   ============================================================ */
+html[data-theme="light"] {
+  /* Both values, light first — dropping `dark` re-enables Chrome
+     auto-dark image inversion (white-pieces bug, see :root note). */
+  color-scheme: light dark;
+
+  /* ---- Surfaces — cool paper, stepping down for elevation ---- */
+  --surface-base:    oklch(97.5% 0.005 248); /* #f4f7fa */
+  --surface-panel:   oklch(94.5% 0.007 248); /* #e9edf1 */
+  --surface-raised:  oklch(92% 0.009 248);   /* #e0e5ea */
+  --surface-overlay: oklch(89% 0.011 248);   /* #d5dce2 */
+  --border:          oklch(78% 0.015 248);   /* #b0b8c1 */
+  --border-subtle:   oklch(86% 0.01 248);    /* #ccd2d7 */
+
+  /* ---- Text — 16.1:1 / 7.9:1 / 6.6:1 on base; ≥4.9:1 on overlay ---- */
+  --text:           oklch(22% 0.015 248); /* #151b21 */
+  --text-secondary: oklch(42% 0.018 248); /* #464e57 */
+  --muted:          oklch(46% 0.02 248);  /* #505963 */
+
+  /* ---- Accent — deep azure, 6.1:1 on base, 4.7:1 on overlay ---- */
+  --accent:           oklch(46.5% 0.125 231); /* #006392 */
+  --accent-dim:       oklch(92% 0.04 231);    /* #cbeafb — 5.2:1 under --accent text */
+  --accent-dim-hover: oklch(89.5% 0.052 231); /* #bae3f9 — 4.8:1 under --accent text */
+  --accent-on:        oklch(98.5% 0.005 248); /* #f8fafd — 6.3:1 on --accent */
+
+  /* ---- Semantic error — 6.4:1 on base ---- */
+  --error: oklch(49% 0.175 25); /* #ae2228 */
+
+  /* ---- Quality ramp — each ≥5.8:1 on panel, ≥4.5:1 on overlay ---- */
+  --q-best:       oklch(47% 0.125 145); /* #216c29 */
+  --q-good:       oklch(48% 0.115 135); /* #3f6b21 */
+  --q-inaccuracy: oklch(49% 0.10 85);   /* #7a5b01 */
+  --q-mistake:    oklch(49% 0.125 55);  /* #944900 */
+  --q-blunder:    oklch(49% 0.175 25);  /* #ae2228 */
+
+  /* ---- Quality tinted backgrounds — each ≥5.3:1 under paired --q-* ---- */
+  --q-best-dim:       oklch(93% 0.05 145);  /* #d4f1d4 */
+  --q-inaccuracy-dim: oklch(94% 0.055 85);  /* #fce9c2 */
+  --q-blunder-dim:    oklch(93% 0.035 25);  /* #ffdfdc */
+  --q-blunder-border: oklch(62% 0.12 25);   /* #c46761 — 3.3:1 on panel */
+
+  /* ---- Shadows — softer, cool-tinted, lower opacity for daylight ---- */
+  --shadow-sm:  0 1px 3px oklch(25% 0.02 248 / 0.10), 0 1px 2px oklch(25% 0.02 248 / 0.07);
+  --shadow-md:  0 4px 12px oklch(25% 0.02 248 / 0.13), 0 2px 4px oklch(25% 0.02 248 / 0.08);
+  --shadow-lg:  0 8px 24px oklch(25% 0.02 248 / 0.17), 0 4px 8px oklch(25% 0.02 248 / 0.10);
+  --shadow-toast: 0 2px 8px oklch(25% 0.02 248 / 0.18);
+
+  /* ---- Scrim — lighter veil ---- */
+  --scrim: oklch(25% 0.02 248 / 0.45);
+
+  /* --eval-bar-black / --eval-bar-white deliberately NOT overridden:
+     chess-semantic (Black vs White advantage), identical in both themes. */
 }
 
 /* ---- Reduced-motion override ---- */
@@ -113,9 +185,45 @@ body {
    ============================================================ */
 
 header {
-  padding: var(--space-4) var(--space-6) var(--space-2);
+  /* Right padding reserves the theme-toggle column at EVERY width:
+     24px inset + 36px button + 8px clearance = 68px. Wrapped title/subtitle
+     text can therefore never run under the absolutely-positioned toggle.
+     Invisible at desktop (text never reaches that far). */
+  padding: var(--space-4)
+           calc(var(--space-6) + 36px + var(--space-2))
+           var(--space-2)
+           var(--space-6);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-panel);
+  /* Anchor for the absolutely-positioned theme toggle */
+  position: relative;
+}
+
+/* Theme toggle — quiet header chrome, top-right. Icon reflects the stored
+   PREFERENCE (monitor/sun/moon), not the resolved theme; theme.js swaps it. */
+#theme-toggle {
+  position: absolute;
+  top: 50%;
+  right: var(--space-6);
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+#theme-toggle:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--border);
+}
+
+#theme-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 header h1 {
@@ -233,8 +341,11 @@ button:active {
   background: var(--accent-dim);
 }
 
-/* Lucide icon inside buttons — size-match text */
-button i[data-lucide] {
+/* Lucide icon inside buttons — size-match text. The svg[data-lucide] arm
+   covers the post-createIcons DOM (the <i> placeholder is replaced by an
+   <svg> that keeps the data-lucide attribute). */
+button i[data-lucide],
+button svg[data-lucide] {
   width: 1em;
   height: 1em;
   display: inline-block;
@@ -300,13 +411,14 @@ body.setup-mode #reset,
 body.setup-mode .fen-row,
 body.setup-mode #fen-error { display: none; }
 
+/* Border diet: mode bars group by surface step (panel on base) + shadow;
+   the old hairline outline was redundant box-lining. */
 .setup-bar {
   width: 480px;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   background: var(--surface-panel);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   box-shadow: var(--shadow-sm);
@@ -330,8 +442,8 @@ body.setup-mode #fen-error { display: none; }
 }
 
 .palette-set.dark {
+  /* Raised surface alone groups the black-piece set — no outline needed. */
   background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
 }
 
 .palette button {
@@ -391,7 +503,9 @@ body.setup-mode #fen-error { display: none; }
 /* ---- Tab bar ---- */
 #panel-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
+  /* Semantic baseline for the active-tab underline; the base-vs-panel surface
+     step already separates bar from content, so subtle weight is enough. */
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-base);
   flex-shrink: 0;
 }
@@ -659,7 +773,8 @@ body.trap-practice-mode #fen-error { display: none; }
 .trap-item-eco { font-variant-numeric: tabular-nums; }
 .trap-item-color { text-transform: capitalize; }
 .trap-item-commonness { font-size: 0.72rem; }
-.traps-empty { color: var(--muted); font-size: 0.82rem; padding: 0.3rem 0; }
+/* .traps-empty (app.js) carries .empty-state too — the shared empty-state
+   style is the single source; no local override so all tabs match. */
 
 /* ============================================================
    Trap chip (live nudge, inside analysis tab)
@@ -792,7 +907,6 @@ body.trap-practice-mode #fen-error { display: none; }
   flex-direction: column;
   gap: var(--space-2);
   background: var(--surface-panel);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   box-shadow: var(--shadow-sm);
@@ -836,9 +950,7 @@ body.trap-practice-mode #fen-error { display: none; }
 .trap-reveal { display: flex; gap: var(--space-1); flex-wrap: wrap; }
 .trap-reveal[hidden] { display: none; }
 
-@media (max-width: 560px) {
-  .trap-bar { width: 92vw; }
-}
+/* .trap-bar mobile width lives in the unified ≤560px tier at the bottom. */
 
 /* ============================================================
    Repertoire trainer mode — hide play/setup controls
@@ -951,7 +1063,9 @@ body.rep-mode #fen-error { display: none; }
   text-align: left;
   font-size: 0.82rem;
   background: var(--surface-raised);
-  border: 1px solid var(--border);
+  /* Border diet: raised surface marks the row (matches .traps-list buttons);
+     the border slot stays for the accent hover/focus affordance. */
+  border: 1px solid transparent;
   color: var(--text);
   border-radius: var(--radius-sm);
   padding: var(--space-1) var(--space-2);
@@ -992,7 +1106,6 @@ body.rep-mode #fen-error { display: none; }
   flex-direction: column;
   gap: var(--space-2);
   background: var(--surface-panel);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
   box-shadow: var(--shadow-sm);
@@ -1029,9 +1142,7 @@ body.rep-mode #fen-error { display: none; }
 
 .rep-controls { display: flex; gap: var(--space-1); flex-wrap: wrap; }
 
-@media (max-width: 560px) {
-  .rep-bar { width: 92vw; }
-}
+/* .rep-bar mobile width lives in the unified ≤560px tier at the bottom. */
 
 /* ============================================================
    Promotion dialog (native <dialog> replaces the old overlay)
@@ -1121,16 +1232,52 @@ body.rep-mode #fen-error { display: none; }
     height: auto;
     align-self: stretch;
   }
+
+  /* ---- Touch targets — WCAG 2.2 AA (SC 2.5.8): dense controls get
+     ≥24×24px hit-boxes at touch widths; desktop density unchanged. ---- */
+  .trap-chip-dismiss {
+    min-width: 24px;
+    min-height: 24px;
+    justify-content: center; /* icon-only ✕ stays centered in the grown box */
+  }
+
+  .rep-practice-btn,
+  .rep-line-practice {
+    min-width: 24px;
+    min-height: 24px;
+  }
+
+  .rep-color-hdr,
+  .rep-opening-name,
+  .rep-line-jump {
+    min-height: 24px;
+  }
 }
 
 @media (max-width: 560px) {
-  #board,
+  /* ---- Exact-fit board row ----
+     Available content = 100vw − 32px (main padding var(--space-4) × 2).
+     Row chrome beside the board = 14px eval-bar + 8px gap = 22px.
+     Board = 100vw − 54px  →  375px: 321 + 22 = 343 = available (0 overflow)
+                              320px: 266 + 22 = 288 = available (0 overflow).
+     Height matches width — board stays square. */
+  #board {
+    width: calc(100vw - 54px);
+    height: calc(100vw - 54px);
+  }
+
+  /* Eval bar mirrors the board's edge so the pair reads as one instrument. */
+  #eval-bar { min-height: calc(100vw - 54px); }
+
+  /* FEN row + mode bars stretch to the column (same width as the full
+     eval-bar + board row), keeping every left/right edge on one line. */
   .fen-row,
   .setup-bar,
   .trap-bar,
-  .rep-bar { width: 92vw; }
+  .rep-bar { width: auto; }
 
-  #board { height: 92vw; }
-
-  #eval-bar { min-height: 92vw; }
+  /* Long trap/line titles wrap above their action button instead of
+     forcing the header row past the viewport. */
+  .trap-header,
+  .rep-header { flex-wrap: wrap; }
 }
