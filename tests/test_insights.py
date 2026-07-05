@@ -1,9 +1,10 @@
 """
-tests/test_insights.py — Unit tests for app/insights.py (Openings slice).
+tests/test_insights.py — Unit tests for app/insights.py (Openings, Mistakes,
+and Endgames slices).
 
 Seeds a temp DB (storage.init(tmp_path)), inserts games + plies via storage
-CRUD helpers, drives repertoire/book state explicitly, then asserts
-build_openings_insights() returns correct, honesty-gated aggregates.
+CRUD helpers, drives repertoire/book state explicitly, then asserts the
+builders return correct, honesty-gated aggregates.
 
 No engine, no network, no Stockfish.
 """
@@ -22,6 +23,7 @@ from app.accuracy import summarize
 from app.insights import (
     CLUSTER_GATE,
     MIN_SAMPLE,
+    build_endgame_insights,
     build_mistakes_insights,
     build_openings_insights,
     gated,
@@ -120,6 +122,61 @@ def _make_leak(
         lead_in_ply=lead_in_ply,
         threat_motif=threat_motif,
     )
+
+
+# ---------------------------------------------------------------------------
+# Endgames fixtures (T3.2) — reuses the T3.1 FEN-swap trick: endgame_start_index
+# / endgame_signature only read fen_before per row, so a legal-but-disconnected
+# prefix + suffix pairing is fine as long as each row itself is a real, legal
+# position/move pair.
+# ---------------------------------------------------------------------------
+
+# King+rook-only endgames, kings starting on e1/e8 with f1/f8 empty — used to
+# build stable, signature-preserving suffixes by shuffling kings only.
+ROOK_ENDGAME_FEN = "3rk3/8/8/8/8/8/8/3RK3 w - - 0 1"          # -> "rook"
+TWO_ROOK_ENDGAME_FEN = "3rk3/8/8/8/8/8/8/R3K2R w - - 0 1"     # -> "two-rook"
+KNIGHT_ENDGAME_FEN = "3nk3/8/8/8/8/8/8/3NK3 w - - 0 1"        # -> "knight"
+QUEEN_ENDGAME_FEN = "3qk3/8/8/8/8/8/8/3QK3 w - - 0 1"         # -> "queen"
+
+# Refuter-blocker regression fixture (mirrors tests/test_endgame.py): dips
+# into an endgame-phase position, reverts to a heavier one, then stably
+# descends — the builder must pick the LAST descent as the suffix entry.
+HEAVY_MIDDLEGAME_FEN = "3qkr2/8/8/8/8/8/8/3QKR2 w - - 0 1"
+
+
+def _suffix_from_fen(
+    start_fen: str,
+    n_plies: int,
+    *,
+    evals: list[int] | None = None,
+    win_probs: list[float] | None = None,
+    start_ply: int = 1,
+) -> list[dict]:
+    """A legal, signature-stable endgame suffix (kings shuffle e<->f, harmless).
+
+    win_prob is stored MOVER-POV (storage.py:91) — pass values already in
+    that convention; _user_win_prob does the user-POV flip.
+    """
+    board = chess.Board(start_fen)
+    rows = []
+    for i in range(n_plies):
+        fen_before = board.fen()
+        color = board.turn
+        e_sq = chess.E1 if color == chess.WHITE else chess.E8
+        san = "Kf1" if color == chess.WHITE else "Kf8"
+        if board.king(color) != e_sq:
+            san = "Ke1" if color == chess.WHITE else "Ke8"
+        move = board.parse_san(san)
+        rows.append({
+            "ply": start_ply + i,
+            "san": san,
+            "uci": move.uci(),
+            "fen_before": fen_before,
+            "eval_cp_white": evals[i] if evals else 0,
+            "win_prob": win_probs[i] if win_probs else None,
+        })
+        board.push(move)
+    return rows
 
 
 def _load_repertoire(tmp_path: Path) -> None:
@@ -629,3 +686,169 @@ class TestEmptyDB:
         cap = result["capitalization"]
         assert (cap["winning_games"], cap["converted"]) == (0, 0)
         assert cap["rate"] == {"value": None, "n": 0, "sufficient": False}
+
+
+# ---------------------------------------------------------------------------
+# Endgames slice (T3.2)
+# ---------------------------------------------------------------------------
+
+
+class TestEndgames:
+    def _game_with_suffix(
+        self,
+        *,
+        content_hash: str,
+        result: str = "1-0",
+        my_color: str = "white",
+        imported_at: str = "2026-01-15T10:00:00",
+        start_fen: str = ROOK_ENDGAME_FEN,
+        n_plies: int = 8,
+        evals: list[int] | None = None,
+        win_probs: list[float] | None = None,
+    ) -> int:
+        """One qualified game: a single non-endgame prefix ply, then a stable
+        signature-preserving endgame suffix (the T3.1 stable-suffix boundary
+        lands right after the prefix)."""
+        gid = _insert_game(
+            content_hash=content_hash, my_color=my_color, result=result,
+            imported_at=imported_at)
+        prefix = [{"ply": 1, "fen_before": chess.STARTING_FEN}]
+        suffix = _suffix_from_fen(
+            start_fen, n_plies, evals=evals, win_probs=win_probs, start_ply=2)
+        storage.write_plies(gid, prefix + suffix)
+        return gid
+
+    def test_sufficient_bucket_averages_contributing_games_only(self):
+        # 5 games, identical zero-eval-drop 8-ply "rook" suffix (4 white
+        # moves each — meets the floor) -> accuracy 100.0, n=5, sufficient.
+        for i in range(5):
+            self._game_with_suffix(content_hash=f"suf{i}")
+        types = build_endgame_insights()["types"]
+        rook = next(t for t in types if t["signature"] == "rook")
+        assert rook["games"] == 5
+        assert rook["accuracy"] == {"value": 100.0, "n": 5, "sufficient": True}
+
+    def test_thin_bucket_below_min_sample(self):
+        # Only 2 "two-rook" games -> value present, sufficient False.
+        for i in range(2):
+            self._game_with_suffix(
+                content_hash=f"thin{i}", start_fen=TWO_ROOK_ENDGAME_FEN)
+        types = build_endgame_insights()["types"]
+        two_rook = next(t for t in types if t["signature"] == "two-rook")
+        assert two_rook["games"] == 2
+        assert two_rook["accuracy"]["sufficient"] is False
+        assert two_rook["accuracy"]["value"] == 100.0
+        assert two_rook["accuracy"]["n"] == 2
+
+    def test_conversion_won_drawn_and_never_winning(self):
+        # Mover-POV win_prob sustained >= 0.8 for the first 4 suffix plies
+        # (user=white): white rows read at face value, black rows flipped.
+        sustained_wp = [0.9, 0.05, 0.9, 0.05, 0.5, 0.5, 0.5, 0.5]
+        never_wp = [0.5] * 8
+
+        self._game_with_suffix(
+            content_hash="conv_won", result="1-0", win_probs=sustained_wp)
+        self._game_with_suffix(
+            content_hash="conv_drawn", result="1/2-1/2", win_probs=sustained_wp)
+        self._game_with_suffix(
+            content_hash="conv_never", result="1-0", win_probs=never_wp)
+        # A separate signature bucket that never sustains a winning stretch —
+        # rate must be None with no ZeroDivisionError.
+        self._game_with_suffix(
+            content_hash="conv_zero", start_fen=KNIGHT_ENDGAME_FEN,
+            result="1-0", win_probs=never_wp)
+
+        types = build_endgame_insights()["types"]
+        rook = next(t for t in types if t["signature"] == "rook")
+        assert rook["games"] == 3
+        assert rook["conversion"]["winning"] == 2
+        assert rook["conversion"]["converted"] == 1
+        assert rook["conversion"]["rate"]["value"] == 0.5
+
+        knight = next(t for t in types if t["signature"] == "knight")
+        assert knight["conversion"] == {
+            "winning": 0, "converted": 0,
+            "rate": {"value": None, "n": 0, "sufficient": False},
+        }
+
+    def test_short_suffix_excluded_from_accuracy_but_counts_elsewhere(self):
+        # Only 4 suffix plies -> 2 white moves, below the 4-move floor.
+        self._game_with_suffix(
+            content_hash="short", start_fen=QUEEN_ENDGAME_FEN, n_plies=4)
+        result = build_endgame_insights()
+        queen = next(t for t in result["types"] if t["signature"] == "queen")
+        assert queen["games"] == 1
+        assert queen["accuracy"] == {"value": None, "n": 0, "sufficient": False}
+        assert "1 game(s)" in result["note"]
+
+    def test_no_endgame_only_db_is_honestly_empty(self):
+        gid = _insert_game(content_hash="never")
+        # Final ply is opening-phase -> no stable endgame suffix at all.
+        storage.write_plies(gid, [{"ply": 1, "fen_before": chess.STARTING_FEN}])
+        result = build_endgame_insights()
+        assert result["types"] == []
+        assert result["weakest"] is None
+        assert result["coverage"]["reached_endgame"] == 0
+        assert "1 of 1 qualified games never reach a stable endgame" in result["note"]
+
+    def test_worst_accuracy_sorted_first_among_sufficient(self):
+        # "rook": 5 games, zero eval drop -> 100.0 accuracy.
+        for i in range(5):
+            self._game_with_suffix(content_hash=f"ord_rook{i}")
+        # "two-rook": 5 games with a real eval drop on white's first move
+        # (0 -> -800 cp) -> strictly lower accuracy than "rook".
+        drop_evals = [0, -800, -800, -800, -800, -800, -800, -800]
+        for i in range(5):
+            self._game_with_suffix(
+                content_hash=f"ord_tr{i}", start_fen=TWO_ROOK_ENDGAME_FEN,
+                evals=drop_evals)
+
+        types = build_endgame_insights()["types"]
+        sufficient = [t for t in types if t["accuracy"]["sufficient"]]
+        assert [t["signature"] for t in sufficient] == ["two-rook", "rook"]
+        assert sufficient[0]["accuracy"]["value"] < sufficient[1]["accuracy"]["value"]
+
+    def test_tie_broken_by_games_desc_then_signature_asc(self):
+        # "rook": 5 games, "knight": 6 games, both zero-drop -> identical
+        # accuracy (100.0), both sufficient -> tie broken by games desc.
+        for i in range(5):
+            self._game_with_suffix(content_hash=f"tie_rook{i}")
+        for i in range(6):
+            self._game_with_suffix(
+                content_hash=f"tie_knight{i}", start_fen=KNIGHT_ENDGAME_FEN)
+
+        types = build_endgame_insights()["types"]
+        sufficient = [t for t in types if t["accuracy"]["sufficient"]]
+        assert [t["signature"] for t in sufficient] == ["knight", "rook"]
+
+    def test_representative_example_is_most_recent_game(self):
+        gid_old = self._game_with_suffix(
+            content_hash="rep_old", imported_at="2026-01-10T10:00:00")
+        gid_new = self._game_with_suffix(
+            content_hash="rep_new", imported_at="2026-01-20T10:00:00")
+        types = build_endgame_insights()["types"]
+        rook = next(t for t in types if t["signature"] == "rook")
+        assert rook["example"]["game_id"] == gid_new
+        assert gid_new != gid_old  # sanity: distinct games seeded
+
+    def test_promotion_reversion_end_to_end(self):
+        """Refuter-blocker regression through the full builder: a transient
+        dip into endgame phase, then a reversion, must NOT be picked as the
+        suffix start — only the final, stable descent counts."""
+        gid = _insert_game(content_hash="promo", my_color="white", result="1-0")
+        plies = [
+            {"ply": 1, "fen_before": HEAVY_MIDDLEGAME_FEN},  # non-endgame
+            {"ply": 2, "fen_before": ROOK_ENDGAME_FEN},       # transient dip
+            {"ply": 3, "fen_before": HEAVY_MIDDLEGAME_FEN},   # reversion
+            {"ply": 4, "fen_before": ROOK_ENDGAME_FEN},       # stable descent
+        ]
+        storage.write_plies(gid, plies)
+
+        result = build_endgame_insights()
+        assert result["coverage"]["reached_endgame"] == 1
+        rook = next(t for t in result["types"] if t["signature"] == "rook")
+        assert rook["games"] == 1
+        assert rook["example"] == {"game_id": gid, "ply": 4}
+        # Suffix is a single ply (index 3 only) -> too short to score.
+        assert rook["accuracy"] == {"value": None, "n": 0, "sufficient": False}
+        assert "1 game(s)" in result["note"]

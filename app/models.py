@@ -668,6 +668,79 @@ class MistakesInsightsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Insights — Endgames slice (additive; app/insights.py::build_endgame_insights)
+# ---------------------------------------------------------------------------
+
+
+class InsightsEndgamesCoverage(BaseModel):
+    """How many games feed the Endgames insights.
+
+    Same baseline as ``InsightsMistakesCoverage`` (no repertoire routing),
+    plus ``reached_endgame`` — Endgames has an extra population step beyond
+    "qualified" (a qualified game may never stably reach an endgame phase),
+    so this field makes that additional exclusion visible in the coverage
+    panel itself, rather than only being discoverable via ``note``.
+    """
+
+    total: int = Field(description="Total number of game rows.")
+    tagged: int = Field(description="Games with my_color set.")
+    analyzed: int = Field(description="Games with analysis_status='done'.")
+    pending: int = Field(description="Games with analysis_status='pending'.")
+    qualified: int = Field(
+        description="Games with my_color set AND analysis_status='done' — the "
+        "population every Endgames section is computed from."
+    )
+    reached_endgame: int = Field(
+        description="Of the qualified games, how many have a stable endgame "
+        "suffix (per app.endgame.endgame_start_index) — the rest never reach "
+        "one and are excluded from every count below."
+    )
+
+
+class InsightsEndgameConversion(BaseModel):
+    """Advantage-capitalization for one endgame signature's suffix."""
+
+    winning: int = Field(
+        description="Games with a sustained winning stretch (win_prob >= 0.8 "
+        "for >= 4 consecutive plies) within this signature's endgame suffix."
+    )
+    converted: int = Field(description="Of those, the games the user actually won.")
+    rate: InsightsGatedMetric
+
+
+class InsightsEndgameType(BaseModel):
+    """One endgame-material signature's accuracy + conversion over its suffix."""
+
+    signature: str = Field(description="Material bucket, e.g. 'rook', 'two-rook'.")
+    games: int = Field(description="Qualified games whose endgame suffix entered here.")
+    accuracy: InsightsGatedMetric = Field(
+        description="Per-signature average of each contributing game's Accuracy % "
+        "over the endgame suffix; gated on the count of games with a scored suffix "
+        "(>= 4 user moves — shorter suffixes are excluded from this average only)."
+    )
+    conversion: InsightsEndgameConversion
+    example: InsightsClusterExample | None = Field(
+        default=None, description="Most recent game reaching this signature, for "
+        "deep-linking to the suffix's entry ply; None only in the empty fallback."
+    )
+
+
+class EndgameInsightsResponse(BaseModel):
+    """Response for ``GET /api/insights/endgames``."""
+
+    coverage: InsightsEndgamesCoverage
+    types: list[InsightsEndgameType] = Field(default_factory=list)
+    weakest: str | None = Field(
+        default=None, description="Signature with the lowest sufficient accuracy; "
+        "None when no signature has enough contributing games."
+    )
+    note: str = Field(
+        description="Caveat: how many qualified games never reach a stable endgame, "
+        "plus how many short suffixes are excluded from the accuracy average only."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Color-tagging + bulk-analyze models (additive)
 # ---------------------------------------------------------------------------
 

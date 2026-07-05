@@ -50,6 +50,7 @@ from app.models import (
     AnalyzeStatusResponse,
     BestLine,
     CoverageDict,
+    EndgameInsightsResponse,
     EngineRestartResponse,
     EngineStatusResponse,
     GameAccuracySummary,
@@ -941,6 +942,31 @@ async def get_insights_mistakes():
             },
         }
     return MistakesInsightsResponse(**data)
+
+
+@app.get("/api/insights/endgames", response_model=EndgameInsightsResponse)
+async def get_insights_endgames():
+    """Return the Endgames insights read-model (per-signature accuracy + conversion)."""
+    try:
+        data = insights.build_endgame_insights()
+    except RuntimeError:
+        # Storage not initialised (edge case in tests or first boot before init).
+        data = {
+            "coverage": {
+                "total": 0, "tagged": 0, "analyzed": 0, "pending": 0,
+                "qualified": 0, "reached_endgame": 0,
+            },
+            "types": [],
+            "weakest": None,
+            "note": (
+                "0 of 0 qualified games never reach a stable endgame phase and "
+                "are excluded from every count below. 0 game(s) that do reach "
+                "one have fewer than 4 scored moves in the endgame suffix — too "
+                "short to be meaningful — and are excluded from the accuracy "
+                "average only; they still count toward games and conversion."
+            ),
+        }
+    return EndgameInsightsResponse(**data)
 
 
 # ---------------------------------------------------------------------------
