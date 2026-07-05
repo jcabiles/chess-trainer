@@ -30,6 +30,7 @@ import app.storage as storage
 from app import book, repertoire
 from app.insights import CLUSTER_GATE
 from app.main import app
+from app.models import EndgameInsightsResponse
 from app.storage import LeakRecord
 
 MISSING = "tests/fixtures/does_not_exist.json"
@@ -359,3 +360,123 @@ def test_mistakes_cluster_item_example_round_trips(client):
     # Most recent import (game B), highest ply within it — proves the nested
     # ClusterExample model round-trips game_id/ply, not just aggregate counts.
     assert example == {"game_id": gid_b, "ply": 22}
+
+
+# ---------------------------------------------------------------------------
+# GET /api/insights/endgames (T3.3)
+# ---------------------------------------------------------------------------
+
+# King+rook-only endgame, kings on e1/e8 with f1/f8 empty — a legal,
+# signature-stable position whose material buckets as "rook"
+# (app.endgame.endgame_signature); mirrors tests/test_insights.py's fixture.
+ROOK_ENDGAME_FEN = "3rk3/8/8/8/8/8/8/3RK3 w - - 0 1"
+
+
+def _rook_endgame_suffix(n_plies: int = 8, win_probs: list[float] | None = None) -> list[dict]:
+    """A legal, signature-stable "rook" endgame suffix (kings shuffle e<->f).
+
+    win_prob is stored MOVER-POV (storage.py:91), same convention as
+    tests/test_insights.py::_suffix_from_fen.
+    """
+    board = chess.Board(ROOK_ENDGAME_FEN)
+    rows = []
+    for i in range(n_plies):
+        fen_before = board.fen()
+        color = board.turn
+        e_sq = chess.E1 if color == chess.WHITE else chess.E8
+        san = "Kf1" if color == chess.WHITE else "Kf8"
+        if board.king(color) != e_sq:
+            san = "Ke1" if color == chess.WHITE else "Ke8"
+        move = board.parse_san(san)
+        rows.append({
+            "ply": i + 2,  # ply 1 is the non-endgame prefix below
+            "san": san,
+            "uci": move.uci(),
+            "fen_before": fen_before,
+            "eval_cp_white": 0,
+            "win_prob": win_probs[i] if win_probs else None,
+        })
+        board.push(move)
+    return rows
+
+
+def test_endgames_empty_db_returns_empty_safe_shape(client):
+    """200 with the typed zero shape when no games exist."""
+    resp = client.get("/api/insights/endgames")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["coverage"] == {
+        "total": 0, "tagged": 0, "analyzed": 0, "pending": 0,
+        "qualified": 0, "reached_endgame": 0,
+    }
+    assert body["types"] == []
+    assert body["weakest"] is None
+    assert body["note"]
+
+    validated = EndgameInsightsResponse.model_validate(body)
+    assert validated.coverage.qualified == 0
+    assert validated.types == []
+    assert validated.weakest is None
+
+
+def test_endgames_populated_sections(client):
+    """200 with a rook-type row: gated accuracy/conversion + a deep-link example."""
+    # Sustained win-prob (mover-POV) for the first 4 suffix plies -> a
+    # "winning" endgame that the user goes on to win (converted).
+    sustained_wp = [0.9, 0.05, 0.9, 0.05, 0.5, 0.5, 0.5, 0.5]
+    gid = _insert_game(content_hash="eg1", my_color="white", result="1-0")
+    prefix = [{"ply": 1, "fen_before": chess.STARTING_FEN}]
+    storage.write_plies(gid, prefix + _rook_endgame_suffix(win_probs=sustained_wp))
+
+    resp = client.get("/api/insights/endgames")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["coverage"]["qualified"] == 1
+    assert body["coverage"]["reached_endgame"] == 1
+
+    types = body["types"]
+    assert len(types) == 1
+    rook = types[0]
+    assert rook["signature"] == "rook"
+    assert rook["games"] == 1
+    assert set(rook["accuracy"]) == {"value", "n", "sufficient"}
+    assert rook["accuracy"]["value"] == 100.0
+    assert rook["conversion"]["winning"] == 1
+    assert rook["conversion"]["converted"] == 1
+    assert set(rook["conversion"]["rate"]) == {"value", "n", "sufficient"}
+    assert rook["example"] == {"game_id": gid, "ply": 2}
+
+    # Only one sufficient-or-not signature exists with n=1 games (< MIN_SAMPLE)
+    # so accuracy isn't "sufficient" and weakest stays None.
+    assert rook["accuracy"]["sufficient"] is False
+    assert body["weakest"] is None
+
+    validated = EndgameInsightsResponse.model_validate(body)
+    assert validated.types[0].example.game_id == gid
+    assert validated.types[0].example.ply == 2
+
+
+def test_endgames_fallback_on_storage_runtime_error(client, monkeypatch):
+    """Drift guard: the except-branch fallback dict validates against the
+    model, exercising the real RuntimeError path (storage-uninitialised)."""
+    def _raise():
+        raise RuntimeError("storage.init() has not been called or failed to open the DB")
+
+    monkeypatch.setattr("app.main.insights.build_endgame_insights", _raise)
+
+    resp = client.get("/api/insights/endgames")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["coverage"] == {
+        "total": 0, "tagged": 0, "analyzed": 0, "pending": 0,
+        "qualified": 0, "reached_endgame": 0,
+    }
+    assert body["types"] == []
+    assert body["weakest"] is None
+    assert body["note"]
+
+    validated = EndgameInsightsResponse.model_validate(body)
+    assert validated.coverage.reached_endgame == 0
