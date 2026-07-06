@@ -99,17 +99,46 @@ def bucket(cp_loss: int) -> str:
     return "blunder"
 
 
-def classify(white_cp_before: int, white_cp_after: int, mover_is_white: bool) -> str:
-    """Classify a move's quality from before/after White-POV evals.
+def cp_loss(before_white_cp: int, after_white_cp: int, mover_is_white: bool) -> int:
+    """Compute a move's centipawn loss from before/after White-POV evals.
 
-    cpLoss is the eval the mover gave up, sign-corrected by who moved:
+    This is the SOLE home of the mover-sign rule — cpLoss is the eval the
+    mover gave up, sign-corrected by who moved:
 
         White moved: cpLoss = before - after
         Black moved: cpLoss = after - before
 
     The result is clamped to ``>= 0`` (engine noise or an engine-matching move
     can yield a small negative) and capped at ``MAX_CP_LOSS`` for display
-    safety, then bucketed.
+    safety.
+
+    Inputs must be *already-normalized* White-POV centipawn values — mate
+    scores mapped via :func:`pov_score_to_white_cp` onto the same cp axis
+    (``sign * (MATE_CP - N)``). This function does no mate handling of its
+    own; it operates purely on that normalized axis.
+
+    Args:
+        before_white_cp: White-POV centipawn eval of the position BEFORE the
+            move (mate-mapped via :func:`pov_score_to_white_cp`).
+        after_white_cp: White-POV centipawn eval of the position AFTER the move.
+        mover_is_white: Whether the side that just moved was White.
+
+    Returns:
+        The centipawn loss as an integer in ``[0, MAX_CP_LOSS]``.
+    """
+    if mover_is_white:
+        loss = before_white_cp - after_white_cp
+    else:
+        loss = after_white_cp - before_white_cp
+    loss = max(0, loss)
+    return min(loss, MAX_CP_LOSS)
+
+
+def classify(white_cp_before: int, white_cp_after: int, mover_is_white: bool) -> str:
+    """Classify a move's quality from before/after White-POV evals.
+
+    Delegates the sign-corrected, clamped centipawn-loss math to
+    :func:`cp_loss`, then buckets the result.
 
     Args:
         white_cp_before: White-POV centipawn eval of the position BEFORE the
@@ -120,13 +149,7 @@ def classify(white_cp_before: int, white_cp_after: int, mover_is_white: bool) ->
     Returns:
         The quality label for the move (see :func:`bucket`).
     """
-    if mover_is_white:
-        cp_loss = white_cp_before - white_cp_after
-    else:
-        cp_loss = white_cp_after - white_cp_before
-    cp_loss = max(0, cp_loss)
-    cp_loss = min(cp_loss, MAX_CP_LOSS)
-    return bucket(cp_loss)
+    return bucket(cp_loss(white_cp_before, white_cp_after, mover_is_white))
 
 
 # ---------------------------------------------------------------------------
