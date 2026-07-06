@@ -1,0 +1,62 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/bin/python scripts/fetch_data.py:*)",
+      "Bash(./scripts/serve.sh:*)",
+      "Bash(git push origin *)",
+      "Bash(gh pr create*)"
+    ],
+    "deny": [
+      "Bash(git push*main*)",
+      "Bash(git push*--force*)",
+      "Bash(git push*-f *)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/secrets.json)",
+      "Read(**/credentials.json)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/Library/Keychains/**)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Write(**/.env)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(env)",
+      "Bash(printenv)",
+      "Bash(cat ~/.ssh/*)",
+      "Bash(cat ~/.zsh_history*)",
+      "Bash(cat ~/.bash_history*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": true,
+    "failIfUnavailable": false,
+    "excludedCommands": [
+      "gh pr create*",
+      "gh pr view*",
+      "gh pr list*",
+      "gh auth status*"
+    ],
+    "network": {
+      "allowedDomains": ["pypi.org", "files.pythonhosted.org", "raw.githubusercontent.com", "github.com", "*.github.com", "api.github.com", "codeload.github.com", "objects.githubusercontent.com"]
+    },
+    "filesystem": {
+      "allowWrite": ["."],
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws",
+        "~/.gnupg",
+        "~/.config/gcloud",
+        "~/Library/Keychains",
+        "~/.secrets"
+      ]
+    }
+  }
+}

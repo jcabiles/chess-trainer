@@ -14,7 +14,6 @@ env/
 
 # Local config
 *.local
-.claude/settings.json
 .claude/settings.local.json
 .claude/*.bak*
 SETUP-SANDBOX.md
@@ -34,5 +33,5 @@ data/games.db
 data/games/*
 !data/games/.gitkeep
 
-# Local machine-specific helper scripts (hardcoded ~/Downloads paths)
-scripts/
+# Local machine-specific helper script (hardcoded ~/Downloads paths)
+scripts/bulk_import.py
