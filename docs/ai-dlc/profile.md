@@ -13,8 +13,9 @@ hotspots:
   - app/main.py         # single FastAPI entrypoint — all routes
   - app/models.py       # shared Pydantic schemas
   - static/index.html   # single SPA shell (tab buttons + panels + css links)
-  - static/app.js       # orchestrator; injects `api` into feature modules; tab array ~:1999
-  - static/review.js    # duplicate tab array ~:515; openGame/goto seams
+  - static/app.js       # hub (~980 ln): state, ground, bus, mode registry, api.hub,
+                        # persistence, play controls, review shim, init/tab wiring
+  - static/review.js    # duplicate tab array; openGame/goto seams
   - requirements.txt
 
 invariants:

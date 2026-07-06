@@ -77,12 +77,12 @@ parallel pair — everything else strictly sequential.
   restart, engine handoff after prep, **promotion during practice if line
   allows** → Return restores snapshot; cross-cutting guards pass.
 
-- [ ] **T6 — PR-B docs + ship.** ARCHITECTURE.md row; PR.
+- [x] **T6 — PR-B docs + ship.** ARCHITECTURE.md row; PR.
   **Done when:** same bar as T4.
 
 ## PR-C (Phase 3) — traps.js (riskiest, last)
 
-- [ ] **T7 — extract traps.js.** Move trap functions per inventory; move
+- [x] **T7 — extract traps.js.** Move trap functions per inventory; move
   traps DOM wiring (:2111-2138) into `initTraps(api)`; owns `trap`,
   `trapsData`, `studyEvalToken` (whole — never split watch/practice),
   `trapsCheckToken`, `trapChipDismissedFen`, `studySnapshot`; registers
@@ -96,7 +96,7 @@ parallel pair — everything else strictly sequential.
   cross-cutting guards pass; no stale-eval flicker stepping fast
   (token guard intact).
 
-- [ ] **T8 — PR-C docs + ship + closeout.** ARCHITECTURE.md row; confirm hub
+- [x] **T8 — PR-C docs + ship + closeout.** ARCHITECTURE.md row; confirm hub
   ≈900-1,000 lines; **refresh `docs/ai-dlc/profile.md` hotspots** (its
   app.js/review.js line refs — e.g. "tab array ~:1999" — are stale after the
   split); PR; mark audit Item 1 done.
