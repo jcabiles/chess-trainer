@@ -41,16 +41,15 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.base.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.brown.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.1.1/assets/chessground.cburnett.css" />
-  <!-- ?v= cache-buster: bump the date when shipping CSS/JS changes — static
-       assets carry no Cache-Control header, so stale styles bite otherwise.
-       Only direct references can be versioned; app.js's own bare relative
-       sub-imports (panel.js, feedback.js, …) are untouched by design. -->
-  <link rel="stylesheet" href="/static/style.css?v=20260703" />
-  <link rel="stylesheet" href="/static/panel.css?v=20260703" />
-  <link rel="stylesheet" href="/static/feedback.css?v=20260703" />
-  <link rel="stylesheet" href="/static/movelist.css?v=20260703" />
-  <link rel="stylesheet" href="/static/review.css?v=20260703" />
-  <link rel="stylesheet" href="/static/insights.css?v=20260703a" />
+  <!-- /static is served with Cache-Control: no-store (see app/main.py
+       middleware), so browsers always fetch fresh copies — no ?v= cache-bust
+       ritual needed for these links or app.js's bare relative sub-imports. -->
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/panel.css" />
+  <link rel="stylesheet" href="/static/feedback.css" />
+  <link rel="stylesheet" href="/static/movelist.css" />
+  <link rel="stylesheet" href="/static/review.css" />
+  <link rel="stylesheet" href="/static/insights.css" />
 
   <!-- Lucide icons via esm.sh — replaces HTML-entity glyphs on nav buttons -->
   <script type="module">
@@ -330,7 +329,7 @@
     </div>
   </dialog>
 
-  <script type="module" src="/static/theme.js?v=20260703"></script>
-  <script type="module" src="/static/app.js?v=20260703"></script>
+  <script type="module" src="/static/theme.js"></script>
+  <script type="module" src="/static/app.js"></script>
 </body>
 </html>
