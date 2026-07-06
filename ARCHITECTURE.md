@@ -50,6 +50,7 @@ server state.
 | `insights.py` | Insights read-models (openings/mistakes/endgames); engine-free, via storage |
 | `accuracy.py` | Pure: per-side accuracy % and Elo estimate from stored evals |
 | `endgame.py` | Pure: endgame classification by material signature |
+| `trainer.py` | Pure: Leitner spaced repetition over blunder motif buckets |
 
 ### `static/` — frontend (native ESM, no bundler)
 
@@ -59,6 +60,7 @@ server state.
 | `setup.js` | Pregame position editor: brush stamping, palette, castling inference |
 | `repertoire.js` | Repertoire trainer: browse tree, Jump, rep-practice + engine handoff |
 | `traps.js` | Traps trainer: browse catalog, live chip, watch stepper, practice drill |
+| `trainer.js` | Blunder trainer: Train section + spaced-repetition drill mode |
 | `panel.js` | Analysis panel rendering |
 | `review.js` | Game library, replay, profile dashboard, foresight cards |
 | `insights.js` | Insights tab dashboard |

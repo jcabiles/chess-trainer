@@ -24,8 +24,9 @@ Impact = value to the user · Effort = build + verify cost. Ordered by rough imp
 | 9 | **Motion polish** | View-Transitions API for tab/mode switches; eval-bar ease tuning. | L | M | Motion tokens + `prefers-reduced-motion` are in place; this is the next tier of polish. |
 | 10 | **P3 wide-gamut accents** | Richer accent colors on P3 displays via `@media (color-gamut: p3)`. | L | L | Pure enhancement; sRGB fallback already correct. |
 | 11 | **Harden `askPromotion`** | Replace the `cloneNode` listener-reset with explicit teardown on the same node. | L | L | Not currently reachable (the `<dialog>` is modal, so no concurrent promotion), but the clone-then-detach pattern could orphan a pending Promise if that ever changes. |
-| 12 | **Blunder Trainer** (game-review next epic) | Re-solve your own blunders as puzzles with a forced threat-check (CCT) + spaced repetition. | H | H | Deferred third "head" of the game-review epic (spec: `specs/game-review-coaching.md`). Caveat: resurface the **motif in varied positions**, never the identical board (de la Maza memorization trap). |
+| 12 | ~~**Blunder Trainer**~~ | **SHIPPED** — see `specs/blunder-trainer.md` (Leitner SR over motif buckets, Train section in Review tab). | — | — | Done. |
 | 13 | **Game-review polish** | Self-hang (not missed-threat) narration; surface time-trouble from `%clk`; auto-fetch games from lichess/chess.com APIs. | M | M | Captured-but-unused: `game_plies.clock_centis` holds clock data; self-hang blunders currently lean on the best-move suggestion; import is manual only. |
 
 ## How to pick up an item
 Run `/ai-dlc <item>` to turn one into requirements → spec → tickets, same as the overhaul.
+| 14 | **Book-badge race on rapid move-after-reset** | A move played while the reset position's analysis is in flight gets its Book badge overwritten by the stale eval render (book responses never bump analysisToken). | L | L | Pre-existing; found during blunder-trainer verification. Fix: bump analysisToken in onUserMove's book path or token-guard applyMoveResponse. |

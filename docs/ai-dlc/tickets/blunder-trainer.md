@@ -48,13 +48,13 @@ B1-B4 sequential; F1-F3 sequential after B-PR merges. `app/main.py` and
 
 ## PR-2 — frontend (Train section + drill mode)
 
-- [ ] **F1 — hub edits (single-owner app.js ticket).** Add
+- [x] **F1 — hub edits (single-owner app.js ticket).** Add
   `blunder-practice` to `PRACTICE_MODES` and `persist()`'s transient
   early-return list; import + `initTrainer(api)` in init; any markup hooks.
   Owned: `static/app.js`, `static/index.html` (Train section + drill bar).
   **Done when:** app boots unchanged; play/trainers regression drags pass.
 
-- [ ] **F2 — `static/trainer.js` module.** Train section render (due
+- [x] **F2 — `static/trainer.js` module.** Train section render (due
   buckets, box levels, Start), drill flow (serve → board at fen_before,
   your-color orientation → move via registered `onMove` → /check → feedback
   with narration + threat highlight → retry-once → reveal → next → session
@@ -66,7 +66,7 @@ B1-B4 sequential; F1-F3 sequential after B-PR merges. `app/main.py` and
   reveal, correct→next, Return restores movelist tints; reload mid-drill
   lands in play (transient); cross-cutting guards pass.
 
-- [ ] **F3 — docs + ship PR-2.** ARCHITECTURE.md codemap row (`trainer.js`)
+- [x] **F3 — docs + ship PR-2.** ARCHITECTURE.md codemap row (`trainer.js`)
   + backend row (`trainer.py` in app/ table); tickets ticked; refuter on
   diff → PR-2; update memory.
   **Done when:** same bar as prior epics; audit trail complete.
