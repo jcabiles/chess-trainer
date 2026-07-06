@@ -156,6 +156,7 @@
 }
 
 .trainer-controls { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.trainer-controls button[hidden] { display: none; }
 
 /* ============================================================
    Mode plumbing — mirrors the rep-practice rules in style.css

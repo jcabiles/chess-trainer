@@ -15,7 +15,10 @@
 // Drill state machine (drill.phase):
 //   'moving'    — board armed, waiting for your move (attempts 0 or 1).
 //   'checking'  — /check in flight, board frozen (checkToken guards staleness).
-//   'advancing' — solved/solved_alt feedback showing, auto-next after a beat.
+//   'solved'    — Correct! feedback + next-up teaser showing; Next button
+//                 advances (Reveal hidden). No auto-advance.
+//   'advancing' — vanished-puzzle (404) skip notice showing, auto-next
+//                 after a beat.
 //   'revealed'  — best move + narration showing; Next button advances.
 //   'summary'   — session complete; bucket outcomes flushed; Return exits.
 //
@@ -175,6 +178,7 @@ function setNarration(narration) {
 }
 
 function showNextButton(on) { byId('trainer-next').hidden = !on; }
+function showRevealButton(on) { byId('trainer-reveal').hidden = !on; }
 
 function showTrainerUI(on) {
   byId('trainer-bar').hidden = !on;
@@ -320,6 +324,7 @@ function loadPuzzle() {
   setFeedback('', null);
   setNarration(null);
   showNextButton(false);
+  showRevealButton(true);
   clearShapes();
   trainerArmBoard();
 }
@@ -395,25 +400,32 @@ async function onTrainerMove(orig, dest) {
     return;
   }
 
-  handleVerdict(data, uci, token);
+  handleVerdict(data, uci);
 }
 
-function handleVerdict(data, uci, token) {
+function handleVerdict(data, uci) {
   const offNote = data.offline ? ' (offline check — engine unavailable)' : '';
 
   if (data.verdict === 'solved' || data.verdict === 'solved_alt') {
-    // Show your move on the board while the feedback beat plays.
+    // Show your move on the board while the Correct! pause holds.
     try { drill.board.play(parseUci(uci)); trainerShowMove(uci); } catch (_) { trainerFreeze(); }
     setFeedback(
       data.verdict === 'solved'
-        ? `Solved — ${data.attempted_san} is the engine's move.${offNote}`
-        : `Good — ${data.attempted_san} holds the position (best was ${data.best_san || '?'}).${offNote}`,
+        ? `Correct! — ${data.attempted_san} is the engine's move.${offNote}`
+        : `Correct! — ${data.attempted_san} holds the position (best was ${data.best_san || '?'}).${offNote}`,
       'good'
     );
     setMoveHint('');
+    const next = drill.index + 1;
+    setNote(
+      next < drill.puzzles.length
+        ? `Next: ${bucketLabel(drill.puzzles[next].bucket)}`
+        : 'Last one — Next shows your session summary.'
+    );
     finishPuzzle(data.verdict);
-    drill.phase = 'advancing';
-    scheduleAdvance(token);
+    drill.phase = 'solved';
+    showRevealButton(false);
+    showNextButton(true);
     return;
   }
 
@@ -533,7 +545,7 @@ function onRevealClick() {
 
 function onNextClick() {
   if (state().mode !== 'blunder-practice' || !drill) return;
-  if (drill.phase !== 'revealed') return;
+  if (drill.phase !== 'revealed' && drill.phase !== 'solved') return;
   advance();
 }
 
