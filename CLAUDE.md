@@ -18,7 +18,7 @@ position editor. Plus four trainers:
   **profiler**, and **pre-blunder foresight** during replay — a deterministic
   Stockfish + python-chess pipeline with template narration, no LLM; backed by
   SQLite `data/games.db` + a `data/games/` drop-folder). Modules: `storage`, `pgn`,
-  `motifs`, `review`, `coaching`, `profile`.
+  `motifs`, `review`, `coaching`, `profile`, `insights`, `accuracy`, `endgame`.
 
 ## Commands
 
@@ -49,9 +49,11 @@ pytest tests/test_api.py::test_move_legal_labels_quality   # a single test
   absent (`EngineUnavailable`). `analyze_multi(fen, depth, multipv)` shares the same
   lock; the review job funnels through it and yields to interactive `/api/move`
   (via `review.note_interactive_start/end`).
-- `app/analysis.py` (plus `motifs.py`, `pgn.py`, `coaching.py`, `profile.py`) are
-  **pure** — unit-testable without a Stockfish binary; the full suite runs with no
-  engine via the `get_engine` fake seam.
+- `app/analysis.py` (plus `motifs.py`, `pgn.py`, `accuracy.py`, `endgame.py`) are
+  **pure**; `coaching.py` is pure logic (imports only storage's `LeakRecord` type);
+  `profile.py`/`insights.py` are engine-free read-models over SQLite. All are
+  unit-testable without a Stockfish binary; the full suite runs with no engine via
+  the `get_engine` fake seam.
 - Reuse `analysis.pov_score_to_white_cp` / `classify` — all evals are White-POV
   before classification; don't re-derive the mover-sign rule.
 

@@ -27,9 +27,11 @@ checked in, not just claimed:
   assistant must obey (engine-lock serialization, purity seams, commit policy);
   [`.claude/settings.json`](.claude/settings.json) sandboxes it (denied secret
   reads, no force-push, no direct pushes to `main`).
-- **AI-legible is testable** — pure logic modules (`analysis`, `motifs`, `pgn`,
-  `coaching`, `profile`) are engine-free, and the Stockfish wrapper sits behind a
-  fake-engine seam, so the full 500+-test suite runs with no engine binary.
+- **AI-legible is testable** — pure logic modules (e.g. `analysis`, `motifs`,
+  `pgn`) plus engine-free read-models (`profile`, `insights`) never touch
+  Stockfish, and the engine wrapper sits behind a fake-engine seam, so the full
+  500+-test suite runs with no engine binary. Module map and invariants:
+  [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - **Deterministic at runtime** — the game-review coach is pure Stockfish +
   python-chess with template narration: no LLM calls, no tokens, fully local.
 
