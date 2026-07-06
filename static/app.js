@@ -30,19 +30,10 @@ import { initFeedback } from './feedback.js';
 import { initShortcuts } from './shortcuts.js';
 import { initReview, openGame } from './review.js';
 import { initInsights } from './insights.js';
+import { initSetup, enterSetupUI, EMPTY_PLACEMENT, INITIAL_PLACEMENT } from './setup.js';
 
-const EMPTY_PLACEMENT = '8/8/8/8/8/8/8/8';
-const INITIAL_PLACEMENT = INITIAL_FEN.split(' ')[0];
-
-// Palette piece codes → chessground piece objects.
-const PIECE_CODES = {
-  wK: { color: 'white', role: 'king' },   wQ: { color: 'white', role: 'queen' },
-  wR: { color: 'white', role: 'rook' },    wB: { color: 'white', role: 'bishop' },
-  wN: { color: 'white', role: 'knight' },  wP: { color: 'white', role: 'pawn' },
-  bK: { color: 'black', role: 'king' },    bQ: { color: 'black', role: 'queen' },
-  bR: { color: 'black', role: 'rook' },     bB: { color: 'black', role: 'bishop' },
-  bN: { color: 'black', role: 'knight' },   bP: { color: 'black', role: 'pawn' },
-};
+// EMPTY_PLACEMENT / INITIAL_PLACEMENT are imported from setup.js (their home
+// since the setup-editor extraction); persist() and init() still use them.
 
 // ---------------------------------------------------------------------------
 // State
@@ -60,7 +51,6 @@ const state = {
 
 let ground = null;
 let playSnapshot = null;   // saved play state captured when entering setup (for Cancel)
-let brush = null;          // setup tool: null = move/drag, 'erase', or a piece object
 let studySnapshot = null;  // saved play state captured when entering a trap (restored on exit)
 let studyEvalToken = 0;    // guards out-of-order async eval while stepping a trap (watch/practice)
 let trapsData = [];        // all trap summaries fetched on load
@@ -503,36 +493,6 @@ async function onUserMove(orig, dest) {
   refreshOpeningThenTraps(); // fire-and-forget: opening then traps check, sequential
 }
 
-// --- setup mode: brush stamping --------------------------------------------
-//
-// chessground's `select` event doesn't reliably fire on EMPTY squares, so we
-// can't use it to place pieces. Instead we own the click: a capture-phase
-// pointer listener on the board maps coordinates → square and stamps/erases,
-// stopping chessground from also starting a drag/selection.
-
-function eventSquare(e) {
-  const boardEl = byId('board');
-  const r = boardEl.getBoundingClientRect();
-  const point = e.touches && e.touches[0] ? e.touches[0] : e;
-  const col = Math.floor(((point.clientX - r.left) / r.width) * 8);
-  const row = Math.floor(((point.clientY - r.top) / r.height) * 8);
-  if (col < 0 || col > 7 || row < 0 || row > 7) return null;
-  let fileIdx, rank;
-  if (state.orientation === 'white') { fileIdx = col; rank = 8 - row; }
-  else { fileIdx = 7 - col; rank = 1 + row; }
-  return 'abcdefgh'[fileIdx] + rank;
-}
-
-function onBoardPointerDown(e) {
-  if (state.mode !== 'setup' || !brush) return; // move tool → let chessground handle
-  const sq = eventSquare(e);
-  if (!sq) return;
-  e.preventDefault();
-  e.stopPropagation();
-  ground.setPieces(new Map([[sq, brush === 'erase' ? undefined : brush]]));
-  persist();
-}
-
 // --- rendering -------------------------------------------------------------
 
 // `opts.suppressQuality` forces the quality label to '—' regardless of the
@@ -677,150 +637,8 @@ async function loadFen() {
   emit('toast:show', 'Position loaded');
 }
 
-// --- setup mode: transitions + tools ---------------------------------------
-
-function showSetupUI(on) {
-  byId('setup-bar').hidden = !on;
-  byId('setup-toggle').hidden = on;
-  document.body.classList.toggle('setup-mode', on);
-}
-
-function updatePaletteActive(tool) {
-  document.querySelectorAll('#palette [data-tool], #palette [data-piece]').forEach((b) => {
-    const id = b.dataset.tool || b.dataset.piece;
-    b.classList.toggle('active', id === tool);
-  });
-}
-
-// Switch the active editing tool. `tool` is 'move', 'erase', or a piece code.
-function setTool(tool) {
-  if (tool === 'move') brush = null;
-  else if (tool === 'erase') brush = 'erase';
-  else brush = PIECE_CODES[tool] || null;
-
-  if (brush) {
-    // Stamp mode: clicks place/erase; dragging disabled so no accidental moves.
-    ground.set({
-      movable: { free: false, color: undefined, dests: undefined },
-      draggable: { enabled: false },
-      selectable: { enabled: true },
-    });
-  } else {
-    // Move tool: free drag to rearrange; drag off-board to delete.
-    ground.set({
-      movable: { free: true, color: 'both', dests: undefined },
-      draggable: { enabled: true, deleteOnDropOff: true },
-      selectable: { enabled: true },
-    });
-  }
-  updatePaletteActive(tool);
-}
-
-function setSide(color) {
-  state.setupColor = color === 'black' ? 'black' : 'white';
-  byId('side-white').classList.toggle('active', state.setupColor === 'white');
-  byId('side-black').classList.toggle('active', state.setupColor === 'black');
-  persist();
-}
-
-function showSetupError(msg) {
-  const el = byId('setup-error');
-  el.textContent = msg;
-  el.hidden = false;
-}
-function clearSetupError() { byId('setup-error').hidden = true; }
-
-function emptyBoard() { ground.set({ fen: EMPTY_PLACEMENT }); persist(); }
-function startPosition() { ground.set({ fen: INITIAL_PLACEMENT }); persist(); }
-
-function enterSetup() {
-  // Non-destructive: snapshot the current game so Cancel can restore it.
-  playSnapshot = { baseFen: state.baseFen, moves: state.moves.slice(), moveQuality: state.moveQuality.slice(), moveRetro: state.moveRetro.slice(), cursor: state.cursor };
-  const { pos } = positionAt(state.cursor);
-  setMode('setup');
-  state.setupColor = pos.turn;
-  ground.set({ fen: fenOf(pos).split(' ')[0], lastMove: undefined, highlight: { lastMove: false, check: false } });
-  enterSetupUI();
-  persist();
-}
-
-function enterSetupUI() {
-  showSetupUI(true);
-  setSide(state.setupColor);
-  setTool('move');
-  clearSetupError();
-  setStatus('Setup mode — arrange pieces, set side to move, then Begin Game.');
-}
-
-function exitSetupToPlay() {
-  brush = null;
-  showSetupUI(false);
-  ground.set({ highlight: { lastMove: true, check: true } });
-  syncBoard();        // restores play board config (legal dests, no free drag)
-  refreshAnalysis();  // evaluator back on
-  refreshOpeningThenTraps();
-  persist();
-}
-
-// Expand a FEN rank ("4P3") to 8 chars ("....P...").
-function expandRank(r) { return r.replace(/\d/g, (d) => '.'.repeat(+d)); }
-
-// Infer castling rights from a placement: rights only where king+rook sit home.
-function inferCastling(placement) {
-  const ranks = placement.split('/');
-  if (ranks.length !== 8) return '-';
-  const r1 = expandRank(ranks[7]); // white back rank (rank 1)
-  const r8 = expandRank(ranks[0]); // black back rank (rank 8)
-  let c = '';
-  if (r1[4] === 'K') { if (r1[7] === 'R') c += 'K'; if (r1[0] === 'R') c += 'Q'; }
-  if (r8[4] === 'k') { if (r8[7] === 'r') c += 'k'; if (r8[0] === 'r') c += 'q'; }
-  return c || '-';
-}
-
-function friendlyPosError(e) {
-  const m = String((e && e.message) || e || '');
-  if (/empty/i.test(m)) return 'The board is empty.';
-  if (/king/i.test(m)) return 'Need exactly one king of each color.';
-  if (/opposite|impossible.*check|other.*check/i.test(m)) return 'The side NOT to move is in check — illegal.';
-  if (/pawn/i.test(m)) return 'Illegal pawn placement (e.g. a pawn on the back rank).';
-  if (/check/i.test(m)) return 'Illegal position (check rule violated).';
-  return 'Illegal position — a game can’t start from here.';
-}
-
-function beginGame() {
-  const placement = ground.getFen();
-  const fen = `${placement} ${state.setupColor === 'white' ? 'w' : 'b'} ${inferCastling(placement)} - 0 1`;
-
-  // Validate fully client-side before committing (chessops enforces kings,
-  // check rules, pawns-on-backrank, etc.). The server re-validates on analyze.
-  try {
-    positionFromFen(fen);
-  } catch (e) {
-    showSetupError(friendlyPosError(e));
-    return;
-  }
-
-  state.baseFen = fen;
-  state.moves = [];
-  state.moveQuality = [];
-  state.moveRetro = [];
-  state.cursor = 0;
-  setMode('play');
-  playSnapshot = null;
-  exitSetupToPlay();
-}
-
-function cancelSetup() {
-  const snap = playSnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
-  state.baseFen = snap.baseFen;
-  state.moves = snap.moves;
-  state.moveQuality = snap.moveQuality || [];
-  state.moveRetro = snap.moveRetro || [];
-  state.cursor = snap.cursor;
-  setMode('play');
-  playSnapshot = null;
-  exitSetupToPlay();
-}
+// (Setup editor lives in setup.js — extracted whole; it registers its own
+// mode handlers and DOM wiring via initSetup(api).)
 
 // --- opening trainer: live name detection ----------------------------------
 
@@ -2084,6 +1902,7 @@ function init() {
       positionAt,
       fenOf,
       lastMoveSquares,
+      refreshOpeningThenTraps,
     },
     on,
     emit,
@@ -2095,10 +1914,9 @@ function init() {
     },
   };
 
-  // Mode registrations — the hub owns all four until their modules are
-  // extracted (setup → PR-A, repertoire → PR-B, traps → PR-C move these
-  // calls into their own initX(api)).
-  registerModeHandlers('setup', { exit: cancelSetup });
+  // Mode registrations — the hub owns these until their modules are extracted
+  // (repertoire → PR-B, traps → PR-C move these calls into their own
+  // initX(api)); setup.js already registers its own inside initSetup.
   registerModeHandlers('trap-watch', { exit: exitTrap });
   registerModeHandlers('trap-practice', { onMove: onTrapMove, exit: exitTrap });
   registerModeHandlers('rep-practice', { onMove: onRepMove, exit: exitRepPractice });
@@ -2133,11 +1951,7 @@ function init() {
   initShortcuts(api);
   initReview(api);
   initInsights(api);
-
-  // Own board clicks for setup stamping (capture phase, before chessground).
-  const boardEl = byId('board');
-  boardEl.addEventListener('mousedown', onBoardPointerDown, true);
-  boardEl.addEventListener('touchstart', onBoardPointerDown, { capture: true, passive: false });
+  initSetup(api);
 
   // Play controls
   byId('undo').addEventListener('click', undo);
@@ -2182,17 +1996,7 @@ function init() {
     });
   }
 
-  // Setup controls
-  byId('setup-toggle').addEventListener('click', enterSetup);
-  byId('begin-game').addEventListener('click', beginGame);
-  byId('cancel-setup').addEventListener('click', cancelSetup);
-  byId('empty-board').addEventListener('click', emptyBoard);
-  byId('start-pos').addEventListener('click', startPosition);
-  byId('side-white').addEventListener('click', () => setSide('white'));
-  byId('side-black').addEventListener('click', () => setSide('black'));
-  document.querySelectorAll('#palette [data-tool], #palette [data-piece]').forEach((b) => {
-    b.addEventListener('click', () => setTool(b.dataset.tool || b.dataset.piece));
-  });
+  // (Setup controls + board stamp listeners are wired by initSetup above.)
 
   // Traps browse filters
   byId('traps-name-filter').addEventListener('input', () => renderTraps());
