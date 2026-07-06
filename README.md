@@ -179,9 +179,38 @@ docs/       design specs, build plans, and research notes per feature
 ## Frontend asset versions
 Pinned in `static/index.html`.
 
-## Development
+## How this was built — AI-native workflow
 
-Built solo with an AI-assisted workflow (Claude Code + Codex). The per-feature
-design specs and build plans under `docs/` (`docs/design/` for the first features,
-`docs/ai-dlc/` for newer ones) are the running record of how each piece was scoped
-and verified.
+Built solo, AI-first (Claude Code + Codex), with the process itself checked in as
+a first-class artifact. Each feature runs the same pipeline, and the full paper
+trail lives in this repo:
+
+1. **Spec** — behavior, scope, and edge cases pinned down before any code
+   ([`docs/ai-dlc/specs/`](docs/ai-dlc/specs/), 12 features).
+2. **Contract map** — a read-only scout pass that documents the invisible
+   behavioral contracts (shared state, storage-key shapes, eval-sign conventions)
+   the change must not break ([`docs/ai-dlc/contracts/`](docs/ai-dlc/contracts/)).
+3. **Adversarial review** — a fresh-context "refuter" agent attacks the spec
+   before implementation; its blockers/majors are folded back in (8 of 12 specs
+   carry folded-in refuter findings — search `refuter` in any spec).
+4. **Ticket decomposition** — the spec is split into parallelizable tickets with
+   explicit file ownership and dependency ordering
+   ([`docs/ai-dlc/tickets/`](docs/ai-dlc/tickets/)).
+5. **Verified implementation** — nothing commits until tests pass and the diff
+   is reviewed; the commit policy is machine-readable in [`CLAUDE.md`](CLAUDE.md).
+
+Guardrails for the AI tooling are versioned too:
+
+- [`CLAUDE.md`](CLAUDE.md) — the project constraints the assistant must obey
+  (engine-lock serialization, purity seams, White-POV eval convention,
+  commit/verification policy).
+- [`.claude/settings.json`](.claude/settings.json) — sandboxed permissions:
+  denied secret reads, curated command allowlist, no force-push, no direct
+  pushes to `main`.
+
+Design choices that make the codebase AI-legible are the same ones that make it
+testable: pure logic modules (`analysis`, `motifs`, `pgn`, `coaching`, `profile`)
+are engine-free and unit-tested directly, the Stockfish wrapper is injected
+behind a fake-engine seam (the full suite runs with no engine binary), and the
+game-review coach is a **deterministic** Stockfish + python-chess pipeline —
+template narration, no LLM at runtime, no tokens, fully local.
