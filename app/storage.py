@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 _conn: Optional[sqlite3.Connection] = None
 
 # Schema version — increment when adding new columns/tables.
-_SCHEMA_VERSION = 1
+# v2: blunder trainer — trainer_attempts + trainer_boxes tables.
+_SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # Schema definition
@@ -114,6 +115,28 @@ CREATE TABLE IF NOT EXISTS leaks (
     lead_in_ply     INTEGER,        -- ply where the foresight warning should fire
     tags_json       TEXT,           -- JSON array of tag strings
     explanation_json TEXT           -- JSON object for template narrator
+);
+
+CREATE TABLE IF NOT EXISTS trainer_attempts (
+    -- Blunder-trainer attempt log.  Joins back to LIVE leaks at read time by
+    -- the natural key (game_id, ply, threat_motif) — leaks.id is reissued on
+    -- every re-analysis and is NEVER stored here.
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id         INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    ply             INTEGER NOT NULL,
+    threat_motif    TEXT NOT NULL,
+    attempted_uci   TEXT NOT NULL,
+    outcome         TEXT NOT NULL,  -- 'solved' | 'solved_alt' | 'failed' | 'revealed'
+    cp_delta        INTEGER,        -- eval gap vs best at check time (White-POV cp)
+    check_depth     INTEGER NOT NULL, -- depth of the verdict; 0 = offline exact-match check
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS trainer_boxes (
+    motif           TEXT PRIMARY KEY, -- bucket = motif category (closed vocab)
+    box             INTEGER NOT NULL DEFAULT 1, -- Leitner box 1..5
+    last_reviewed   TEXT,           -- ISO date of last completed bucket review
+    cursor_key      TEXT            -- natural key of last-served puzzle (rotation pointer)
 );
 """
 
@@ -603,4 +626,140 @@ def coverage() -> dict:
         "tagged":   row[1] or 0,
         "analyzed": row[2] or 0,
         "pending":  row[3] or 0,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Blunder-trainer helpers (trainer_attempts / trainer_boxes)
+# ---------------------------------------------------------------------------
+
+_TRAINER_OUTCOMES = frozenset({"solved", "solved_alt", "failed", "revealed"})
+
+
+def record_trainer_attempt(
+    game_id: int,
+    ply: int,
+    threat_motif: str,
+    attempted_uci: str,
+    outcome: str,
+    cp_delta: Optional[int],
+    check_depth: int,
+) -> int:
+    """Insert a trainer_attempts row and return its id.
+
+    The puzzle's durable identity is the natural key (game_id, ply,
+    threat_motif) — never leaks.id, which is reissued on every re-analysis.
+    The threat_motif column stores the BUCKET the puzzle was served under
+    (COALESCE(threat_motif, category)) — the column name predates the rename.
+    check_depth is the engine depth the verdict was computed at; the sentinel
+    0 means an offline exact-match check (engine unavailable).
+
+    Raises ValueError on an invalid outcome.
+    """
+    if outcome not in _TRAINER_OUTCOMES:
+        raise ValueError(f"invalid outcome: {outcome!r}")
+    conn = _get_conn()
+    cur = conn.execute(
+        """
+        INSERT INTO trainer_attempts
+            (game_id, ply, threat_motif, attempted_uci, outcome, cp_delta, check_depth)
+        VALUES
+            (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (game_id, ply, threat_motif, attempted_uci, outcome, cp_delta, check_depth),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_trainer_boxes() -> list[dict]:
+    """Return all trainer_boxes rows as dicts, ordered by motif."""
+    conn = _get_conn()
+    rows = conn.execute("SELECT * FROM trainer_boxes ORDER BY motif").fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_trainer_box(
+    motif: str,
+    box: int = 1,
+    last_reviewed: Optional[str] = None,
+    cursor_key: Optional[str] = None,
+) -> None:
+    """Insert or update a trainer_boxes row (full-row upsert keyed on motif).
+
+    Idempotent on motif: re-inserting the same motif updates the values.
+    """
+    conn = _get_conn()
+    conn.execute(
+        """
+        INSERT INTO trainer_boxes
+            (motif, box, last_reviewed, cursor_key)
+        VALUES
+            (?, ?, ?, ?)
+        ON CONFLICT(motif) DO UPDATE SET
+            box           = excluded.box,
+            last_reviewed = excluded.last_reviewed,
+            cursor_key    = excluded.cursor_key
+        """,
+        (motif, box, last_reviewed, cursor_key),
+    )
+    conn.commit()
+
+
+def get_attempt_stats() -> dict:
+    """Return trainer attempt aggregates (counts only — no rates computed here).
+
+    Keys:
+        per_bucket:   Per-motif outcome counts for attempts that still join to
+                      a LIVE leak by the natural key (game_id, ply, bucket),
+                      where a live leak's bucket is COALESCE(threat_motif,
+                      category) — the same fallback puzzle sourcing uses.
+                      Attempts orphaned by re-analysis (leak vanished or was
+                      reclassified) are EXCLUDED from these rows.
+        all_attempts: Outcome counts over EVERY recorded attempt, including
+                      orphans — display as "all attempts", never per-bucket.
+
+    Empty-state safe: zero games/attempts yields per_bucket=[] and an all-zero
+    all_attempts dict.  Solve rates are left to callers so no division can hit
+    zero here.
+    """
+    conn = _get_conn()
+    bucket_rows = conn.execute(
+        """
+        SELECT
+            a.threat_motif AS motif,
+            COUNT(*)                                                  AS total,
+            SUM(CASE WHEN a.outcome = 'solved'     THEN 1 ELSE 0 END) AS solved,
+            SUM(CASE WHEN a.outcome = 'solved_alt' THEN 1 ELSE 0 END) AS solved_alt,
+            SUM(CASE WHEN a.outcome = 'failed'     THEN 1 ELSE 0 END) AS failed,
+            SUM(CASE WHEN a.outcome = 'revealed'   THEN 1 ELSE 0 END) AS revealed
+        FROM trainer_attempts a
+        JOIN leaks l
+          ON l.game_id = a.game_id
+         AND l.ply     = a.ply
+         AND COALESCE(l.threat_motif, l.category) = a.threat_motif
+        GROUP BY a.threat_motif
+        ORDER BY a.threat_motif
+        """
+    ).fetchall()
+    total_row = conn.execute(
+        """
+        SELECT
+            COUNT(*)                                                AS total,
+            SUM(CASE WHEN outcome = 'solved'     THEN 1 ELSE 0 END) AS solved,
+            SUM(CASE WHEN outcome = 'solved_alt' THEN 1 ELSE 0 END) AS solved_alt,
+            SUM(CASE WHEN outcome = 'failed'     THEN 1 ELSE 0 END) AS failed,
+            SUM(CASE WHEN outcome = 'revealed'   THEN 1 ELSE 0 END) AS revealed
+        FROM trainer_attempts
+        """
+    ).fetchone()
+    return {
+        "per_bucket": [dict(r) for r in bucket_rows],
+        "all_attempts": {
+            "total":      total_row["total"] or 0,
+            "solved":     total_row["solved"] or 0,
+            "solved_alt": total_row["solved_alt"] or 0,
+            "failed":     total_row["failed"] or 0,
+            "revealed":   total_row["revealed"] or 0,
+        },
     }

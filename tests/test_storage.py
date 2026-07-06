@@ -558,3 +558,180 @@ class TestCoverage:
         cov = storage.coverage()
         assert cov["analyzed"] == 0
         assert cov["pending"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Blunder-trainer: schema + trainer_attempts / trainer_boxes (B2)
+# ---------------------------------------------------------------------------
+
+def _trainer_leak(
+    game_id: int,
+    ply: int = 5,
+    threat_motif: str | None = "fork",
+    category: str = "hanging",
+) -> storage.LeakRecord:
+    """A minimal leak carrying the trainer's natural-key fields."""
+    return storage.LeakRecord(
+        game_id=game_id,
+        ply=ply,
+        color="white",
+        severity="blunder",
+        category=category,
+        phase="middlegame",
+        win_prob_before=0.7,
+        win_prob_after=0.3,
+        win_prob_drop=0.4,
+        threat_motif=threat_motif,
+    )
+
+
+class TestTrainerSchema:
+    def test_trainer_tables_created(self, tmp_path):
+        db_path = _init(tmp_path)
+        conn = sqlite3.connect(db_path)
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        conn.close()
+        assert {"trainer_attempts", "trainer_boxes"}.issubset(tables)
+
+
+class TestRecordTrainerAttempt:
+    def test_insert_returns_id(self, tmp_path):
+        _init(tmp_path)
+        gid = storage.insert_game(_game())
+        aid = storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "solved", 12, 18)
+        assert isinstance(aid, int)
+        assert aid > 0
+
+    def test_invalid_outcome_raises(self, tmp_path):
+        _init(tmp_path)
+        gid = storage.insert_game(_game())
+        with pytest.raises(ValueError):
+            storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "won", 12, 18)
+
+    def test_offline_sentinel_and_nullable_cp_delta(self, tmp_path):
+        """check_depth=0 (offline exact-match) and cp_delta=None are storable."""
+        db_path = _init(tmp_path)
+        gid = storage.insert_game(_game())
+        storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "revealed", None, 0)
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            "SELECT cp_delta, check_depth, created_at FROM trainer_attempts"
+        ).fetchone()
+        conn.close()
+        assert row[0] is None
+        assert row[1] == 0
+        assert row[2]  # created_at defaulted by SQLite
+
+    def test_cascade_on_game_delete(self, tmp_path):
+        db_path = _init(tmp_path)
+        gid = storage.insert_game(_game())
+        storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "failed", 300, 18)
+        storage.delete_game(gid)
+        conn = sqlite3.connect(db_path)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM trainer_attempts WHERE game_id = ?", (gid,)
+        ).fetchone()[0]
+        conn.close()
+        assert count == 0
+
+
+class TestTrainerBoxes:
+    def test_empty_returns_no_rows(self, tmp_path):
+        _init(tmp_path)
+        assert storage.get_trainer_boxes() == []
+
+    def test_upsert_create_with_defaults(self, tmp_path):
+        _init(tmp_path)
+        storage.upsert_trainer_box("pin")
+        rows = storage.get_trainer_boxes()
+        assert len(rows) == 1
+        assert rows[0]["motif"] == "pin"
+        assert rows[0]["box"] == 1
+        assert rows[0]["last_reviewed"] is None
+        assert rows[0]["cursor_key"] is None
+
+    def test_upsert_update_same_motif(self, tmp_path):
+        """Re-upserting the same motif → one row, values updated."""
+        _init(tmp_path)
+        storage.upsert_trainer_box("fork", box=2, last_reviewed="2026-07-01", cursor_key="1:5:fork")
+        storage.upsert_trainer_box("fork", box=3, last_reviewed="2026-07-05", cursor_key="2:9:fork")
+        rows = storage.get_trainer_boxes()
+        assert len(rows) == 1
+        assert rows[0]["box"] == 3
+        assert rows[0]["last_reviewed"] == "2026-07-05"
+        assert rows[0]["cursor_key"] == "2:9:fork"
+
+    def test_ordered_by_motif(self, tmp_path):
+        _init(tmp_path)
+        storage.upsert_trainer_box("pin")
+        storage.upsert_trainer_box("fork")
+        assert [r["motif"] for r in storage.get_trainer_boxes()] == ["fork", "pin"]
+
+
+class TestAttemptStats:
+    def test_empty_state_zero_games(self, tmp_path):
+        """Zero games / zero attempts → explicit empty structures."""
+        _init(tmp_path)
+        stats = storage.get_attempt_stats()
+        assert stats["per_bucket"] == []
+        assert stats["all_attempts"] == {
+            "total": 0, "solved": 0, "solved_alt": 0, "failed": 0, "revealed": 0,
+        }
+
+    def test_per_bucket_outcome_counts(self, tmp_path):
+        _init(tmp_path)
+        gid = storage.insert_game(_game())
+        storage.write_leaks(gid, [_trainer_leak(gid, ply=5, threat_motif="fork")])
+        storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "solved", 0, 18)
+        storage.record_trainer_attempt(gid, 5, "fork", "d2d4", "failed", 300, 18)
+        stats = storage.get_attempt_stats()
+        assert stats["per_bucket"] == [
+            {"motif": "fork", "total": 2, "solved": 1, "solved_alt": 0,
+             "failed": 1, "revealed": 0},
+        ]
+        assert stats["all_attempts"]["total"] == 2
+
+    def test_natural_key_survives_reanalysis(self, tmp_path):
+        """delete+reinsert leaks (new autoincrement ids) → attempts still join."""
+        _init(tmp_path)
+        gid = storage.insert_game(_game())
+        storage.write_leaks(gid, [_trainer_leak(gid, ply=5, threat_motif="fork")])
+        storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "solved", 0, 18)
+        # Simulated re-analysis: same natural key, fresh leaks.id.
+        storage.write_leaks(gid, [_trainer_leak(gid, ply=5, threat_motif="fork")])
+        stats = storage.get_attempt_stats()
+        assert len(stats["per_bucket"]) == 1
+        assert stats["per_bucket"][0]["motif"] == "fork"
+        assert stats["per_bucket"][0]["total"] == 1
+
+    def test_reclassified_motif_orphans_attempt(self, tmp_path):
+        """Motif change at the same (game_id, ply) → attempt drops out of
+        per-bucket rows but stays in the all-time totals."""
+        _init(tmp_path)
+        gid = storage.insert_game(_game())
+        storage.write_leaks(gid, [_trainer_leak(gid, ply=5, threat_motif="fork")])
+        storage.record_trainer_attempt(gid, 5, "fork", "e2e4", "solved", 0, 18)
+        # Re-analysis reclassifies the position: fork → pin.
+        storage.write_leaks(gid, [_trainer_leak(gid, ply=5, threat_motif="pin")])
+        stats = storage.get_attempt_stats()
+        assert stats["per_bucket"] == []  # orphaned: no live fork leak
+        assert stats["all_attempts"]["total"] == 1  # all-time keeps the orphan
+
+    def test_bucket_falls_back_to_category(self, tmp_path):
+        """A live leak with NULL threat_motif joins via its category —
+        the same bucket fallback puzzle sourcing uses."""
+        _init(tmp_path)
+        gid = storage.insert_game(_game())
+        storage.write_leaks(
+            gid, [_trainer_leak(gid, ply=5, threat_motif=None, category="hanging")]
+        )
+        storage.record_trainer_attempt(gid, 5, "hanging", "e2e4", "solved_alt", 40, 18)
+        stats = storage.get_attempt_stats()
+        assert len(stats["per_bucket"]) == 1
+        assert stats["per_bucket"][0]["motif"] == "hanging"
+        assert stats["per_bucket"][0]["solved_alt"] == 1

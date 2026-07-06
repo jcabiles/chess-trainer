@@ -808,3 +808,145 @@ class EngineRestartResponse(BaseModel):
 
     restarted: bool = Field(description="Whether the engine restart was attempted (always True).")
     running: bool = Field(description="Whether the Stockfish subprocess is running after the restart.")
+
+
+# ---------------------------------------------------------------------------
+# Blunder trainer models (additive)
+# ---------------------------------------------------------------------------
+
+# Trainer attempt outcomes ('revealed' = user gave up after the retry).
+TrainerOutcome = Literal["solved", "solved_alt", "failed", "revealed"]
+
+
+class TrainerPuzzle(BaseModel):
+    """One servable puzzle — a position from your own games where you leaked."""
+
+    key: str = Field(
+        description="Natural key 'game_id:ply:bucket' — stable across re-analysis "
+        "(leaks.id is not)."
+    )
+    game_id: int
+    ply: int
+    bucket: str = Field(description="Motif bucket (threat_motif, falling back to category).")
+    color: str = Field(description="Side that made the original mistake ('white' | 'black').")
+    severity: str
+    win_prob_drop: float
+    fen_before: str = Field(
+        description="The puzzle position, rebuilt server-side from game_plies."
+    )
+    hung_square: str | None = None
+    threat_uci: str | None = None
+    best_uci: str | None = Field(
+        default=None,
+        description="Stored background-depth best move (a hint; used for the offline "
+        "fallback — the check-time engine is authoritative).",
+    )
+    best_san: str | None = None
+
+
+class TrainerBucketStatus(BaseModel):
+    """A due bucket in the assembled session."""
+
+    motif: str
+    box: int = Field(description="Leitner box 1..5.")
+    last_reviewed: str | None = None
+    pool_size: int = Field(description="Live qualifying puzzles in this bucket.")
+    served: int = Field(description="Puzzles from this bucket in this session.")
+
+
+class TrainerPreviewBucket(BaseModel):
+    """One live-pool bucket's status in the idempotent session preview."""
+
+    motif: str
+    box: int = Field(description="Leitner box 1..5.")
+    last_reviewed: str | None = None
+    pool_size: int = Field(description="Live qualifying puzzles in this bucket.")
+    due: bool = Field(description="Whether the bucket is due for review today.")
+
+
+class TrainerPreviewResponse(BaseModel):
+    """Response for ``GET /api/trainer/session`` (read-only peek, no serving)."""
+
+    buckets: list[TrainerPreviewBucket] = Field(default_factory=list)
+
+
+class TrainerSessionResponse(BaseModel):
+    """Response for ``POST /api/trainer/session/start`` (the mutating serve)."""
+
+    buckets: list[TrainerBucketStatus] = Field(default_factory=list)
+    puzzles: list[TrainerPuzzle] = Field(default_factory=list)
+
+
+class TrainerCheckRequest(BaseModel):
+    """Request for ``POST /api/trainer/check``."""
+
+    game_id: int
+    ply: int
+    bucket: str = Field(
+        description="The bucket the puzzle was served under — threat_motif falling "
+        "back to category, i.e. TrainerPuzzle.bucket (part of the natural key)."
+    )
+    attempted_uci: str
+    offline: bool = Field(
+        default=False,
+        description="When true, skip the engine entirely: the verdict is an exact "
+        "match against the stored leak best_uci and the attempt is recorded with "
+        "the check_depth=0 sentinel (degraded 'offline check').",
+    )
+
+
+class TrainerCheckResponse(BaseModel):
+    """Response for ``POST /api/trainer/check``.
+
+    ``legal=False`` mirrors ``/api/move``'s convention: every other field is
+    null and nothing is recorded.
+    """
+
+    legal: bool
+    verdict: Literal["solved", "solved_alt", "failed"] | None = None
+    attempted_san: str | None = None
+    best_san: str | None = Field(
+        default=None, description="Best move at check time (engine-authoritative)."
+    )
+    best_uci: str | None = None
+    cp_loss: int | None = Field(
+        default=None,
+        description="Mover-POV centipawn loss vs best (None when illegal or offline).",
+    )
+    check_depth: int | None = Field(
+        default=None, description="Depth the verdict was computed at; 0 = offline check."
+    )
+    offline: bool = False
+    narration: dict | None = Field(
+        default=None, description="Narrator foresight text (populated on 'failed')."
+    )
+
+
+class TrainerStatsResponse(BaseModel):
+    """Response for ``GET /api/trainer/stats``."""
+
+    boxes: list[dict] = Field(default_factory=list, description="trainer_boxes rows.")
+    per_bucket: list[dict] = Field(
+        default_factory=list,
+        description="Outcome counts per bucket, live leaks only (orphans excluded).",
+    )
+    all_attempts: dict = Field(
+        default_factory=dict,
+        description="Outcome counts over every attempt — may include orphans.",
+    )
+
+
+class TrainerBucketCompleteRequest(BaseModel):
+    """Request for ``POST /api/trainer/bucket-complete``."""
+
+    motif: str
+    outcomes: list[TrainerOutcome] = Field(
+        description="Outcomes of the puzzles served from this bucket this session."
+    )
+
+
+class TrainerBucketCompleteResponse(BaseModel):
+    """Response for ``POST /api/trainer/bucket-complete``."""
+
+    motif: str
+    box: int = Field(description="The bucket's Leitner box after the transition.")

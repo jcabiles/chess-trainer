@@ -17,10 +17,12 @@ from app.analysis import (
     GOOD_MAX,
     INACCURACY_MAX,
     MATE_CP,
+    MAX_CP_LOSS,
     MISTAKE_MAX,
     MISTAKE_WP_DROP,
     bucket,
     classify,
+    cp_loss,
     game_phase,
     leak_severity,
     pov_score_to_white_cp,
@@ -171,6 +173,94 @@ def test_classify_faster_mate_is_small_loss():
     )
     # White goes from M5 to M3 (faster) -> White improved -> clamps to best.
     assert classify(before, after, mover_is_white=True) == "best"
+
+
+# --- cp_loss: sign correctness (B1) ------------------------------------------
+
+
+def test_cp_loss_white_mover_eval_drop_is_positive_loss():
+    # White's eval drops 200cp (300 -> 100): White gave up 200.
+    assert cp_loss(300, 100, mover_is_white=True) == 200
+
+
+def test_cp_loss_black_mover_sign_flip():
+    # White-POV eval rises 200cp (-200 -> 0): that is a 200cp LOSS for Black.
+    assert cp_loss(-200, 0, mover_is_white=False) == 200
+
+
+def test_cp_loss_zero_when_eval_unchanged():
+    assert cp_loss(50, 50, mover_is_white=True) == 0
+
+
+def test_cp_loss_negative_clamps_to_zero_white():
+    # White improves its own eval -> negative raw loss clamps to 0.
+    assert cp_loss(100, 300, mover_is_white=True) == 0
+
+
+def test_cp_loss_negative_clamps_to_zero_black():
+    # White-POV eval falls (good for Black) -> negative raw loss clamps to 0.
+    assert cp_loss(0, -150, mover_is_white=False) == 0
+
+
+# --- cp_loss: mate-clamped inputs at both extremes ----------------------------
+
+
+def test_cp_loss_white_threw_mate_into_getting_mated():
+    # White had M1 (MATE_CP - 1) and now Black has M2 (-(MATE_CP - 2)):
+    # the worst realistic swing on the mate-mapped axis, still under the cap.
+    before = pov_score_to_white_cp(
+        chess.engine.PovScore(chess.engine.Mate(1), chess.WHITE)
+    )
+    after = pov_score_to_white_cp(
+        chess.engine.PovScore(chess.engine.Mate(-2), chess.WHITE)
+    )
+    loss = cp_loss(before, after, mover_is_white=True)
+    assert loss == 2 * MATE_CP - 3
+    assert loss <= MAX_CP_LOSS
+
+
+def test_cp_loss_black_threw_mate_into_getting_mated():
+    # Mirror extreme for a Black mover: Black had M1, now White has M2.
+    before = pov_score_to_white_cp(
+        chess.engine.PovScore(chess.engine.Mate(-1), chess.WHITE)
+    )
+    after = pov_score_to_white_cp(
+        chess.engine.PovScore(chess.engine.Mate(2), chess.WHITE)
+    )
+    loss = cp_loss(before, after, mover_is_white=False)
+    assert loss == 2 * MATE_CP - 3
+    assert loss <= MAX_CP_LOSS
+
+
+def test_cp_loss_capped_at_max_cp_loss():
+    # Synthetic beyond-mate values: the cap bounds the result for display safety.
+    assert cp_loss(3 * MATE_CP, -3 * MATE_CP, mover_is_white=True) == MAX_CP_LOSS
+
+
+# --- classify delegates to cp_loss: output unchanged --------------------------
+
+
+@pytest.mark.parametrize(
+    "before, after, mover_is_white, expected",
+    [
+        (0, 0, True, "best"),               # cpLoss 0 -> best
+        (100, 300, True, "best"),           # negative loss clamps -> best
+        (0, -30, True, "good"),             # cpLoss 30 -> good
+        (-40, 40, False, "inaccuracy"),     # cpLoss 80 -> inaccuracy
+        (150, -50, True, "mistake"),        # cpLoss 200 -> mistake
+        (-100, 200, False, "blunder"),      # cpLoss 300 -> blunder
+        (MATE_CP - 1, 0, True, "blunder"),  # threw away M1 -> blunder
+        (0, MATE_CP - 3, False, "blunder"),  # Black walked into M3 -> blunder
+    ],
+)
+def test_classify_output_unchanged_after_cp_loss_extraction(
+    before, after, mover_is_white, expected
+):
+    # Expected labels derived from the pre-refactor thresholds (BEST_MAX=10,
+    # GOOD_MAX=50, INACCURACY_MAX=100, MISTAKE_MAX=250): classify must produce
+    # the same label as before, and must equal bucket(cp_loss(...)).
+    assert classify(before, after, mover_is_white) == expected
+    assert bucket(cp_loss(before, after, mover_is_white)) == expected
 
 
 # ---------------------------------------------------------------------------

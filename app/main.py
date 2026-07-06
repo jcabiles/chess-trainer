@@ -38,10 +38,11 @@ from app import (
     repertoire,
     review,
     storage,
+    trainer,
     traps,
 )
-from app.analysis import classify, pov_score_to_white_cp
-from app.engine import AnalysisResult, EngineUnavailable, StockfishEngine
+from app.analysis import classify, cp_loss, pov_score_to_white_cp
+from app.engine import DEFAULT_DEPTH, AnalysisResult, EngineUnavailable, StockfishEngine
 from app.models import (
     Analysis,
     AnalyzeAllResponse,
@@ -72,6 +73,13 @@ from app.models import (
     RetagResponse,
     ReviewResponse,
     SetColorRequest,
+    TrainerBucketCompleteRequest,
+    TrainerBucketCompleteResponse,
+    TrainerCheckRequest,
+    TrainerCheckResponse,
+    TrainerPreviewResponse,
+    TrainerSessionResponse,
+    TrainerStatsResponse,
     TrapsCheckRequest,
 )
 
@@ -984,6 +992,175 @@ async def get_insights_endgames():
             ),
         }
     return EndgameInsightsResponse(**data)
+
+
+# ---------------------------------------------------------------------------
+# Blunder trainer (spaced repetition over your own mistakes)
+# ---------------------------------------------------------------------------
+
+# Verdict window for /api/trainer/check (spec: eval-window solving).
+SOLVED_ALT_MAX_CP_LOSS = 50  # attempted move within 50cp of best → solved_alt
+WINNING_MOVER_CP = 300       # both evals >= +300 mover-POV (still winning) → solved_alt
+
+
+@app.get("/api/trainer/session", response_model=TrainerPreviewResponse)
+async def get_trainer_session():
+    """Idempotent peek at bucket/due status (no engine, no cursor movement).
+
+    Safe to call on every Train-section render — serving is a separate POST.
+    """
+    return TrainerPreviewResponse(buckets=trainer.preview_due_buckets())
+
+
+@app.post("/api/trainer/session/start", response_model=TrainerSessionResponse)
+async def start_trainer_session():
+    """Serve today's session and advance rotation cursors (no engine).
+
+    MUTATING: called exactly once per Start click — every call burns rotation.
+    """
+    return TrainerSessionResponse(**trainer.assemble_session())
+
+
+@app.post("/api/trainer/check", response_model=TrainerCheckResponse)
+async def check_trainer_move(
+    req: TrainerCheckRequest, engine: StockfishEngine = Depends(get_engine)
+):
+    """Check an attempted solution against the engine (eval-window verdict).
+
+    The puzzle position is rebuilt server-side from game_plies — a client FEN
+    is never trusted. Verdict: engine best at check depth → 'solved'; within
+    the eval window → 'solved_alt'; else 'failed' (with narration). The
+    attempt is recorded under the natural key. ``offline=true`` skips the
+    engine entirely (exact match vs the stored leak best_uci, check_depth=0).
+    """
+    # Resolve the natural key against the LIVE pool — the qualification gate,
+    # bucket fallback, and server-side fen_before all come from trainer sourcing.
+    key = trainer.natural_key(req.game_id, req.ply, req.bucket)
+    pool = trainer.get_live_pool()
+    puzzle = next((p for p in pool.get(req.bucket, []) if p["key"] == key), None)
+    if puzzle is None:
+        return JSONResponse(
+            status_code=404, content={"detail": f"No live puzzle for key '{key}'."}
+        )
+
+    board = chess.Board(puzzle["fen_before"])
+
+    # Parse + legality-check the attempted move (mirror /api/move's shape).
+    try:
+        move = chess.Move.from_uci(req.attempted_uci)
+    except (ValueError, chess.InvalidMoveError):
+        return TrainerCheckResponse(legal=False)
+    if move not in board.legal_moves:
+        return TrainerCheckResponse(legal=False)
+
+    mover_is_white = board.turn == chess.WHITE
+    attempted_san = board.san(move)  # render SAN BEFORE pushing
+    fen_before = board.fen()
+    board.push(move)
+    fen_after = board.fen()
+
+    # The live leaks row for this ply (one leak per ply) — narration source.
+    leak_row = next(
+        (lk for lk in storage.get_leaks(req.game_id) if lk["ply"] == req.ply), None
+    )
+
+    # Offline fallback: exact match against the stored (background-depth)
+    # best_uci, recorded with the check_depth=0 sentinel. No engine touched.
+    if req.offline:
+        verdict = "solved" if req.attempted_uci == puzzle["best_uci"] else "failed"
+        narration = None
+        if verdict == "failed" and leak_row is not None:
+            narration = coaching.get_narrator().narrate_leak(leak_row)
+        storage.record_trainer_attempt(
+            req.game_id, req.ply, req.bucket, req.attempted_uci,
+            verdict, None, 0,
+        )
+        return TrainerCheckResponse(
+            legal=True,
+            verdict=verdict,
+            attempted_san=attempted_san,
+            best_san=puzzle["best_san"],
+            best_uci=puzzle["best_uci"],
+            cp_loss=None,
+            check_depth=0,
+            offline=True,
+            narration=narration,
+        )
+
+    # Two-call before/after pattern (exactly like /api/move): the attempted
+    # move needs its REAL eval — a single multipv call cannot score a move
+    # outside the top-K lines.
+    review.note_interactive_start()
+    try:
+        before_lines = await engine.analyze_interactive_multi(fen_before, multipv=1)
+        after_lines = await engine.analyze_interactive_multi(fen_after, multipv=1)
+    except EngineUnavailable:
+        return _engine_unavailable_response()
+    finally:
+        review.note_interactive_end()
+
+    before, after = before_lines[0], after_lines[0]
+
+    # All evals are normalized ONLY via pov_score_to_white_cp; the mover-sign
+    # rule lives in analysis.cp_loss alone (never inline the flip).
+    before_white_cp = pov_score_to_white_cp(before.score)
+    after_white_cp = pov_score_to_white_cp(after.score)
+    loss = cp_loss(before_white_cp, after_white_cp, mover_is_white)
+
+    engine_best_uci = before.pv[0].uci() if before.pv else None
+    engine_best_san = before.pv_san[0] if before.pv_san else None
+
+    if req.attempted_uci == engine_best_uci:
+        verdict = "solved"
+    else:
+        # Mover-POV framing of the SAME White-POV numbers (sign only): the
+        # mover's advantage is the White-POV eval negated for a Black mover.
+        before_mover_cp = before_white_cp if mover_is_white else -before_white_cp
+        after_mover_cp = after_white_cp if mover_is_white else -after_white_cp
+        still_winning = (
+            before_mover_cp >= WINNING_MOVER_CP and after_mover_cp >= WINNING_MOVER_CP
+        )
+        verdict = "solved_alt" if loss <= SOLVED_ALT_MAX_CP_LOSS or still_winning else "failed"
+
+    narration = None
+    if verdict == "failed" and leak_row is not None:
+        narration = coaching.get_narrator().narrate_leak(leak_row)
+
+    storage.record_trainer_attempt(
+        req.game_id, req.ply, req.bucket, req.attempted_uci,
+        verdict, loss, DEFAULT_DEPTH,
+    )
+    return TrainerCheckResponse(
+        legal=True,
+        verdict=verdict,
+        attempted_san=attempted_san,
+        # Check-time engine is authoritative; stored leak best is only a hint.
+        best_san=engine_best_san or puzzle["best_san"],
+        best_uci=engine_best_uci or puzzle["best_uci"],
+        cp_loss=loss,
+        check_depth=DEFAULT_DEPTH,
+        narration=narration,
+    )
+
+
+@app.get("/api/trainer/stats", response_model=TrainerStatsResponse)
+async def get_trainer_stats():
+    """Trainer boxes + attempt aggregates for the Train section (no engine)."""
+    stats = storage.get_attempt_stats()
+    return TrainerStatsResponse(
+        boxes=storage.get_trainer_boxes(),
+        per_bucket=stats["per_bucket"],
+        all_attempts=stats["all_attempts"],
+    )
+
+
+@app.post("/api/trainer/bucket-complete", response_model=TrainerBucketCompleteResponse)
+async def complete_trainer_bucket(req: TrainerBucketCompleteRequest):
+    """Close out a finished bucket review: apply the Leitner box transition."""
+    # motif is deliberately unvalidated (single-user trust model): an unknown
+    # motif just creates a box row that box hygiene resets on next assembly.
+    new_box = trainer.complete_bucket_review(req.motif, list(req.outcomes))
+    return TrainerBucketCompleteResponse(motif=req.motif, box=new_box)
 
 
 # ---------------------------------------------------------------------------

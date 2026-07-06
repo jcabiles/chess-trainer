@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 import app.review as review_module
 import app.storage as storage
-from app.engine import AnalysisResult
+from app.engine import AnalysisResult, EngineUnavailable
 from app.main import app, get_engine
 from tests.engine_fakes import ScriptedEngine
 
@@ -527,3 +527,316 @@ def test_review_existing_fields_unchanged(review_client, review_storage):
 
     # Plies must reflect the 4 rows we wrote.
     assert len(body["plies"]) == 4
+
+
+# ---------------------------------------------------------------------------
+# Blunder trainer routes (B4) — ScriptedEngine scripts fen_before and
+# fen_after independently; storage uses a fresh temp DB per test.
+# ---------------------------------------------------------------------------
+
+TRAINER_BLACK_FEN = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+
+
+def _fen_after(fen: str, uci: str) -> str:
+    """Return the FEN after playing *uci* from *fen*."""
+    board = chess.Board(fen)
+    board.push(chess.Move.from_uci(uci))
+    return board.fen()
+
+
+def _trainer_result(
+    fen: str, cp: int, best_uci: Optional[str] = None
+) -> AnalysisResult:
+    """AnalysisResult with a White-POV cp score and optional best move."""
+    pv: list[chess.Move] = []
+    pv_san: list[str] = []
+    if best_uci:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(best_uci)
+        pv, pv_san = [move], [board.san(move)]
+    return AnalysisResult(
+        score=chess_engine.PovScore(chess_engine.Cp(cp), chess.WHITE),
+        pv=pv,
+        pv_san=pv_san,
+        depth=18,
+    )
+
+
+class UnavailableEngine:
+    """Raises EngineUnavailable on any analysis call (binary absent)."""
+
+    @property
+    def is_running(self) -> bool:
+        return False
+
+    async def analyze_interactive_multi(
+        self, fen: str, depth: int = 18, multipv: int = 1
+    ) -> list[AnalysisResult]:
+        raise EngineUnavailable("stockfish not installed")
+
+
+def _seed_trainer_puzzle(
+    fen_before: str,
+    *,
+    ply: int = 5,
+    motif: str = "fork",
+    best_uci: Optional[str] = "e2e4",
+    best_san: Optional[str] = "e4",
+) -> int:
+    """Insert a qualified game + ply + leak so the natural key is live."""
+    gid = storage.insert_game({
+        "content_hash": f"trainer-{fen_before[:20]}-{ply}-{motif}",
+        "pgn": '[Event "?"]\n1. e4 *',
+        "imported_at": datetime.now(timezone.utc).isoformat(),
+        "my_color": "white",
+    })
+    storage.set_status(gid, "done")
+    storage.write_plies(gid, [{"ply": ply, "fen_before": fen_before}])
+    storage.write_leaks(gid, [storage.LeakRecord(
+        game_id=gid, ply=ply, color="white", severity="blunder",
+        category="hanging", phase="middlegame",
+        win_prob_before=0.7, win_prob_after=0.3, win_prob_drop=0.4,
+        threat_motif=motif, best_uci=best_uci, best_san=best_san,
+    )])
+    return gid
+
+
+@pytest.fixture
+def trainer_client(tmp_path: Path, monkeypatch):
+    """Factory: fresh temp DB + a TestClient around a per-test engine.
+
+    Call with a ScriptedEngine script dict, or pass ``engine=`` for a custom
+    fake (e.g. UnavailableEngine).
+    """
+    db_path = str(tmp_path / "trainer_api_test.db")
+    monkeypatch.setenv("GAMES_DB", db_path)
+    storage.init(db_path)
+    review_module._interactive_pending = 0
+
+    def make(script: Optional[dict] = None, *, engine=None) -> TestClient:
+        eng = engine if engine is not None else ScriptedEngine(script or {})
+        app.dependency_overrides[get_engine] = lambda: eng
+        return TestClient(app)
+
+    yield make
+    app.dependency_overrides.clear()
+
+
+class TestTrainerCheck:
+    def test_solved_when_attempted_equals_engine_best(self, trainer_client):
+        gid = _seed_trainer_puzzle(START_FEN)
+        c = trainer_client({START_FEN: _trainer_result(START_FEN, 30, "e2e4")})
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "e2e4",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["legal"] is True
+        assert body["verdict"] == "solved"
+        assert body["check_depth"] == 18
+        assert body["narration"] is None
+        # Attempt recorded and joins the live leak by natural key.
+        stats = storage.get_attempt_stats()
+        assert stats["per_bucket"] == [{
+            "motif": "fork", "total": 1, "solved": 1,
+            "solved_alt": 0, "failed": 0, "revealed": 0,
+        }]
+
+    def test_solved_alt_within_cp_window(self, trainer_client):
+        """Not the best move, but within 50cp of it (White mover)."""
+        gid = _seed_trainer_puzzle(START_FEN)
+        after = _fen_after(START_FEN, "d2d4")
+        c = trainer_client({
+            START_FEN: _trainer_result(START_FEN, 30, "e2e4"),
+            after: _trainer_result(after, 10),
+        })
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "d2d4",
+        })
+        body = r.json()
+        assert body["verdict"] == "solved_alt"
+        assert body["cp_loss"] == 20
+
+    def test_black_mover_losing_ground_fails(self, trainer_client):
+        """White-POV -300 → -100 is a 200cp LOSS for the Black mover; an
+        inverted sign flip would clamp it to 0 and call it solved_alt.
+        Failed response carries best_san + narration."""
+        gid = _seed_trainer_puzzle(
+            TRAINER_BLACK_FEN, motif="pin", best_uci="e7e5", best_san="e5"
+        )
+        after = _fen_after(TRAINER_BLACK_FEN, "c7c5")
+        c = trainer_client({
+            TRAINER_BLACK_FEN: _trainer_result(TRAINER_BLACK_FEN, -300, "e7e5"),
+            after: _trainer_result(after, -100),
+        })
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "pin",
+            "attempted_uci": "c7c5",
+        })
+        body = r.json()
+        assert body["verdict"] == "failed"
+        assert body["cp_loss"] == 200
+        assert body["best_san"] == "e5"  # check-time engine best
+        assert isinstance(body["narration"], dict)
+        assert body["narration"]["summary"]
+
+    def test_black_mover_gaining_ground_is_solved_alt(self, trainer_client):
+        """White-POV -100 → -300 means Black IMPROVED (loss clamps to 0);
+        an inverted sign flip would read it as a 200cp loss and fail it."""
+        gid = _seed_trainer_puzzle(
+            TRAINER_BLACK_FEN, motif="pin", best_uci="e7e5", best_san="e5"
+        )
+        after = _fen_after(TRAINER_BLACK_FEN, "c7c5")
+        c = trainer_client({
+            TRAINER_BLACK_FEN: _trainer_result(TRAINER_BLACK_FEN, -100, "e7e5"),
+            after: _trainer_result(after, -300),
+        })
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "pin",
+            "attempted_uci": "c7c5",
+        })
+        body = r.json()
+        assert body["verdict"] == "solved_alt"
+        assert body["cp_loss"] == 0
+
+    def test_solved_alt_when_both_evals_still_winning(self, trainer_client):
+        """Loss above the 50cp window, but both evals >= +300 mover-POV."""
+        gid = _seed_trainer_puzzle(START_FEN)
+        after = _fen_after(START_FEN, "d2d4")
+        c = trainer_client({
+            START_FEN: _trainer_result(START_FEN, 500, "e2e4"),
+            after: _trainer_result(after, 320),
+        })
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "d2d4",
+        })
+        body = r.json()
+        assert body["verdict"] == "solved_alt"
+        assert body["cp_loss"] == 180
+
+    def test_illegal_move_records_nothing(self, trainer_client):
+        gid = _seed_trainer_puzzle(START_FEN)
+        c = trainer_client({})
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "e2e5",
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert body["legal"] is False
+        assert body["verdict"] is None
+        assert storage.get_attempt_stats()["all_attempts"]["total"] == 0
+
+    def test_unknown_natural_key_404(self, trainer_client):
+        gid = _seed_trainer_puzzle(START_FEN, motif="fork")
+        c = trainer_client({})
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "pin",  # wrong bucket
+            "attempted_uci": "e2e4",
+        })
+        assert r.status_code == 404
+
+    def test_offline_exact_match_records_depth_zero(self, trainer_client):
+        gid = _seed_trainer_puzzle(START_FEN, best_uci="e2e4", best_san="e4")
+        c = trainer_client({})
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "e2e4", "offline": True,
+        })
+        body = r.json()
+        assert body["verdict"] == "solved"
+        assert body["offline"] is True
+        assert body["check_depth"] == 0
+        row = storage._get_conn().execute(
+            "SELECT outcome, cp_delta, check_depth FROM trainer_attempts"
+        ).fetchone()
+        assert row["outcome"] == "solved"
+        assert row["cp_delta"] is None
+        assert row["check_depth"] == 0
+
+    def test_engine_unavailable_503_records_nothing(self, trainer_client):
+        gid = _seed_trainer_puzzle(START_FEN)
+        c = trainer_client(engine=UnavailableEngine())
+        r = c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "e2e4",
+        })
+        assert r.status_code == 503
+        assert storage.get_attempt_stats()["all_attempts"]["total"] == 0
+
+
+class TestTrainerSessionStatsBucket:
+    def test_session_preview_is_idempotent_read(self, trainer_client):
+        """GET /api/trainer/session peeks only: no puzzles, no cursor burn."""
+        gid = _seed_trainer_puzzle(START_FEN)
+        assert gid > 0
+        c = trainer_client({})
+        r1 = c.get("/api/trainer/session")
+        assert r1.status_code == 200, r1.text
+        assert r1.json() == {"buckets": [{
+            "motif": "fork", "box": 1, "last_reviewed": None,
+            "pool_size": 1, "due": True,
+        }]}
+        rows_after_first = storage.get_trainer_boxes()
+        r2 = c.get("/api/trainer/session")
+        assert r2.json() == r1.json()
+        assert storage.get_trainer_boxes() == rows_after_first  # cursors untouched
+
+    def test_session_start_serves_and_advances_rotation(self, trainer_client):
+        """POST /api/trainer/session/start is the mutating serve: consecutive
+        starts walk the bucket's rotation (existing cursor semantics)."""
+        gid = _seed_trainer_puzzle(START_FEN, ply=1)
+        # Grow the same game/bucket to 5 puzzles (write_* replace per game).
+        storage.write_plies(gid, [
+            {"ply": p, "fen_before": START_FEN} for p in (1, 2, 3, 4, 5)
+        ])
+        storage.write_leaks(gid, [storage.LeakRecord(
+            game_id=gid, ply=p, color="white", severity="blunder",
+            category="hanging", phase="middlegame",
+            win_prob_before=0.7, win_prob_after=0.3, win_prob_drop=0.4,
+            threat_motif="fork", best_uci="e2e4", best_san="e4",
+        ) for p in (1, 2, 3, 4, 5)])
+
+        c = trainer_client({})
+        # A prior preview must not affect what start serves.
+        c.get("/api/trainer/session")
+
+        r1 = c.post("/api/trainer/session/start")
+        assert r1.status_code == 200, r1.text
+        body1 = r1.json()
+        assert [p["ply"] for p in body1["puzzles"]] == [1, 2, 3]
+        assert body1["buckets"] == [{
+            "motif": "fork", "box": 1, "last_reviewed": None,
+            "pool_size": 5, "served": 3,
+        }]
+        assert storage.get_trainer_boxes()[0]["cursor_key"] == f"{gid}:3:fork"
+
+        r2 = c.post("/api/trainer/session/start")
+        assert [p["ply"] for p in r2.json()["puzzles"]] == [4, 5, 1]
+        assert storage.get_trainer_boxes()[0]["cursor_key"] == f"{gid}:1:fork"
+
+    def test_stats_smoke(self, trainer_client):
+        gid = _seed_trainer_puzzle(START_FEN)
+        c = trainer_client({START_FEN: _trainer_result(START_FEN, 30, "e2e4")})
+        c.post("/api/trainer/check", json={
+            "game_id": gid, "ply": 5, "bucket": "fork",
+            "attempted_uci": "e2e4",
+        })
+        r = c.get("/api/trainer/stats")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert isinstance(body["boxes"], list)
+        assert body["per_bucket"][0]["motif"] == "fork"
+        assert body["all_attempts"]["total"] == 1
+
+    def test_bucket_complete_transitions_box(self, trainer_client):
+        c = trainer_client({})
+        r = c.post("/api/trainer/bucket-complete", json={
+            "motif": "fork", "outcomes": ["solved", "solved_alt"],
+        })
+        assert r.status_code == 200, r.text
+        assert r.json() == {"motif": "fork", "box": 2}
+        assert storage.get_trainer_boxes()[0]["box"] == 2
