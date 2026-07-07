@@ -880,3 +880,140 @@ input[type="file"].review-file-input {
   font-size: 0.82rem;
   color: var(--text-secondary);
 }
+
+/* ==========================================================================
+   AI narrative panel — sibling of .review-game-summary, hosted at
+   #review-narrative. Never rendered inside #review-game-summary.
+   ========================================================================== */
+
+.review-narrative[hidden] {
+  display: none;
+}
+
+.review-narrative-cta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) 0;
+}
+
+.review-narrative-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.review-narrative-story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.review-narrative-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.review-narrative-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.review-narrative-regen {
+  font-size: 0.75rem;
+  padding: 1px var(--space-2);
+}
+
+.review-narrative-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Collapsed to roughly four lines; "Read more" expands to the full story. */
+.review-narrative-collapsed {
+  max-height: 6.4em;
+  overflow: hidden;
+}
+
+.review-narrative-phase {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.review-narrative-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.review-narrative-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.review-narrative-toggle:hover {
+  text-decoration: underline;
+}
+
+.review-narrative-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   AI moment cards — rendered alongside foresight cards in #review-foresight,
+   visually distinct (accent border + "AI" tag) from the template-narrated
+   lead-in/tie-back cards.
+   ========================================================================== */
+
+.review-moment-card {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-dim);
+}
+
+.review-moment-hdr {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-1);
+}
+
+.review-moment-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: var(--surface-overlay);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.review-moment-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}

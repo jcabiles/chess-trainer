@@ -16,6 +16,9 @@ let _reviewData = null;  // ReviewResponse from GET /api/games/{id}/review (leak
 let _openedGameId = null;
 let _analyzeAllInterval = null;  // polling interval while any game is pending/analyzing
 let _openStatusInterval = null;  // polling interval for a game opened mid-analysis
+let _narrativeData = null;       // {enabled, narrative} from GET /api/games/{id}/narrative
+let _narrativeGenerating = false;
+let _narrativeExpanded = false;  // read-more/show-less toggle state for the story panel
 
 // ---------------------------------------------------------------------------
 // Utility
@@ -44,9 +47,24 @@ function fmt(val, fallback = '—') {
 // API calls (all fetch — no postJSON from app.js to keep modules one-directional)
 // ---------------------------------------------------------------------------
 
+// Attach {status, detail} from a non-2xx JSON error body onto the thrown
+// Error (best-effort — a non-JSON or empty body just omits `detail`). The
+// message string stays exactly as before so existing call sites that only
+// read err.message are unaffected.
+async function attachErrorDetail(err, res) {
+  err.status = res.status;
+  try {
+    const body = await res.json();
+    if (body && typeof body.detail === 'string') err.detail = body.detail;
+  } catch (_) {
+    // No/invalid JSON body — leave err.detail undefined.
+  }
+  return err;
+}
+
 async function fetchJSON(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+  if (!res.ok) throw await attachErrorDetail(new Error(`HTTP ${res.status}: ${url}`), res);
   return res.json();
 }
 
@@ -56,7 +74,7 @@ async function postJSON(url, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
+  if (!res.ok) throw await attachErrorDetail(new Error(`HTTP ${res.status}: ${url}`), res);
   return res.json();
 }
 
@@ -544,10 +562,14 @@ export async function openGame(gameId) {
     if (panel) panel.classList.toggle('is-active', name === 'analysis');
   });
 
-  // Clear the previous game's summary/foresight before the new data arrives.
+  // Clear the previous game's summary/foresight/narrative before the new data arrives.
   renderGameSummary(null);
   const foresightHost = byId('review-foresight');
   if (foresightHost) foresightHost.replaceChildren();
+  _narrativeData = null;
+  _narrativeGenerating = false;
+  _narrativeExpanded = false;
+  renderNarrativePanel();
 
   // Load review data (leaks + foresight) in the background if analysis is
   // done; a game opened mid-analysis has no data yet, so poll and load the
@@ -612,6 +634,20 @@ async function loadReviewData(gameId) {
   } catch (_) {
     _reviewData = null;
   }
+
+  // Narrative fetch failure (network blip, or route not yet deployed) degrades
+  // silently to the disabled state — no console noise, no toast spam.
+  try {
+    _narrativeData = await fetchJSON(`/api/games/${gameId}/narrative`);
+  } catch (_) {
+    _narrativeData = { enabled: false, narrative: null };
+  }
+  _narrativeExpanded = false;
+  renderNarrativePanel();
+  // Re-render foresight so any moment cards for the current ply appear once
+  // the narrative arrives (it lands after the /review fetch above).
+  const currentState = _api && _api.actions && _api.actions.getState();
+  if (currentState) renderForesight(currentState.cursor);
 }
 
 // ---------------------------------------------------------------------------
@@ -673,29 +709,46 @@ function renderForesight(ply) {
   if (!host) return;
   host.replaceChildren();
 
-  if (!_reviewData || !_reviewData.leaks || _reviewData.leaks.length === 0) return;
-  const leaks = _reviewData.leaks;
+  if (_reviewData && _reviewData.leaks && _reviewData.leaks.length > 0) {
+    const leaks = _reviewData.leaks;
 
-  // Check if the current ply matches any lead_in_ply (show warning card BEFORE the blunder).
-  const leadInLeaks = leaks.filter((l) => l.lead_in_ply === ply);
-  // Check if the current ply matches any blunder ply (tie-back warning).
-  const blunderLeaks = leaks.filter((l) => l.ply === ply);
+    // Check if the current ply matches any lead_in_ply (show warning card BEFORE the blunder).
+    const leadInLeaks = leaks.filter((l) => l.lead_in_ply === ply);
+    // Check if the current ply matches any blunder ply (tie-back warning).
+    const blunderLeaks = leaks.filter((l) => l.ply === ply);
 
-  if (leadInLeaks.length === 0 && blunderLeaks.length === 0) return;
+    // Lead-in warnings (highest priority — shown before the blunder occurs).
+    for (const leak of leadInLeaks) {
+      host.appendChild(renderForesightCard(leak, 'lead-in'));
+    }
 
-  // Lead-in warnings (highest priority — shown before the blunder occurs).
-  for (const leak of leadInLeaks) {
-    host.appendChild(renderForesightCard(leak, 'lead-in'));
-  }
-
-  // Blunder tie-back (gentler — the foresight already warned you).
-  for (const leak of blunderLeaks) {
-    // Only show tie-back if we haven't already shown a lead-in for this exact leak.
-    const alreadyShown = leadInLeaks.some((l) => l.id === leak.id);
-    if (!alreadyShown) {
-      host.appendChild(renderForesightCard(leak, 'tie-back'));
+    // Blunder tie-back (gentler — the foresight already warned you).
+    for (const leak of blunderLeaks) {
+      // Only show tie-back if we haven't already shown a lead-in for this exact leak.
+      const alreadyShown = leadInLeaks.some((l) => l.id === leak.id);
+      if (!alreadyShown) {
+        host.appendChild(renderForesightCard(leak, 'tie-back'));
+      }
     }
   }
+
+  // AI narrative moment cards — appended after any foresight cards, never
+  // replacing them. Distinct styling (review-moment-card) + a small "AI" tag.
+  const moments = _narrativeData && _narrativeData.narrative && _narrativeData.narrative.moments;
+  if (moments && moments.length > 0) {
+    for (const moment of moments.filter((m) => m.ply === ply)) {
+      host.appendChild(renderMomentCard(moment));
+    }
+  }
+}
+
+function renderMomentCard(moment) {
+  const card = el('div', { className: 'review-moment-card' });
+  const hdr = el('div', { className: 'review-moment-hdr' });
+  hdr.appendChild(el('span', { className: 'review-moment-tag', textContent: 'AI' }));
+  card.appendChild(hdr);
+  card.appendChild(el('p', { className: 'review-moment-text', textContent: moment.text }));
+  return card;
 }
 
 function renderForesightCard(leak, kind) {
@@ -765,6 +818,117 @@ function renderForesightCard(leak, kind) {
   if (ctx.children.length) card.appendChild(ctx);
 
   return card;
+}
+
+// ---------------------------------------------------------------------------
+// Narrative panel — shown in #review-narrative, a sibling of
+// #review-game-summary (never rendered inside it — that host is owned by
+// renderGameSummary/renderAnalyzingNote).
+// ---------------------------------------------------------------------------
+
+function renderNarrativePanel() {
+  const host = byId('review-narrative');
+  if (!host) return;
+  host.replaceChildren();
+
+  if (!_narrativeData) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+
+  if (_narrativeGenerating) {
+    host.appendChild(renderNarrativeCta('Generating…', { disabled: true }));
+    return;
+  }
+
+  const { enabled, narrative } = _narrativeData;
+
+  if (narrative) {
+    host.appendChild(renderNarrativeStory(narrative));
+    return;
+  }
+
+  if (!enabled) {
+    host.appendChild(renderNarrativeCta('Generate commentary', {
+      disabled: true,
+      hint: 'Set ANTHROPIC_API_KEY to enable AI commentary',
+    }));
+    return;
+  }
+
+  host.appendChild(renderNarrativeCta('Generate commentary', {
+    onClick: () => generateNarrative(),
+  }));
+}
+
+function renderNarrativeCta(label, { disabled = false, hint = null, onClick = null } = {}) {
+  const wrap = el('div', { className: 'review-narrative-cta' });
+  const btn = el('button', { className: 'review-btn review-btn-primary', textContent: label });
+  btn.disabled = disabled;
+  if (onClick) btn.addEventListener('click', onClick);
+  wrap.appendChild(btn);
+  if (hint) wrap.appendChild(el('div', { className: 'review-narrative-hint', textContent: hint }));
+  return wrap;
+}
+
+function renderNarrativeStory(narrative) {
+  const wrap = el('div', { className: 'review-narrative-story' });
+
+  const hdr = el('div', { className: 'review-narrative-hdr' });
+  hdr.appendChild(el('span', { className: 'review-narrative-title', textContent: 'AI Game Commentary' }));
+  const regenBtn = el('button', { className: 'review-btn review-narrative-regen', textContent: 'Regenerate' });
+  regenBtn.addEventListener('click', () => generateNarrative());
+  hdr.appendChild(regenBtn);
+  wrap.appendChild(hdr);
+
+  const body = el('div', { className: 'review-narrative-body' });
+  if (!_narrativeExpanded) body.classList.add('review-narrative-collapsed');
+
+  for (const chapter of narrative.chapters || []) {
+    const chapterEl = el('div', { className: 'review-narrative-chapter' });
+    if (chapter.phase) {
+      chapterEl.appendChild(el('div', { className: 'review-narrative-phase', textContent: chapter.phase }));
+    }
+    chapterEl.appendChild(el('p', { className: 'review-narrative-text', textContent: chapter.text }));
+    body.appendChild(chapterEl);
+  }
+  if (narrative.overall) {
+    const overallEl = el('div', { className: 'review-narrative-chapter' });
+    overallEl.appendChild(el('p', { className: 'review-narrative-text', textContent: narrative.overall }));
+    body.appendChild(overallEl);
+  }
+  wrap.appendChild(body);
+
+  const toggle = el('button', {
+    className: 'review-narrative-toggle',
+    textContent: _narrativeExpanded ? 'Show less' : 'Read more',
+  });
+  toggle.addEventListener('click', () => {
+    _narrativeExpanded = !_narrativeExpanded;
+    renderNarrativePanel();
+  });
+  wrap.appendChild(toggle);
+
+  return wrap;
+}
+
+async function generateNarrative() {
+  if (!_openedGameId || _narrativeGenerating) return;
+  _narrativeGenerating = true;
+  renderNarrativePanel();
+  try {
+    const data = await postJSON(`/api/games/${_openedGameId}/narrative`, {});
+    _narrativeData = data;
+    _narrativeExpanded = false;
+    const currentState = _api && _api.actions && _api.actions.getState();
+    if (currentState) renderForesight(currentState.cursor);
+  } catch (err) {
+    showToast(`Commentary failed: ${err.detail || err.message}`);
+  } finally {
+    _narrativeGenerating = false;
+    renderNarrativePanel();
+  }
 }
 
 // ---------------------------------------------------------------------------
