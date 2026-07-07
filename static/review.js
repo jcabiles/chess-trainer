@@ -178,6 +178,10 @@ function renderBulkControls() {
 function renderLibrary(games, profile) {
   const host = byId('review-library');
   if (!host) return;
+  // Full rebuild clobbers anything the user is typing (retag username, pasted
+  // PGN) — auto-poll ticks and action-triggered refreshes both land here, so
+  // preserve text-field state across the rebuild.
+  const inputSnap = snapshotLibraryInputs();
   host.replaceChildren();
 
   // Section header
@@ -295,6 +299,8 @@ function renderLibrary(games, profile) {
 
   host.appendChild(listWrap);
 
+  restoreLibraryInputs(inputSnap);
+
   // Auto-poll while any listed game is pending/analyzing (automation owns those states).
   maybeStartAutoPoll(games);
 }
@@ -406,6 +412,52 @@ function pollStatus(gameId, btn, statusEl) {
 
 function hasPendingOrAnalyzing(games) {
   return (games || []).some((g) => g.analysis_status === 'pending' || g.analysis_status === 'analyzing');
+}
+
+// renderLibrary rebuilds the whole panel, clobbering anything the user is
+// typing (retag username, pasted PGN, import color choice). Snapshot the
+// fields with a unique aria-label before the rebuild and restore value +
+// focus + cursor after. Duplicate labels (per-game color selects) are
+// skipped — their values mirror server state anyway.
+function snapshotLibraryInputs() {
+  const host = byId('review-library');
+  if (!host) return null;
+  const byLabel = new Map();
+  for (const f of host.querySelectorAll('input[type="text"], textarea, select')) {
+    const label = f.getAttribute('aria-label');
+    if (!label) continue;
+    byLabel.set(label, byLabel.has(label) ? null : f);
+  }
+  const active = document.activeElement;
+  const snap = [];
+  for (const [label, f] of byLabel) {
+    if (f === null) continue; // duplicate label — ambiguous, skip
+    snap.push({
+      label,
+      value: f.value,
+      focused: f === active,
+      selStart: f.selectionStart,
+      selEnd: f.selectionEnd,
+    });
+  }
+  return snap;
+}
+
+function restoreLibraryInputs(snap) {
+  if (!snap) return;
+  const host = byId('review-library');
+  if (!host) return;
+  for (const s of snap) {
+    const f = host.querySelector(`[aria-label="${s.label}"]`);
+    if (!f) continue;
+    f.value = s.value;
+    if (s.focused) {
+      f.focus();
+      if (s.selStart != null && typeof f.setSelectionRange === 'function') {
+        try { f.setSelectionRange(s.selStart, s.selEnd); } catch (_) { /* selects */ }
+      }
+    }
+  }
 }
 
 // Start the auto-analysis poll if any listed game is pending/analyzing and no
