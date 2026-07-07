@@ -871,3 +871,12 @@ input[type="file"].review-file-input {
   font-size: 0.7rem;
   color: var(--muted);
 }
+
+.review-analyzing-note {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}

@@ -15,6 +15,7 @@ let _api = null;
 let _reviewData = null;  // ReviewResponse from GET /api/games/{id}/review (leaks + plies)
 let _openedGameId = null;
 let _analyzeAllInterval = null;  // polling interval while any game is pending/analyzing
+let _openStatusInterval = null;  // polling interval for a game opened mid-analysis
 
 // ---------------------------------------------------------------------------
 // Utility
@@ -543,10 +544,62 @@ export async function openGame(gameId) {
     if (panel) panel.classList.toggle('is-active', name === 'analysis');
   });
 
-  // Load review data (leaks + foresight) in the background if analysis is done.
+  // Clear the previous game's summary/foresight before the new data arrives.
+  renderGameSummary(null);
+  const foresightHost = byId('review-foresight');
+  if (foresightHost) foresightHost.replaceChildren();
+
+  // Load review data (leaks + foresight) in the background if analysis is
+  // done; a game opened mid-analysis has no data yet, so poll and load the
+  // moment analysis completes (otherwise the replay shows no evals forever).
   if (gameDetail.analysis_status === 'done') {
     loadReviewData(gameId);
+  } else {
+    awaitAnalysisThenLoad(gameId);
   }
+}
+
+// Poll an opened game that is still pending/analyzing; show a progress note
+// and pull in evals/leaks/summary as soon as the background analysis lands.
+function awaitAnalysisThenLoad(gameId) {
+  if (_openStatusInterval !== null) {
+    clearInterval(_openStatusInterval);
+    _openStatusInterval = null;
+  }
+  renderAnalyzingNote('Analyzing this game — evaluations will appear when ready…');
+  let attempts = 0;
+  const max = 300; // give up after ~5 min; a single game never takes that long
+  _openStatusInterval = setInterval(async () => {
+    attempts++;
+    try {
+      const data = await fetchJSON(`/api/games/${gameId}/status`);
+      if (_openedGameId !== gameId || attempts >= max) {
+        clearInterval(_openStatusInterval);
+        _openStatusInterval = null;
+        return;
+      }
+      if (data.analysis_status === 'done') {
+        clearInterval(_openStatusInterval);
+        _openStatusInterval = null;
+        loadReviewData(gameId);
+      } else if (data.analysis_status === 'failed') {
+        clearInterval(_openStatusInterval);
+        _openStatusInterval = null;
+        renderAnalyzingNote('Analysis failed — use Retry in the game library.');
+      }
+    } catch (_) {
+      // Network blip — keep polling until the attempt cap.
+    }
+  }, 1000);
+}
+
+// Progress note shown in the review bar's summary slot. renderGameSummary
+// overwrites it when real data arrives; replay navigation never touches it.
+function renderAnalyzingNote(message) {
+  const el_ = document.getElementById('review-game-summary');
+  if (!el_) return;
+  el_.replaceChildren(el('div', { className: 'review-analyzing-note', textContent: message }));
+  el_.hidden = false;
 }
 
 async function loadReviewData(gameId) {
