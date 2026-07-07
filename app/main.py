@@ -143,6 +143,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("review: reset_stuck failed at startup: %s", exc)
 
+    # Catch-up: auto-analyze anything left pending (stuck jobs just reset above,
+    # fresh drop-folder imports). The env gate inside the helper keeps the test
+    # suite engine-free and fast.
+    try:
+        if storage.coverage().get("pending", 0) > 0:
+            _kick_auto_analysis(engine)
+    except Exception as exc:
+        logger.warning("auto-analyze: startup kick failed: %s", exc)
+
     try:
         yield
     finally:
@@ -214,6 +223,35 @@ async def no_store_static(request: Request, call_next):
 def get_engine(request: Request) -> StockfishEngine:
     """Dependency: the app's single engine instance (overridable in tests)."""
     return request.app.state.engine
+
+
+def _kick_auto_analysis(engine: StockfishEngine) -> None:
+    """Best-effort: start the singleton bulk-analysis task for pending games.
+
+    Guard order matters (both mandatory):
+    1. CHESS_SKIP_ENGINE_AUTOSTART gates EVERY trigger, not just lifespan —
+       this keeps the pytest suite (which sets it) from mutating the real
+       data/games.db via TestClient lifespans that don't override GAMES_DB,
+       and keeps pending-status assertions race-free.
+    2. Availability probe — start_analyze_all never raises synchronously, so
+       wrapping it in try/except is dead code; without this probe an
+       engine-down kick walks the whole queue flipping every pending game to
+       'failed'. When the process isn't up (e.g. right after restart(), which
+       poisons and leaves lazy start to the next analyze), try the idempotent
+       start() — sync, no awaits, so atomic on the event loop. Binary absent
+       ⇒ EngineUnavailable ⇒ skip, games stay 'pending'; the boot /
+       engine-restart catch-up recovers them.
+    """
+    if os.environ.get("CHESS_SKIP_ENGINE_AUTOSTART"):
+        logger.info("auto-analyze: skipped (CHESS_SKIP_ENGINE_AUTOSTART set).")
+        return
+    if not engine.is_running:
+        try:
+            engine.start()
+        except EngineUnavailable as exc:
+            logger.info("auto-analyze: engine unavailable (%s); games stay 'pending'.", exc)
+            return
+    review.start_analyze_all(engine, depth=review.BACKGROUND_DEPTH)
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +479,13 @@ async def restart_engine(engine: StockfishEngine = Depends(get_engine)):
     healthy; safe to call when wedged. Always returns status 200 with restarted=True.
     """
     await engine.restart()
+    # Catch-up: a restart usually follows a wedge that left games pending/failed.
+    try:
+        pending = storage.coverage().get("pending", 0)
+    except Exception:
+        pending = 0
+    if pending > 0:
+        _kick_auto_analysis(engine)
     return EngineRestartResponse(restarted=True, running=engine.is_running)
 
 
@@ -540,12 +585,14 @@ def _game_summary(row: dict) -> GameSummary:
 # integer game_id.  Order: import → retag-color → analyze-all → {game_id}/*.
 
 @app.post("/api/games/import", response_model=ImportResponse)
-async def import_games(req: ImportRequest):
+async def import_games(req: ImportRequest, engine: StockfishEngine = Depends(get_engine)):
     """Import one or more PGN games from pasted text.
 
     Parses the PGN, inserts each game (deduped by content_hash), and applies
     the optional ``my_color`` override to every game in the batch.
     Returns imported/duplicate counts and summaries of all games in the batch.
+    Analysis of the batch starts automatically (best-effort; engine absent ⇒
+    games simply stay 'pending').
     """
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -600,6 +647,9 @@ async def import_games(req: ImportRequest):
         except Exception as exc:
             logger.warning("import: failed to insert game: %s", exc)
 
+    if imported or duplicates:
+        _kick_auto_analysis(engine)
+
     return ImportResponse(imported=imported, duplicates=duplicates, games=summaries)
 
 
@@ -617,13 +667,13 @@ async def list_games():
 # /api/games/{game_id} so they are never shadowed by the parameterised route.
 
 @app.post("/api/games/retag-color", response_model=RetagResponse)
-async def retag_color(req: RetagRequest):
+async def retag_color(req: RetagRequest, engine: StockfishEngine = Depends(get_engine)):
     """Bulk-tag my_color on games whose White/Black name matches any alias.
 
     Accepts a comma-separated list of usernames in ``username``.  Matching is
     case-insensitive and trimmed (same logic as import-time inference).  Each
-    matching game has its ``analysis_status`` reset to 'pending' so that the
-    next bulk-analyze pass recomputes leaks under the correct color.
+    matching game has its ``analysis_status`` reset to 'pending'; the
+    recompute pass under the correct color starts automatically (best-effort).
 
     Returns the number of updated games and fresh coverage counts.
     """
@@ -633,6 +683,8 @@ async def retag_color(req: RetagRequest):
         cov = storage.coverage()
     except Exception as exc:
         return JSONResponse(status_code=500, content={"detail": str(exc)})
+    if updated > 0:
+        _kick_auto_analysis(engine)
     return RetagResponse(
         updated=updated,
         coverage=CoverageDict(**cov),
@@ -703,12 +755,15 @@ async def get_game(game_id: int):
 
 
 @app.patch("/api/games/{game_id}", response_model=GameSummary)
-async def patch_game(game_id: int, req: SetColorRequest):
+async def patch_game(
+    game_id: int, req: SetColorRequest, engine: StockfishEngine = Depends(get_engine)
+):
     """Set or clear ``my_color`` on a single game.
 
     Resetting the color invalidates previously computed leaks, so
-    ``analysis_status`` is automatically reset to 'pending'.  Returns the
-    updated game summary, or 404 if the game does not exist.
+    ``analysis_status`` is automatically reset to 'pending' and re-analysis
+    starts automatically (best-effort).  Returns the updated game summary,
+    or 404 if the game does not exist.
     """
     try:
         changed = storage.set_my_color(game_id, req.my_color)
@@ -718,6 +773,7 @@ async def patch_game(game_id: int, req: SetColorRequest):
         return JSONResponse(status_code=500, content={"detail": str(exc)})
     if not changed:
         return JSONResponse(status_code=404, content={"detail": f"Game {game_id} not found."})
+    _kick_auto_analysis(engine)
     row = storage.get_game(game_id)
     if row is None:
         return JSONResponse(status_code=404, content={"detail": f"Game {game_id} not found."})

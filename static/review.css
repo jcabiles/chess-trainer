@@ -702,7 +702,7 @@ input[type="file"].review-file-input {
 }
 
 /* ==========================================================================
-   Bulk controls (retag + analyze-all)
+   Bulk controls (retag — analysis is automatic)
    ========================================================================== */
 
 .review-bulk {
@@ -749,12 +749,6 @@ input[type="file"].review-file-input {
 
 .review-bulk-input::placeholder {
   color: var(--muted);
-}
-
-.review-bulk-progress {
-  font-size: 0.78rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
 /* ==========================================================================

@@ -14,7 +14,7 @@ const byId = (id) => document.getElementById(id);
 let _api = null;
 let _reviewData = null;  // ReviewResponse from GET /api/games/{id}/review (leaks + plies)
 let _openedGameId = null;
-let _analyzeAllInterval = null;  // polling interval for analyze-all progress
+let _analyzeAllInterval = null;  // polling interval while any game is pending/analyzing
 
 // ---------------------------------------------------------------------------
 // Utility
@@ -171,28 +171,7 @@ function renderBulkControls() {
 
   retagSection.append(retagRow, retagStatus);
 
-  // --- "Analyze all" ---
-  const analyzeSection = el('div', { className: 'review-bulk-section' });
-  analyzeSection.appendChild(el('div', { className: 'review-import-title', textContent: 'Bulk analyze' }));
-
-  const analyzeRow = el('div', { className: 'review-bulk-row' });
-  const analyzeAllBtn = el('button', { className: 'review-btn review-btn-primary', textContent: 'Analyze all pending' });
-  analyzeRow.appendChild(analyzeAllBtn);
-
-  const analyzeProgress = el('span', { className: 'review-bulk-progress' });
-  analyzeRow.appendChild(analyzeProgress);
-
-  analyzeAllBtn.addEventListener('click', () => triggerAnalyzeAll(analyzeAllBtn, analyzeProgress));
-
-  // If a poll is already running (re-render mid-flight), disable the button
-  if (_analyzeAllInterval !== null) {
-    analyzeAllBtn.disabled = true;
-    analyzeProgress.textContent = 'Analyzing…';
-  }
-
-  analyzeSection.appendChild(analyzeRow);
-
-  wrap.append(retagSection, analyzeSection);
+  wrap.append(retagSection);
   return wrap;
 }
 
@@ -209,7 +188,7 @@ function renderLibrary(games, profile) {
   // Coverage hint
   host.appendChild(renderCoverageHint(games, profile));
 
-  // Bulk controls (retag + analyze-all)
+  // Bulk controls (retag only — analysis is automatic)
   host.appendChild(renderBulkControls());
 
   // Import controls
@@ -291,26 +270,33 @@ function renderLibrary(games, profile) {
     const openBtn = el('button', { className: 'review-btn review-btn-primary', textContent: 'Open' });
     openBtn.addEventListener('click', () => openGame(game.id));
 
-    const analyzeBtn = el('button', {
-      className: 'review-btn',
-      textContent: game.analysis_status === 'done' ? 'Re-analyze' : 'Analyze',
-    });
-    analyzeBtn.disabled = game.analysis_status === 'analyzing';
-    analyzeBtn.addEventListener('click', () => triggerAnalysis(game.id, analyzeBtn, statusEl));
+    // Status (live polling placeholder)
+    const statusEl = el('span', { className: 'review-game-status-live' });
+
+    actions.appendChild(openBtn);
+
+    // pending/analyzing are automation-owned — no manual button.
+    if (game.analysis_status === 'done' || game.analysis_status === 'failed') {
+      const analyzeBtn = el('button', {
+        className: 'review-btn',
+        textContent: game.analysis_status === 'done' ? 'Re-analyze' : 'Retry',
+      });
+      analyzeBtn.addEventListener('click', () => triggerAnalysis(game.id, analyzeBtn, statusEl));
+      actions.appendChild(analyzeBtn);
+    }
 
     const deleteBtn = el('button', { className: 'review-btn review-btn-danger', textContent: 'Delete' });
     deleteBtn.addEventListener('click', () => deleteAndRefresh(game.id));
-
-    actions.append(openBtn, analyzeBtn, deleteBtn);
-
-    // Status (live polling placeholder)
-    const statusEl = el('span', { className: 'review-game-status-live' });
+    actions.appendChild(deleteBtn);
 
     row.append(players, meta, colorRow, actions, statusEl);
     listWrap.appendChild(row);
   }
 
   host.appendChild(listWrap);
+
+  // Auto-poll while any listed game is pending/analyzing (automation owns those states).
+  maybeStartAutoPoll(games);
 }
 
 function renderImportControls() {
@@ -418,47 +404,34 @@ function pollStatus(gameId, btn, statusEl) {
   }, 1000);
 }
 
-async function triggerAnalyzeAll(btn, progressEl) {
-  if (_analyzeAllInterval !== null) return; // already running
-  btn.disabled = true;
-  if (progressEl) progressEl.textContent = 'Starting…';
-  try {
-    const data = await postJSON('/api/games/analyze-all', {});
-    const initialPending = data.pending;
-    if (initialPending === 0) {
-      if (progressEl) progressEl.textContent = 'No pending games.';
-      btn.disabled = false;
-      return;
-    }
-    if (progressEl) progressEl.textContent = `Analyzing… ${initialPending} pending`;
+function hasPendingOrAnalyzing(games) {
+  return (games || []).some((g) => g.analysis_status === 'pending' || g.analysis_status === 'analyzing');
+}
 
-    // Poll /api/profile every ~1.5s for updated pending count.
-    _analyzeAllInterval = setInterval(async () => {
-      try {
-        const profile = await fetchJSON('/api/profile');
-        const games = await fetchJSON('/api/games').catch(() => []);
-        const pending = games.filter((g) => g.analysis_status === 'pending' || g.analysis_status === 'analyzing').length;
-        if (progressEl) {
-          progressEl.textContent = pending > 0 ? `Analyzing… ${pending} pending` : 'Done.';
-        }
-        renderLibrary(games, profile);
-        renderProfile(profile);
-        if (pending === 0) {
-          clearInterval(_analyzeAllInterval);
-          _analyzeAllInterval = null;
-          btn.disabled = false;
-          showToast('All games analyzed.');
-          // Final full refresh to ensure consistent state.
-          await refreshLibraryAndProfile();
-        }
-      } catch (_) {
-        // Network blip — keep polling, do not stop.
+// Start the auto-analysis poll if any listed game is pending/analyzing and no
+// poll is already running. Analysis itself is kicked off server-side
+// (import/retag/color-change/boot/engine-restart) — this only reflects progress.
+function maybeStartAutoPoll(games) {
+  if (_analyzeAllInterval !== null) return; // already running — guard against double intervals
+  if (!hasPendingOrAnalyzing(games)) return; // nothing pending — a poll here would never toast
+
+  _analyzeAllInterval = setInterval(async () => {
+    try {
+      const [polledGames, profile] = await Promise.all([
+        fetchJSON('/api/games').catch(() => []),
+        fetchJSON('/api/profile').catch(() => null),
+      ]);
+      renderLibrary(polledGames, profile);
+      renderProfile(profile);
+      if (!hasPendingOrAnalyzing(polledGames)) {
+        clearInterval(_analyzeAllInterval);
+        _analyzeAllInterval = null;
+        showToast('All games analyzed.');
       }
-    }, 1500);
-  } catch (err) {
-    if (progressEl) progressEl.textContent = `Failed: ${err.message}`;
-    btn.disabled = false;
-  }
+    } catch (_) {
+      // Network blip — keep polling, do not stop.
+    }
+  }, 1500);
 }
 
 function showToast(message) {
@@ -726,7 +699,7 @@ function renderProfile(profile) {
       statsRow.appendChild(reviewStat('Analyzed', profile.games_analyzed));
       emptyWrap.appendChild(statsRow);
     }
-    emptyWrap.appendChild(el('div', { className: 'review-profile-empty', textContent: 'No analyzed games yet. Import and analyze some games to see your coaching profile.' }));
+    emptyWrap.appendChild(el('div', { className: 'review-profile-empty', textContent: 'No analyzed games yet. Import some games to see your coaching profile — analysis starts automatically.' }));
     host.appendChild(emptyWrap);
     return;
   }
