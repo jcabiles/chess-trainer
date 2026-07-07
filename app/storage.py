@@ -35,7 +35,8 @@ _conn: Optional[sqlite3.Connection] = None
 
 # Schema version — increment when adding new columns/tables.
 # v2: blunder trainer — trainer_attempts + trainer_boxes tables.
-_SCHEMA_VERSION = 2
+# v3: game commentary — narratives table (cached LLM narrative per game).
+_SCHEMA_VERSION = 3
 
 # ---------------------------------------------------------------------------
 # Schema definition
@@ -137,6 +138,16 @@ CREATE TABLE IF NOT EXISTS trainer_boxes (
     box             INTEGER NOT NULL DEFAULT 1, -- Leitner box 1..5
     last_reviewed   TEXT,           -- ISO date of last completed bucket review
     cursor_key      TEXT            -- natural key of last-served puzzle (rotation pointer)
+);
+
+CREATE TABLE IF NOT EXISTS narratives (
+    -- Cached LLM (Claude) narrative for a game — one row per game, overwritten
+    -- on regenerate.  Deleted whenever analysis_status resets to 'pending'
+    -- (set_my_color, retag_colors_by_aliases) or the game itself is deleted.
+    game_id         INTEGER PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+    model           TEXT NOT NULL,
+    narrative_json  TEXT NOT NULL,  -- JSON object: {chapters, moments, overall}
+    created_at      TEXT NOT NULL
 );
 """
 
@@ -408,6 +419,49 @@ def get_pos_cache(epd_key: str, depth: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
+# SQLite's default compiled limit on bound variables per statement (SQLITE_MAX_VARIABLE_NUMBER).
+_SQLITE_MAX_VARS = 900
+
+
+def get_pos_cache_many(epd_keys: list[str]) -> dict[str, dict]:
+    """Return the DEEPEST pos_cache row per EPD for a batch of keys.
+
+    pos_cache is keyed (epd_key, depth) — a position may have been analyzed at
+    different depths across restarts (REVIEW_BG_DEPTH is an env-tunable
+    constant, not a fixed schema value).  Filtering on the *current* depth
+    constant would silently miss/blank rows written at an older depth, so this
+    helper is depth-agnostic: for each epd_key it returns whichever row has the
+    greatest depth on file.
+
+    Chunks the IN-clause to stay under SQLite's bound-variable limit for large
+    key lists.  Keys not present in pos_cache are simply absent from the
+    result (never raises, never returns partial/None rows).
+
+    Returns: {epd_key: row_dict}.  Empty dict for an empty or all-missing input.
+    """
+    if not epd_keys:
+        return {}
+    conn = _get_conn()
+    result: dict[str, dict] = {}
+    unique_keys = list(dict.fromkeys(epd_keys))  # de-dup, preserve order
+    for i in range(0, len(unique_keys), _SQLITE_MAX_VARS):
+        chunk = unique_keys[i : i + _SQLITE_MAX_VARS]
+        placeholders = ",".join("?" * len(chunk))
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM pos_cache
+            WHERE epd_key IN ({placeholders})
+            ORDER BY epd_key, depth ASC
+            """,
+            chunk,
+        ).fetchall()
+        for row in rows:
+            # ORDER BY depth ASC means the last row seen per epd_key is deepest.
+            result[row["epd_key"]] = dict(row)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # game_plies helpers
 # ---------------------------------------------------------------------------
@@ -515,6 +569,46 @@ def get_leaks(game_id: int) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# narratives helpers
+# ---------------------------------------------------------------------------
+
+def get_narrative(game_id: int) -> Optional[dict]:
+    """Return the cached narrative row for a game as a dict, or None if absent."""
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM narratives WHERE game_id = ?", (game_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def upsert_narrative(game_id: int, model: str, narrative_json: str, created_at: str) -> None:
+    """Insert or overwrite the cached narrative for a game (one row per game).
+
+    Idempotent on game_id: regenerating a narrative replaces the previous one.
+    """
+    conn = _get_conn()
+    conn.execute(
+        """
+        INSERT INTO narratives (game_id, model, narrative_json, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(game_id) DO UPDATE SET
+            model          = excluded.model,
+            narrative_json = excluded.narrative_json,
+            created_at     = excluded.created_at
+        """,
+        (game_id, model, narrative_json, created_at),
+    )
+    conn.commit()
+
+
+def delete_narrative(game_id: int) -> None:
+    """Delete the cached narrative for a game, if any.  No-op if absent."""
+    conn = _get_conn()
+    conn.execute("DELETE FROM narratives WHERE game_id = ?", (game_id,))
+    conn.commit()
+
+
+# ---------------------------------------------------------------------------
 # Color-tagging helpers
 # ---------------------------------------------------------------------------
 
@@ -525,7 +619,9 @@ def set_my_color(game_id: int, color: Optional[str]) -> bool:
     """Set my_color for a game and reset its analysis_status to 'pending'.
 
     The reset is required because leaks are computed per-color: changing the
-    color invalidates any previously written leaks.
+    color invalidates any previously written leaks.  The cached narrative
+    (also color-dependent) is deleted for the same reason, in the same
+    transaction.
 
     Args:
         game_id: The game to update.
@@ -544,6 +640,7 @@ def set_my_color(game_id: int, color: Optional[str]) -> bool:
         "UPDATE games SET my_color = ?, analysis_status = 'pending' WHERE id = ?",
         (color, game_id),
     )
+    conn.execute("DELETE FROM narratives WHERE game_id = ?", (game_id,))
     conn.commit()
     return cur.rowcount > 0
 
@@ -553,8 +650,9 @@ def retag_colors_by_aliases(aliases: list[str]) -> int:
 
     Implements the same case-insensitive trimmed matching as
     pgn._infer_my_color.  For each matching game, my_color is updated and
-    analysis_status is reset to 'pending' (invalidates stale leaks).
-    Games that do not match any alias are left untouched.
+    analysis_status is reset to 'pending' (invalidates stale leaks), and its
+    cached narrative (also color-dependent) is deleted in the same
+    transaction.  Games that do not match any alias are left untouched.
 
     Args:
         aliases: List of username strings to match against (e.g. from the
@@ -594,6 +692,7 @@ def retag_colors_by_aliases(aliases: list[str]) -> int:
                 "UPDATE games SET my_color = ?, analysis_status = 'pending' WHERE id = ?",
                 (my_color, game_id),
             )
+            conn.execute("DELETE FROM narratives WHERE game_id = ?", (game_id,))
             updated += 1
 
     if updated:
