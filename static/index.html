@@ -172,8 +172,6 @@
           <button id="review-return">Return to my game</button>
         </div>
         <div id="review-game-summary" class="review-game-summary" hidden></div>
-        <div id="review-narrative" class="review-narrative" hidden></div>
-        <div id="review-foresight" class="review-foresight"></div>
       </div>
 
       <!-- Repertoire practice bar — shown only in rep-practice mode -->
@@ -240,37 +238,50 @@
           </select>
         </label>
 
-        <div class="eval-block">
-          <div class="eval-label">Evaluation</div>
-          <div id="eval" class="eval">—</div>
-        </div>
-
-        <div class="quality-block">
-          <div class="eval-label">Last move</div>
-          <div id="quality" class="quality">—</div>
-        </div>
-
-        <div class="best-block">
-          <!-- Retrospective: the best move the last mover should have played
-               (from the position BEFORE the move). Hidden until a prior move
-               exists; on an opponent's skipped ply it carries over the last
-               own-move's retrospective. -->
-          <div id="retro-block" class="retro-block" hidden>
-            <div class="eval-label" id="retro-label">Your move — best</div>
-            <div class="best-move-row">
-              <span id="retro-best" class="best-move">—</span>
-              <span id="retro-second" class="best-second"></span>
+        <div class="analysis-eval-row">
+          <div class="analysis-eval-col">
+            <div class="eval-block">
+              <div class="eval-label">Evaluation</div>
+              <div id="eval" class="eval">—</div>
             </div>
-            <div id="retro-pv" class="pv">—</div>
+
+            <div class="quality-block">
+              <div class="eval-label">Last move</div>
+              <div id="quality" class="quality">—</div>
+            </div>
+
+            <div class="best-block">
+              <!-- Retrospective: the best move the last mover should have played
+                   (from the position BEFORE the move). Hidden until a prior move
+                   exists; on an opponent's skipped ply it carries over the last
+                   own-move's retrospective. -->
+              <div id="retro-block" class="retro-block" hidden>
+                <div class="eval-label" id="retro-label">Your move — best</div>
+                <div class="best-move-row">
+                  <span id="retro-best" class="best-move">—</span>
+                  <span id="retro-second" class="best-second"></span>
+                </div>
+                <div id="retro-pv" class="pv">—</div>
+              </div>
+              <!-- Current position best -->
+              <div class="eval-label">Best now</div>
+              <div class="best-move-row">
+                <span id="best-move" class="best-move">—</span>
+                <span id="best-second" class="best-second"></span>
+              </div>
+              <div class="eval-label">Best line</div>
+              <div id="pv" class="pv">—</div>
+            </div>
           </div>
-          <!-- Current position best -->
-          <div class="eval-label">Best now</div>
-          <div class="best-move-row">
-            <span id="best-move" class="best-move">—</span>
-            <span id="best-second" class="best-second"></span>
+
+          <!-- Review-mode coaching column: AI game commentary + pre-blunder
+               foresight/moment cards. Sits right of the eval readouts; the whole
+               column is toggled with review mode by showReviewUI() so it collapses
+               (and the eval column fills the row) in play mode. -->
+          <div id="analysis-review-col" class="analysis-review-col" hidden>
+            <div id="review-narrative" class="review-narrative" hidden></div>
+            <div id="review-foresight" class="review-foresight"></div>
           </div>
-          <div class="eval-label">Best line</div>
-          <div id="pv" class="pv">—</div>
         </div>
 
         <div class="movelist-block">

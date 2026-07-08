@@ -731,6 +731,10 @@ function requestModeExit() {
 
 function showReviewUI(on) {
   byId('review-bar').hidden = !on;
+  // The AI commentary + foresight/moment cards now live in the Analysis panel's
+  // right column (not under #review-bar), so they no longer inherit #review-bar's
+  // hidden — toggle that column with review mode so it collapses in play mode.
+  byId('analysis-review-col').hidden = !on;
   if (on) byId('trap-chip').hidden = true;
 }
 

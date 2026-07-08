@@ -579,6 +579,39 @@ body[data-mode="blunder-practice"] .tab-panel {
 .mode-indicator:empty { display: none; }
 
 /* ============================================================
+   Analysis panel — eval readouts + review commentary side-by-side
+   ============================================================ */
+
+.analysis-eval-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.analysis-eval-col {
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.analysis-review-col {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Collapse the column out of the flex row in play mode so the eval column
+   fills the full width (global [hidden] is overridden by display:flex above). */
+.analysis-review-col[hidden] {
+  display: none;
+}
+
+/* ============================================================
    Section label
    ============================================================ */
 
