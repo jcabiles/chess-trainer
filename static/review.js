@@ -849,9 +849,10 @@ function renderForesightCard(leak, kind) {
 }
 
 // ---------------------------------------------------------------------------
-// Narrative panel — shown in #review-narrative, a sibling of
-// #review-game-summary (never rendered inside it — that host is owned by
-// renderGameSummary/renderAnalyzingNote).
+// Narrative panel — shown in #review-narrative, which now lives in the
+// Analysis panel (`.analysis-eval-row`, right of the eval readouts), not
+// under #review-bar (never rendered inside #review-game-summary — that host
+// is owned by renderGameSummary/renderAnalyzingNote).
 // ---------------------------------------------------------------------------
 
 function renderNarrativePanel() {
@@ -904,7 +905,7 @@ function renderNarrativeStory(narrative) {
   const wrap = el('div', { className: 'review-narrative-story' });
 
   const hdr = el('div', { className: 'review-narrative-hdr' });
-  hdr.appendChild(el('span', { className: 'review-narrative-title', textContent: 'AI Game Commentary' }));
+  hdr.appendChild(el('h3', { className: 'review-narrative-title', textContent: 'AI Game Commentary' }));
   const regenBtn = el('button', { className: 'review-btn review-narrative-regen', textContent: 'Regenerate' });
   regenBtn.addEventListener('click', () => generateNarrative());
   hdr.appendChild(regenBtn);

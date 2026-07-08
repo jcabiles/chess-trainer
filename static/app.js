@@ -731,6 +731,9 @@ function requestModeExit() {
 
 function showReviewUI(on) {
   byId('review-bar').hidden = !on;
+  // The AI commentary now lives in the Analysis panel (not under #review-bar),
+  // so it no longer inherits #review-bar's hidden and must be cleared explicitly.
+  if (!on) byId('review-narrative').hidden = true;
   if (on) byId('trap-chip').hidden = true;
 }
 

@@ -340,7 +340,11 @@
 .review-btn:focus-visible {
   color: var(--text);
   border-color: var(--accent);
-  outline: none;
+}
+
+.review-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .review-btn:disabled {
@@ -882,8 +886,8 @@ input[type="file"].review-file-input {
 }
 
 /* ==========================================================================
-   AI narrative panel — sibling of .review-game-summary, hosted at
-   #review-narrative. Never rendered inside #review-game-summary.
+   AI narrative panel — hosted at #review-narrative, now living in the Analysis
+   panel (.analysis-eval-row, right of the eval readouts), not under #review-bar.
    ========================================================================== */
 
 .review-narrative[hidden] {
@@ -921,6 +925,7 @@ input[type="file"].review-file-input {
 }
 
 .review-narrative-title {
+  margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--accent);
@@ -959,6 +964,11 @@ input[type="file"].review-file-input {
   color: var(--text-secondary);
   line-height: 1.5;
   margin: 0;
+  /* Cap the reading measure — in the wide Analysis-panel column the prose would
+     otherwise run ~90+ chars/line. 56ch lands ~70 rendered chars (the ch unit
+     tracks the wider "0" glyph); on narrow stacked layouts the column is
+     narrower so this never binds. */
+  max-width: 56ch;
 }
 
 .review-narrative-toggle {
