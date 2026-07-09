@@ -376,12 +376,16 @@ async function refreshAnalysis() {
   // finally block below will re-invoke once the current request settles,
   // picking up whatever position the user ended up at — so the final position
   // always gets analyzed, never silently dropped.
+  // Bump the stale-guard token on EVERY call — including coalesced ones below.
+  // A rapid undo/redo that hits the in-flight early-return must still invalidate
+  // the request already running, or its response renders analysis for a cursor
+  // the board has since moved past (illegal "best" moves flash on screen).
+  const myToken = ++analysisToken;
   if (analysisInFlight) {
     analysisPending = true;
     return;
   }
   analysisInFlight = true;
-  const myToken = ++analysisToken;
 
   emit('analysis:start');
   setStatus('Analyzing…');
