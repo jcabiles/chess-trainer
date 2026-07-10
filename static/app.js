@@ -63,6 +63,11 @@ let reviewSnapshot = null; // saved play state captured when entering review mod
 let analysisInFlight = false; // true while a refreshAnalysis fetch is in progress
 let analysisPending = false;  // true if another refresh was requested while in-flight
 let analysisToken = 0;        // monotonic counter; stale responses are dropped
+// Monotonic guard for the move-WRITE path (mirrors analysisToken). Bumped by every
+// onUserMove and by every wholesale play-state swap (reset/loadFen/review/restore),
+// so a slow /api/move response for a move the user abandoned mid-flight (undo, mode
+// switch, a newer move) never writes stale history. See onUserMove's stale().
+let moveToken = 0;
 // Analyze-my-color preference: 'both' | 'white' | 'black'
 let analyzeColor = (readUiPrefs().analyzeColor) || 'both';
 
@@ -221,6 +226,7 @@ function snapshotPlay() {
 // moveQuality/moveRetro are transient and never persisted, so a snapshot that
 // crossed a page reload arrives without them.
 function restorePlay(snap) {
+  moveToken++; // wholesale play-state swap — invalidate any move still in flight
   state.baseFen = snap.baseFen;
   state.moves = (snap.moves || []).slice();
   state.moveQuality = (snap.moveQuality || []).slice();
@@ -440,6 +446,16 @@ async function onUserMove(orig, dest) {
   if (state.mode === 'setup') { persist(); return; }
 
   const before = positionAt(state.cursor);
+  // Capture where this move belongs BEFORE any await. `onUserMove` awaits the
+  // engine (and maybe a promotion dialog); meanwhile undo/redo/goto, a mode switch,
+  // or a wholesale state swap can move the cursor or replace the whole line. If any
+  // of that happened by the time a response lands, the move was abandoned — drop it
+  // rather than writing history against a cursor/base that no longer matches. Keying
+  // the commit off `insertAt` (not a re-read of state.cursor) is the actual fix.
+  const insertAt = state.cursor;
+  const myMove = ++moveToken;
+  const stale = () => state.mode !== 'play' || myMove !== moveToken || state.cursor !== insertAt;
+
   let promo = '';
   if (isPromotion(before.pos, orig, dest)) {
     try {
@@ -449,6 +465,9 @@ async function onUserMove(orig, dest) {
       syncBoard();
       return;
     }
+    // Undo / mode switch can fire while the promotion <dialog> is open — bail here
+    // before we waste an /api/move round-trip and flash "Analyzing…".
+    if (stale()) { syncBoard(); return; }
   }
   const uci = orig + dest + promo;
   const fenBefore = fenOf(before.pos);
@@ -460,10 +479,17 @@ async function onUserMove(orig, dest) {
   try {
     data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true, analyze: doAnalyze });
   } catch (err) {
+    // A stale failure (move already abandoned mid-flight) must not stomp the status
+    // bar with an error — the navigating action owns the status line now.
+    if (stale()) { syncBoard(); return; }
     setStatus(err.message, true);
     syncBoard();
     return;
   }
+
+  // Navigated away / superseded while analyzing → drop the write so the move list
+  // (and whose-turn-it-is) stays intact. This is the corruption fix.
+  if (stale()) { syncBoard(); return; }
 
   if (!data.legal) {
     setStatus('Illegal move.', true);
@@ -471,20 +497,24 @@ async function onUserMove(orig, dest) {
     return;
   }
 
-  state.moves = state.moves.slice(0, state.cursor);
-  state.moveQuality = state.moveQuality.slice(0, state.cursor);
-  state.moveRetro = state.moveRetro.slice(0, state.cursor);  // lockstep with moveQuality
+  // Commit at the captured `insertAt`, NOT a re-read of state.cursor — a re-read is
+  // exactly what the race corrupted (a late response truncating against a moved cursor).
+  // stale() above guarantees state.cursor === insertAt here, so this is equivalent on
+  // the happy path and safe on the racy one.
+  state.moves = state.moves.slice(0, insertAt);
+  state.moveQuality = state.moveQuality.slice(0, insertAt);
+  state.moveRetro = state.moveRetro.slice(0, insertAt);  // lockstep with moveQuality
   state.moves.push(uci);
   // Index-assign (not push): if moveQuality is shorter than the history — e.g. after a
   // restore/jump where prior moves have no recorded quality — this still lands the new
   // move's quality at the correct index (gaps stay undefined → render neutral).
-  state.moveQuality[state.cursor] = data.book ? 'book' : (doAnalyze ? ((data.analysis && data.analysis.quality) || null) : null);
+  state.moveQuality[insertAt] = data.book ? 'book' : (doAnalyze ? ((data.analysis && data.analysis.quality) || null) : null);
   // Cache the retrospective (what the mover should have played) at the same index;
   // null on book/skipped moves so the carry-over scan walks past them.
-  state.moveRetro[state.cursor] = (!data.book && doAnalyze && data.analysis)
+  state.moveRetro[insertAt] = (!data.book && doAnalyze && data.analysis)
     ? { retroBest: data.analysis.retroBest, retroSecond: data.analysis.retroSecond }
     : null;
-  state.cursor += 1;
+  state.cursor = insertAt + 1;
 
   syncBoard();
   if (doAnalyze) applyMoveResponse(data); else renderSkipped();
@@ -584,6 +614,7 @@ function flip() {
 
 function reset() {
   if (state.mode !== 'play') return;
+  moveToken++; // invalidate any in-flight move against the old line
   state.baseFen = INITIAL_FEN;
   state.moves = [];
   state.moveQuality = [];
@@ -625,6 +656,7 @@ async function loadFen() {
   }
 
   errEl.hidden = true;
+  moveToken++; // invalidate any in-flight move against the previous base position
   state.baseFen = data.fen;
   state.moves = [];
   state.moveQuality = [];
@@ -764,6 +796,7 @@ function enterReview(gameDetail) {
   const baseFen = (plies.length && plies[0].fen_before) ? plies[0].fen_before : INITIAL_FEN;
   const moves = plies.map((p) => p.uci).filter(Boolean);
 
+  moveToken++; // a play move still analyzing must not write into the review game
   state.baseFen = baseFen;
   state.moves = moves;
   state.moveQuality = [];
@@ -807,6 +840,7 @@ async function openGameAtPly(gameId, ply) {
 // Exit review mode and restore the saved play snapshot.
 function exitReview() {
   const snap = reviewSnapshot || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
+  moveToken++; // returning to play with a restored cursor — invalidate stale in-flight moves
   state.baseFen = snap.baseFen;
   state.moves = snap.moves;
   state.moveQuality = snap.moveQuality || [];
