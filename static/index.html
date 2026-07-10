@@ -59,11 +59,13 @@
       Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2,
       Move, Eraser, X, ChevronDown,
       ChevronFirst, ChevronLeft, ChevronRight, ChevronLast,
+      Activity, BookOpen, Zap, Layers, ClipboardList, ChartColumn,
     } from 'https://esm.sh/lucide@1.22.0';
     createIcons({ icons: {
       Undo2, Redo2, FlipHorizontal2, RotateCcw, Settings2,
       Move, Eraser, X, ChevronDown,
       ChevronFirst, ChevronLeft, ChevronRight, ChevronLast,
+      Activity, BookOpen, Zap, Layers, ClipboardList, ChartColumn,
     } });
   </script>
 </head>
@@ -76,6 +78,17 @@
   </header>
 
   <main>
+    <!-- Tab rail — first grid column (rail | board | panel). Moved out of the
+         aside for the Nocturne layout; panel.js wiring is ID-based. -->
+    <div id="panel-tabs" role="tablist">
+      <button id="tab-btn-analysis" role="tab" data-tab="analysis" aria-selected="true" aria-controls="tab-analysis"><i data-lucide="activity"></i>Analysis</button>
+      <button id="tab-btn-opening" role="tab" data-tab="opening" aria-selected="false" aria-controls="tab-opening"><i data-lucide="book-open"></i>Opening</button>
+      <button id="tab-btn-traps" role="tab" data-tab="traps" aria-selected="false" aria-controls="tab-traps"><i data-lucide="zap"></i>Traps</button>
+      <button id="tab-btn-repertoire" role="tab" data-tab="repertoire" aria-selected="false" aria-controls="tab-repertoire"><i data-lucide="layers"></i>Repertoire</button>
+      <button id="tab-btn-review" role="tab" data-tab="review" aria-selected="false" aria-controls="tab-review"><i data-lucide="clipboard-list"></i>Review</button>
+      <button id="tab-btn-insights" role="tab" data-tab="insights" aria-selected="false" aria-controls="tab-insights"><i data-lucide="chart-column"></i>Insights</button>
+    </div>
+
     <section class="board-col">
       <div class="board-wrap">
         <div id="eval-bar"></div>
@@ -208,20 +221,10 @@
     </section>
 
     <aside class="panel">
-      <!-- Tab bar -->
-      <div id="panel-tabs" role="tablist">
-        <button id="tab-btn-analysis" role="tab" data-tab="analysis" aria-selected="true" aria-controls="tab-analysis">Analysis</button>
-        <button id="tab-btn-opening" role="tab" data-tab="opening" aria-selected="false" aria-controls="tab-opening">Opening</button>
-        <button id="tab-btn-traps" role="tab" data-tab="traps" aria-selected="false" aria-controls="tab-traps">Traps</button>
-        <button id="tab-btn-repertoire" role="tab" data-tab="repertoire" aria-selected="false" aria-controls="tab-repertoire">Repertoire</button>
-        <button id="tab-btn-review" role="tab" data-tab="review" aria-selected="false" aria-controls="tab-review">Review</button>
-        <button id="tab-btn-insights" role="tab" data-tab="insights" aria-selected="false" aria-controls="tab-insights">Insights</button>
-      </div>
-
-      <!-- Special-mode indicator: fills the tab strip while a mode is active and
-           tells the user a tab click leaves it. Sibling of the tablist (NOT a
-           tab-role child), empty + hidden in play mode. Text set by app.js on
-           mode:change; aria-live so the mode change is announced. -->
+      <!-- Special-mode indicator: shown at the top of the panel while a mode is
+           active and tells the user a tab click leaves it. NOT a tab-role child
+           (the tablist lives in the rail), empty + hidden in play mode. Text set
+           by app.js on mode:change; aria-live so the mode change is announced. -->
       <div id="mode-indicator" class="mode-indicator" aria-live="polite"></div>
 
       <!-- Analysis tab -->

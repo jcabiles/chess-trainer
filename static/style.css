@@ -1,7 +1,7 @@
 /* ============================================================
    Chess Trainer — Main Stylesheet
-   Design system: dark-first, layered OKLCH surfaces, electric
-   azure accent, Inter UI + JetBrains Mono for code/notation.
+   Design system: "Nocturne" — dark-first, near-black neutral
+   surfaces, spring-green accent, Inter UI + JetBrains Mono.
    ============================================================ */
 
 /* ---- Design tokens ---- */
@@ -11,44 +11,43 @@
   color-scheme: dark light;
 
   /* ---- Surface elevation (OKLCH + hex fallback) ---- */
-  /* Base — page background, near-black with a cool tint */
-  --surface-base:    oklch(14% 0.012 248); /* #151b22 */
+  /* Base — page background, near-black, neutral (barely-violet) tint */
+  --surface-base:    oklch(13.5% 0.004 286); /* #09090b */
   /* Panel — card/aside background, one step up */
-  --surface-panel:   oklch(18% 0.013 248); /* #1d2430 */
+  --surface-panel:   oklch(17% 0.005 286);   /* #101014 */
   /* Raised — inputs, code blocks, secondary cards */
-  --surface-raised:  oklch(22% 0.014 248); /* #242d3a */
+  --surface-raised:  oklch(20.5% 0.006 286); /* #15151b */
   /* Overlay — dialogs, tooltips, dropdowns */
-  --surface-overlay: oklch(26% 0.015 248); /* #2c3647 */
+  --surface-overlay: oklch(24% 0.008 286);   /* #1c1c23 */
   /* Border default */
-  --border:          oklch(32% 0.016 248); /* #38455a */
+  --border:          oklch(30% 0.012 286);   /* #2a2a36 */
   /* Border subtle — hairlines */
-  --border-subtle:   oklch(25% 0.013 248); /* #2a3342 */
+  --border-subtle:   oklch(24.5% 0.009 286); /* #1f1f28 */
 
   /* ---- Text hierarchy ---- */
-  /* Primary — nearly white, cool tint, ≥7:1 on surface-base */
-  --text:         oklch(94% 0.008 248); /* #e8edf4 */
+  /* Primary — nearly white, neutral tint, ≥7:1 on surface-base */
+  --text:         oklch(94% 0.004 286); /* #e6e6ec */
   /* Secondary — label text, slightly dimmed, ≥4.5:1 on surface-panel */
-  --text-secondary: oklch(74% 0.012 248); /* #a8b4c8 */
-  /* Muted — very dim metadata, ≥4.5:1 on EVERY surface incl. overlay
-     (64%: 5.93 base / 5.60 panel / 5.15 raised / 4.62 overlay) */
-  --muted:        oklch(64% 0.014 248); /* #868d94 */
+  --text-secondary: oklch(74% 0.008 286); /* #a3a3af */
+  /* Muted — very dim metadata, ≥4.5:1 on EVERY surface incl. overlay */
+  --muted:        oklch(64% 0.01 286); /* #8a8a98 */
 
-  /* ---- Accent — electric azure ---- */
-  --accent:        oklch(72% 0.19 231);  /* #38bdf8  sky-400-ish */
-  --accent-dim:    oklch(30% 0.09 231);  /* #0c2a40 — subtle tinted bg */
-  --accent-dim-hover: oklch(25% 0.09 231); /* #062338 — accent-dim, one step deeper on hover */
-  --accent-on:     oklch(13% 0.03 248);  /* near-black text on accent bg */
+  /* ---- Accent — spring green ---- */
+  --accent:        oklch(79% 0.17 152);  /* #4ade80  green-400-ish */
+  --accent-dim:    oklch(26% 0.055 152); /* #0a2f1a — subtle tinted bg */
+  --accent-dim-hover: oklch(22% 0.05 152); /* #062513 — accent-dim, one step deeper on hover */
+  --accent-on:     oklch(20% 0.05 152);  /* near-black green text on accent bg */
 
   /* ---- Semantic error ---- */
   --error: oklch(68% 0.18 22); /* #f87171 */
 
   /* ---- Move quality colors (retuned for dark surfaces, ≥4.5:1) ---- */
   --q-best:       oklch(74% 0.16 145); /* #4ade80 */
-  --q-good:       oklch(78% 0.16 130); /* #86efac */
+  --q-good:       oklch(72% 0.14 285); /* #8b7cf6 — violet, distinct from accent green */
   --q-inaccuracy: oklch(82% 0.16 85);  /* #fde047 */
   --q-mistake:    oklch(75% 0.16 55);  /* #fb923c */
   --q-blunder:    oklch(65% 0.18 22);  /* #f87171 */
-  --q-book:       var(--accent);
+  --q-book:       oklch(72% 0.12 231); /* #7dc4f0 — soft azure, book stays informational */
 
   /* ---- Quality tinted backgrounds (badge/button fills, pair with --q-*) ---- */
   --q-best-dim:       oklch(18% 0.05 145); /* dark green tint  — pairs --q-best */
@@ -93,12 +92,12 @@
 }
 
 /* ============================================================
-   Light theme — same Electric Azure system on cool paper.
+   Light theme — the Nocturne system on neutral paper.
    Applied via html[data-theme="light"], set pre-paint by the
    inline <head> script (theme.js keeps it live). Overrides
    TOKENS ONLY; component rules never change per theme.
-   Elevation inverts: base is lightest, panel/raised/overlay
-   step DOWN in lightness (deeper = closer to the desk).
+   Elevation flips direction here: panel/raised are LIGHTER than
+   base (white cards on a gray desk), matching modern light UIs.
    All pairs verified ≥4.5:1 text / ≥3:1 UI (see each comment).
    ============================================================ */
 html[data-theme="light"] {
@@ -106,34 +105,35 @@ html[data-theme="light"] {
      auto-dark image inversion (white-pieces bug, see :root note). */
   color-scheme: light dark;
 
-  /* ---- Surfaces — cool paper, stepping down for elevation ---- */
-  --surface-base:    oklch(97.5% 0.005 248); /* #f4f7fa */
-  --surface-panel:   oklch(94.5% 0.007 248); /* #e9edf1 */
-  --surface-raised:  oklch(92% 0.009 248);   /* #e0e5ea */
-  --surface-overlay: oklch(89% 0.011 248);   /* #d5dce2 */
-  --border:          oklch(78% 0.015 248);   /* #b0b8c1 */
-  --border-subtle:   oklch(86% 0.01 248);    /* #ccd2d7 */
+  /* ---- Surfaces — neutral paper; white cards on a soft gray base ---- */
+  --surface-base:    oklch(97.5% 0.002 286); /* #f7f7f9 */
+  --surface-panel:   oklch(100% 0 0);        /* #ffffff */
+  --surface-raised:  oklch(95.5% 0.003 286); /* #f0f0f4 */
+  --surface-overlay: oklch(93% 0.004 286);   /* #e8e8ee */
+  --border:          oklch(85% 0.006 286);   /* #d3d3dd */
+  --border-subtle:   oklch(91.5% 0.004 286); /* #e5e5eb */
 
-  /* ---- Text — 16.1:1 / 7.9:1 / 6.6:1 on base; ≥4.9:1 on overlay ---- */
-  --text:           oklch(22% 0.015 248); /* #151b21 */
-  --text-secondary: oklch(42% 0.018 248); /* #464e57 */
-  --muted:          oklch(46% 0.02 248);  /* #505963 */
+  /* ---- Text — ≥12:1 / ≥7:1 / ≥5:1 on panel; ≥4.5:1 on overlay ---- */
+  --text:           oklch(22% 0.008 286); /* #1b1b22 */
+  --text-secondary: oklch(42% 0.012 286); /* #4c4c58 */
+  --muted:          oklch(47% 0.014 286); /* #5f5f6e */
 
-  /* ---- Accent — deep azure, 6.1:1 on base, 4.7:1 on overlay ---- */
-  --accent:           oklch(46.5% 0.125 231); /* #006392 */
-  --accent-dim:       oklch(92% 0.04 231);    /* #cbeafb — 5.2:1 under --accent text */
-  --accent-dim-hover: oklch(89.5% 0.052 231); /* #bae3f9 — 4.8:1 under --accent text */
-  --accent-on:        oklch(98.5% 0.005 248); /* #f8fafd — 6.3:1 on --accent */
+  /* ---- Accent — deep green, ≥4.5:1 on base/panel ---- */
+  --accent:           oklch(52% 0.14 152);  /* #16843f */
+  --accent-dim:       oklch(93.5% 0.045 152); /* #d7f2e0 — tinted bg under --accent text */
+  --accent-dim-hover: oklch(90.5% 0.055 152); /* #c2ead1 — one step deeper on hover */
+  --accent-on:        oklch(98.5% 0.002 286); /* #fafafc — on-accent text */
 
   /* ---- Semantic error — 6.4:1 on base ---- */
   --error: oklch(49% 0.175 25); /* #ae2228 */
 
   /* ---- Quality ramp — each ≥5.8:1 on panel, ≥4.5:1 on overlay ---- */
   --q-best:       oklch(47% 0.125 145); /* #216c29 */
-  --q-good:       oklch(48% 0.115 135); /* #3f6b21 */
+  --q-good:       oklch(47% 0.15 285);  /* #5b3fd1 — violet, matches dark ramp hue */
   --q-inaccuracy: oklch(49% 0.10 85);   /* #7a5b01 */
   --q-mistake:    oklch(49% 0.125 55);  /* #944900 */
   --q-blunder:    oklch(49% 0.175 25);  /* #ae2228 */
+  --q-book:       oklch(46.5% 0.10 231); /* #1a6390 — soft azure */
 
   /* ---- Quality tinted backgrounds — each ≥5.3:1 under paired --q-* ---- */
   --q-best-dim:       oklch(93% 0.05 145);  /* #d4f1d4 */
@@ -185,16 +185,19 @@ body {
    ============================================================ */
 
 header {
-  /* Right padding reserves the theme-toggle column at EVERY width:
+  /* Slim topbar: title + subtitle on one baseline row.
+     Right padding reserves the theme-toggle column at EVERY width:
      24px inset + 36px button + 8px clearance = 68px. Wrapped title/subtitle
-     text can therefore never run under the absolutely-positioned toggle.
-     Invisible at desktop (text never reaches that far). */
-  padding: var(--space-4)
+     text can therefore never run under the absolutely-positioned toggle. */
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3)
            calc(var(--space-6) + 36px + var(--space-2))
-           var(--space-2)
+           var(--space-3)
            var(--space-6);
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-panel);
+  background: var(--surface-base);
   /* Anchor for the absolutely-positioned theme toggle */
   position: relative;
 }
@@ -228,16 +231,28 @@ header {
 
 header h1 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text);
+  white-space: nowrap;
+}
+
+/* Green logo tick before the title — pure CSS, no markup */
+header h1::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: var(--accent);
+  margin-right: var(--space-2);
 }
 
 header .sub {
-  margin: 2px 0 0;
-  color: var(--text-secondary);
-  font-size: 0.82rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 /* ============================================================
@@ -245,10 +260,11 @@ header .sub {
    ============================================================ */
 
 main {
+  /* rail | board | panel */
   display: grid;
-  grid-template-columns: auto minmax(280px, 1fr);
+  grid-template-columns: auto auto minmax(280px, 1fr);
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
   overflow: hidden;
   min-height: 0;
 }
@@ -500,44 +516,58 @@ body.setup-mode #fen-error { display: none; }
   min-height: 0;
 }
 
-/* ---- Tab bar ---- */
+/* ---- Tab rail — vertical icon+label nav in the first grid column.
+   Lives as a direct child of <main> (moved out of the aside); tab wiring
+   in panel.js is ID-based and unaffected. ---- */
 #panel-tabs {
   display: flex;
-  /* Semantic baseline for the active-tab underline; the base-vs-panel surface
-     step already separates bar from content, so subtle weight is enough. */
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-base);
+  flex-direction: column;
+  gap: 2px;
+  width: 152px;
   flex-shrink: 0;
+  align-self: start;
+  padding-top: var(--space-1);
 }
 
 #panel-tabs button {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
   border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: var(--space-3) var(--space-2);
-  text-transform: uppercase;
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: var(--space-2) var(--space-3);
+  text-transform: none;
   transition:
     color var(--motion-fast) var(--ease-out),
-    border-color var(--motion-fast) var(--ease-out);
+    background var(--motion-fast) var(--ease-out);
   white-space: nowrap;
 }
 
+#panel-tabs button i[data-lucide],
+#panel-tabs button svg[data-lucide] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
 #panel-tabs button:hover {
-  color: var(--text-secondary);
+  color: var(--text);
   background: var(--surface-raised);
-  border-bottom-color: var(--border);
 }
 
 #panel-tabs button[aria-selected="true"] {
+  color: var(--text);
+  background: var(--accent-dim);
+}
+
+#panel-tabs button[aria-selected="true"] svg[data-lucide] {
   color: var(--accent);
-  border-bottom-color: var(--accent);
-  background: var(--surface-panel);
 }
 
 #panel-tabs button:focus-visible {
@@ -1262,6 +1292,14 @@ body.rep-mode #fen-error { display: none; }
     padding: var(--space-4);
   }
 
+  /* Rail flattens into a horizontal, scrollable tab row above the board */
+  #panel-tabs {
+    flex-direction: row;
+    width: auto;
+    overflow-x: auto;
+    padding-top: 0;
+  }
+
   .board-col {
     overflow-y: visible;
   }
@@ -1299,6 +1337,50 @@ body.rep-mode #fen-error { display: none; }
   }
 }
 
+/* ============================================================
+   Nocturne board theme — overrides chessground.brown.css.
+   A theme-aware checkerboard drawn with a conic-gradient (2×2
+   squares per tile, tiled 4×4 over the board) so both themes
+   recolor via the tokens below — no image assets.
+   ============================================================ */
+
+:root {
+  --board-light: oklch(36% 0.014 286); /* #3d3d4b */
+  --board-dark:  oklch(27% 0.01 286);  /* #26262f */
+}
+
+html[data-theme="light"] {
+  --board-light: oklch(94.5% 0.006 275); /* #eceef4 */
+  --board-dark:  oklch(76% 0.02 275);    /* #aeb3c7 */
+}
+
+cg-board {
+  background-color: var(--board-light);
+  /* Quadrants clockwise from 12: TR dark, BR light, BL dark, TL light */
+  background-image: conic-gradient(
+    var(--board-dark) 0 25%,
+    var(--board-light) 0 50%,
+    var(--board-dark) 0 75%,
+    var(--board-light) 0
+  );
+  background-size: 25% 25%;
+}
+
+/* Highlights — accent-tinted instead of chessground's mustard yellow */
+cg-board square.last-move {
+  background-color: color-mix(in oklab, var(--accent) 32%, transparent);
+}
+
+cg-board square.selected {
+  background-color: color-mix(in oklab, var(--accent) 45%, transparent);
+}
+
+/* Board coordinates — quiet, readable on both board themes */
+.cg-wrap coords coord {
+  color: color-mix(in oklab, var(--text) 45%, transparent);
+  text-shadow: none;
+}
+
 @media (max-width: 560px) {
   /* ---- Exact-fit board row ----
      Available content = 100vw − 32px (main padding var(--space-4) × 2).
@@ -1325,4 +1407,8 @@ body.rep-mode #fen-error { display: none; }
      forcing the header row past the viewport. */
   .trap-header,
   .rep-header { flex-wrap: wrap; }
+
+  /* The subtitle wraps into a 4-line column beside the title at phone
+     widths — the title alone identifies the app there. */
+  header .sub { display: none; }
 }

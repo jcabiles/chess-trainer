@@ -971,6 +971,12 @@ input[type="file"].review-file-input {
   max-width: 56ch;
 }
 
+/* Chapters render one <p> per model paragraph (split on newlines) — space
+   consecutive paragraphs apart without adding margin above the first. */
+.review-narrative-text + .review-narrative-text {
+  margin-top: var(--space-2);
+}
+
 .review-narrative-toggle {
   align-self: flex-start;
   background: none;
