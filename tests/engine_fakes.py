@@ -1,4 +1,4 @@
-"""Scriptable test engine for the chess-trainer pipeline tests.
+"""Scriptable test engine for the chess-coach pipeline tests.
 
 ``ScriptedEngine`` satisfies the same async interface as ``StockfishEngine``
 (``analyze``, ``analyze_multi``, ``is_running``, ``start``, ``close``) and can

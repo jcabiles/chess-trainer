@@ -7,7 +7,7 @@ identity with one signature motion moment, and make every view genuinely usable 
 **375px** — UX/UI only, zero backend change.
 
 ## Design commitment (Gate-1, confirmed verbatim)
-- **Purpose**: local single-user chess-trainer cockpit. Each screen answers one thing —
+- **Purpose**: local single-user chess-coach cockpit. Each screen answers one thing —
   Play/Analysis: "how good was that move"; trainers: "what's the prepared line";
   Review: "where do I go wrong"; Insights: "what patterns should I fix".
 - **Named aesthetic**: **Electric Azure Dark** (keep + enforce). Layered OKLCH surfaces,
