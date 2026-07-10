@@ -98,7 +98,11 @@ def build_prompt(payload: dict) -> tuple[str, str]:
         "user message); include moments ONLY for the plies listed in the "
         "user message.\n"
         "- 300-500 words total across the chapters; 1-2 sentences per "
-        "moment; \"overall\" is a short takeaway for the player."
+        "moment; \"overall\" is a short takeaway for the player.\n"
+        "- Break every chapter's \"text\" (and \"overall\") into short "
+        "paragraphs of 2-3 sentences max, one topic per paragraph, separated "
+        "by a blank line (a literal \\n\\n inside the JSON string). Never "
+        "write a single wall-of-text paragraph."
     )
 
     user = (

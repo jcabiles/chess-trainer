@@ -903,6 +903,16 @@ function renderNarrativeCta(label, { disabled = false, hint = null, onClick = nu
   return wrap;
 }
 
+// One <p> per paragraph: the model separates topics with blank lines (single
+// newlines tolerated). Cached pre-paragraph narratives have no newlines and
+// fall through as a single <p>; Regenerate picks up the new format.
+function appendNarrativeParagraphs(parent, text) {
+  const paras = String(text || '').split(/\n+/).map((s) => s.trim()).filter(Boolean);
+  for (const p of paras) {
+    parent.appendChild(el('p', { className: 'review-narrative-text', textContent: p }));
+  }
+}
+
 function renderNarrativeStory(narrative) {
   const wrap = el('div', { className: 'review-narrative-story' });
 
@@ -921,12 +931,12 @@ function renderNarrativeStory(narrative) {
     if (chapter.phase) {
       chapterEl.appendChild(el('div', { className: 'review-narrative-phase', textContent: chapter.phase }));
     }
-    chapterEl.appendChild(el('p', { className: 'review-narrative-text', textContent: chapter.text }));
+    appendNarrativeParagraphs(chapterEl, chapter.text);
     body.appendChild(chapterEl);
   }
   if (narrative.overall) {
     const overallEl = el('div', { className: 'review-narrative-chapter' });
-    overallEl.appendChild(el('p', { className: 'review-narrative-text', textContent: narrative.overall }));
+    appendNarrativeParagraphs(overallEl, narrative.overall);
     body.appendChild(overallEl);
   }
   wrap.appendChild(body);

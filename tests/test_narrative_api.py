@@ -262,6 +262,8 @@ class TestBuildPrompt:
         # Strict JSON contract is stated verbatim.
         assert '"chapters"' in system and '"moments"' in system and '"overall"' in system
         assert "300-500 words" in system and "1-2 sentences" in system
+        # Readability contract: short topic paragraphs, blank-line separated.
+        assert "2-3 sentences" in system and "\\n\\n" in system
 
     def test_user_contains_facts_and_allowed_sets(self):
         _, user = narrative.build_prompt(_PAYLOAD)
