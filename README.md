@@ -1,6 +1,6 @@
-# Chess Trainer — Stockfish Analysis Board
+# Chess Coach — Stockfish Analysis Board
 
-[![CI](https://github.com/jcabiles/chess-trainer/actions/workflows/ci.yml/badge.svg)](https://github.com/jcabiles/chess-trainer/actions/workflows/ci.yml)
+[![CI](https://github.com/jcabiles/chess-coach/actions/workflows/ci.yml/badge.svg)](https://github.com/jcabiles/chess-coach/actions/workflows/ci.yml)
 
 A local, single-user web app: an interactive chess board where you move **both
 colors** freely, jump to any position by FEN, and get **live Stockfish feedback**
@@ -85,7 +85,7 @@ per-move coaching notes.
    ```
 
 3. **(Optional, recommended) [direnv](https://direnv.net/)** — auto-activates
-   the venv and exposes the `chess-trainer` command whenever you `cd` into
+   the venv and exposes the `chess-coach` command whenever you `cd` into
    this repo:
    ```sh
    brew install direnv                            # macOS; see direnv.net for other OSes
@@ -95,8 +95,8 @@ per-move coaching notes.
 
 4. **Run:**
    ```sh
-   chess-trainer            # with direnv: start the server in the background
-   chess-trainer stop       #   stop / restart / status also work
+   chess-coach            # with direnv: start the server in the background
+   chess-coach stop       #   stop / restart / status also work
    ```
    or, without direnv:
    ```sh
@@ -108,7 +108,7 @@ per-move coaching notes.
 
    > Port **8001** is the default here because **8000** (uvicorn's own default)
    > is commonly taken by other local apps. Override with `PORT=8123
-   > chess-trainer` (or `--port 8123` for the raw `uvicorn` command). Run two
+   > chess-coach` (or `--port 8123` for the raw `uvicorn` command). Run two
    > apps at once by giving each its own port; no need to stop the other.
 
 5. **(Optional) AI game commentary** — everything else in the app is fully
