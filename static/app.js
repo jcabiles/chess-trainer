@@ -517,6 +517,12 @@ async function onUserMove(orig, dest) {
   state.cursor = insertAt + 1;
 
   syncBoard();
+  // Claim the analysis panel: invalidate any refreshAnalysis still in flight from an
+  // earlier undo/redo. Without this, its late response passes its own analysisToken
+  // check and repaints THIS position's panel with the previous position's eval/PV —
+  // the engine result for the wrong side. (onUserMove renders directly, outside the
+  // refreshAnalysis token machinery, so it must bump the token itself.)
+  analysisToken++;
   if (doAnalyze) applyMoveResponse(data); else renderSkipped();
   setStatus('');
   persist();
@@ -656,7 +662,9 @@ async function loadFen() {
   }
 
   errEl.hidden = true;
-  moveToken++; // invalidate any in-flight move against the previous base position
+  moveToken++;     // invalidate any in-flight move against the previous base position
+  analysisToken++; // ...and any in-flight refreshAnalysis, so it can't repaint the
+                   // loaded position's panel with the old position's eval.
   state.baseFen = data.fen;
   state.moves = [];
   state.moveQuality = [];
