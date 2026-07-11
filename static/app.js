@@ -1087,7 +1087,8 @@ function init() {
   if (evalToggleEl) {
     const syncEvalToggle = () => {
       evalToggleEl.setAttribute('aria-pressed', String(evalEnabled));
-      evalToggleEl.textContent = evalEnabled ? 'Evaluation: On' : 'Evaluation: Off';
+      evalToggleEl.textContent = evalEnabled ? 'On' : 'Off';
+      evalToggleEl.setAttribute('aria-label', evalEnabled ? 'Evaluation on' : 'Evaluation off');
     };
     syncEvalToggle(); // reflect the default (on) on first paint
     evalToggleEl.addEventListener('click', () => {

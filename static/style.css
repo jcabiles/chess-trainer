@@ -972,10 +972,12 @@ body.trap-practice-mode #fen-error { display: none; }
   border-color: var(--accent);
 }
 
-/* Evaluation on/off toggle — inherits the base button (grey, like Undo/Reset)
-   when OFF; green-filled (like button.primary) when ON. */
+/* Evaluation on/off toggle — sits inline after the Evaluate select. Grey base
+   button (like Undo/Reset) when OFF; green-filled when ON. Sized to the select. */
 .eval-toggle {
-  margin: var(--space-2) 0;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  margin: 0;
 }
 
 .eval-toggle[aria-pressed="true"] {
