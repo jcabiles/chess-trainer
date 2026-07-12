@@ -15,11 +15,14 @@ Coverage
 - errors: unknown user -> 404 with detail; network failure -> 502; bad
   platform -> 422 (pydantic literal).
 - auto-analysis kick: fetch uses the same _kick_auto_analysis seam as import.
+- end-to-end: fetched clocked games, once analyzed, populate the Insights
+  time-trouble buckets (the roadmap chain: fetch -> %clk -> clock_centis ->
+  time_trouble card).
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
 from pathlib import Path
 
 import httpx
@@ -281,3 +284,35 @@ class TestFetchValidation:
             json={"platform": "lichess", "username": "x", "max_games": 500},
         )
         assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Fetch → clocks → Insights time-trouble (the roadmap slice-3/4 chain)
+# ---------------------------------------------------------------------------
+
+
+class TestFetchLightsUpTimeTrouble:
+    def test_fetched_clocked_games_populate_time_trouble(self, client, monkeypatch):
+        """Fetched %clk games, once analyzed, exit the time-trouble empty state.
+
+        This is the end-to-end version of the roadmap pass/fail: before
+        auto-fetch existed, 0 stored plies had clocks and the card could only
+        show 'No clock data yet.'
+        """
+        _install_transport(monkeypatch, _lichess_handler())
+        r = client.post(
+            "/api/games/fetch", json={"platform": "lichess", "username": "testuser"}
+        )
+        assert r.status_code == 200
+        game_ids = [g["id"] for g in r.json()["games"]]
+
+        # Run the background analysis synchronously (neutral engine: no leaks,
+        # but is_user_move gets tagged and analysis_status flips to 'done').
+        for gid in game_ids:
+            asyncio.run(review_module.analyze_game(gid, ScriptedEngine(), depth=8))
+
+        body = client.get("/api/insights/mistakes").json()
+        tt = body["time_trouble"]
+        assert tt["clocked_games"] == 2
+        assert tt["unclocked_games"] == 0
+        assert sum(b["moves"] for b in tt["buckets"]) > 0

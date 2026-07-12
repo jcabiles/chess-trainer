@@ -51,15 +51,16 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       daemon (fetch on demand); never commit fetched game data · contracts:
       `contracts/auto-analyze.md`, `contracts/game-review-coaching.md`; external
       APIs are greenfield — /ai-dlc maps them · ICE 4·4·3=48
-- [ ] **4. Time-trouble insights** — problem: user blunders under clock pressure
-      but nothing surfaces it; clock columns exist and are empty until slice 3
-      lands (backlog #13 part) · outcome-link: N1 · pass/fail: with clocked games
-      imported, Mistakes tab time-trouble card populates (blunder rate at low
-      clock vs otherwise, min-sample guard); empty state remains honest with no
-      clock data · appetite: days · no-gos: no per-move clock UI in replay (card
-      only, this slice) · contracts: `contracts/insights-endgames.md` (insights
-      seams) · **hard-gated: cannot start before slice 3 lands (sort floor = after
-      slice 3), regardless of ICE tie** · ICE 3·4·4=48
+- [x] **4. Time-trouble insights** — problem: user blunders under clock pressure
+      but nothing surfaces it; clock columns were empty until slice 3
+      (backlog #13 part) · outcome-link: N1 · **CLOSED 2026-07-12 as
+      already-built + chain-tested**: the card (insights.js `renderTimeTrouble`)
+      and clock-bucket analytics (`insights._time_trouble`: <10s…>2m buckets,
+      min-sample guard, honest unclocked-games note) shipped with Insights
+      Phase 2 and were dark only for lack of clock data. Slice 3 supplies the
+      data; a new integration test (`test_fetch_api.py::TestFetchLightsUpTimeTrouble`)
+      proves the full fetch → %clk → clock_centis → time-trouble chain exits
+      the empty state. Live population happens on the user's first real fetch.
 - [ ] **5. Command palette** — problem: power-user navigation (load FEN, switch
       tab/mode, jump to trap/line) takes many clicks (backlog #2) · outcome-link:
       N1 (weak — friction) + N2 (perceived polish); flagged: weakest N1 link in
