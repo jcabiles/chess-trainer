@@ -8,7 +8,10 @@ Coverage:
 - Cancellation safety: task.cancel() → CancelledError; engine poisoned (_engine None).
 - Hard-timeout watchdog: ENGINE_HARD_TIMEOUT_S fires → EngineUnavailable; engine poisoned.
 - EngineError propagation: analyse raises chess.engine.EngineError → EngineUnavailable; poisoned.
-- Soft time cap: analyze() passes Limit(time=INTERACTIVE_SOFT_TIME_S); analyze_multi() passes time=None.
+- Speed presets: analyze()/analyze_interactive_multi() build Limits from
+  SPEED_PRESETS (nodes+time, no depth); unknown speed falls back to balanced;
+  analyze_multi() stays depth-only.
+- Threads autodetect: _detect_threads() survives os.cpu_count() returning None.
 - restart() idempotence: poisons regardless of state; safe to call twice.
 """
 
@@ -24,7 +27,7 @@ import pytest
 
 import app.engine as engine_module
 from app.engine import (
-    INTERACTIVE_SOFT_TIME_S,
+    SPEED_PRESETS,
     EngineUnavailable,
     StockfishEngine,
 )
@@ -53,6 +56,7 @@ class _ImmediateEngine:
     def __init__(self, cp: int = 20):
         self._cp = cp
         self._calls: List[chess_engine.Limit] = []
+        self._multipvs: List[int] = []
 
     def analyse(
         self,
@@ -62,6 +66,7 @@ class _ImmediateEngine:
         multipv: int = 1,
     ) -> chess_engine.InfoDict:
         self._calls.append(limit)
+        self._multipvs.append(multipv)
         return _make_info(self._cp)
 
     def close(self) -> None:
@@ -200,11 +205,12 @@ class TestEngineErrorPropagation:
         assert eng.is_running is False
 
 
-class TestSoftCapAndMultiPVLimit:
-    """analyze() passes time=INTERACTIVE_SOFT_TIME_S; analyze_multi() passes time=None."""
+class TestSpeedPresetLimits:
+    """Interactive calls build node-budget Limits from SPEED_PRESETS (no depth);
+    analyze_multi() stays depth-only for background reviews."""
 
     @pytest.mark.anyio
-    async def test_analyze_passes_soft_time_cap(self):
+    async def test_analyze_defaults_to_balanced_preset(self):
         eng = StockfishEngine()
         fake = _ImmediateEngine()
         _inject(eng, fake)
@@ -213,12 +219,51 @@ class TestSoftCapAndMultiPVLimit:
 
         assert len(fake._calls) == 1
         limit = fake._calls[0]
-        assert limit.time == INTERACTIVE_SOFT_TIME_S, (
-            f"analyze() should pass time={INTERACTIVE_SOFT_TIME_S}, got {limit.time}"
-        )
+        assert limit.nodes == 800_000
+        assert limit.time == 0.8
+        assert limit.depth is None, "interactive limits must not carry a depth"
 
     @pytest.mark.anyio
-    async def test_analyze_multi_passes_no_time_cap(self):
+    async def test_analyze_fast_preset(self):
+        eng = StockfishEngine()
+        fake = _ImmediateEngine()
+        _inject(eng, fake)
+
+        await eng.analyze(START_FEN, speed="fast")
+
+        limit = fake._calls[0]
+        assert limit.nodes == 400_000
+        assert limit.time == 0.5
+        assert limit.depth is None
+
+    @pytest.mark.anyio
+    async def test_interactive_multi_deep_preset_and_multipv_passthrough(self):
+        eng = StockfishEngine()
+        fake = _ImmediateEngine()
+        _inject(eng, fake)
+
+        await eng.analyze_interactive_multi(START_FEN, speed="deep", multipv=2)
+
+        limit = fake._calls[0]
+        assert limit.nodes == 12_000_000
+        assert limit.time == 1.4
+        assert limit.depth is None
+        assert fake._multipvs == [2], "multipv must pass through unchanged"
+
+    @pytest.mark.anyio
+    async def test_unknown_speed_falls_back_to_balanced(self):
+        eng = StockfishEngine()
+        fake = _ImmediateEngine()
+        _inject(eng, fake)
+
+        await eng.analyze_interactive_multi(START_FEN, speed="warp9")
+
+        limit = fake._calls[0]
+        assert limit.nodes == SPEED_PRESETS["balanced"].nodes
+        assert limit.time == SPEED_PRESETS["balanced"].time
+
+    @pytest.mark.anyio
+    async def test_analyze_multi_stays_depth_only(self):
         eng = StockfishEngine()
         fake = _ImmediateEngine()
         _inject(eng, fake)
@@ -227,10 +272,27 @@ class TestSoftCapAndMultiPVLimit:
 
         assert len(fake._calls) == 1
         limit = fake._calls[0]
-        # analyze_multi uses depth-only limit — time should be None.
-        assert limit.time is None, (
-            f"analyze_multi() should not pass a time cap, got {limit.time}"
-        )
+        # Background review path: depth-only limit — no time or node cap.
+        assert limit.depth == engine_module.DEFAULT_DEPTH
+        assert limit.time is None
+        assert limit.nodes is None
+
+
+class TestThreadsAutodetect:
+    """_detect_threads() honors the env override and survives cpu_count() → None."""
+
+    def test_cpu_count_none_yields_at_least_one_thread(self, monkeypatch):
+        monkeypatch.delenv("ENGINE_THREADS", raising=False)
+        monkeypatch.setattr(engine_module.os, "cpu_count", lambda: None)
+
+        threads = engine_module._detect_threads()
+
+        assert threads >= 1
+
+    def test_env_override_wins(self, monkeypatch):
+        monkeypatch.setenv("ENGINE_THREADS", "6")
+
+        assert engine_module._detect_threads() == 6
 
 
 class TestRestartIdempotence:

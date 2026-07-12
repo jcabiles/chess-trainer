@@ -231,7 +231,8 @@ class TestStockfishMultipv:
         """analyze_multi(multipv=1) returns one valid result, same sign as analyze()."""
         depth = 8
 
-        single = await engine.analyze(START_FEN, depth=depth)
+        # analyze() is preset-limited (balanced) now; analyze_multi stays depth-only.
+        single = await engine.analyze(START_FEN)
         multi = await engine.analyze_multi(START_FEN, depth=depth, multipv=1)
 
         assert len(multi) == 1

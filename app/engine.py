@@ -42,31 +42,62 @@ import chess
 import chess.engine as chess_engine
 
 # ---------------------------------------------------------------------------
-# Engine configuration constants (documented; no UI control — see spec "Engine
-# config"). Depth is fixed (not a time cap) so before/after-move evals are
-# searched to the same depth and cpLoss is comparable.
+# Engine configuration constants (documented; presets are the only UI control —
+# see docs/ai-dlc/specs/analysis-speed.md). Interactive limits are node budgets:
+# both evals of one move use the SAME preset limit, keeping cpLoss comparable.
 # ---------------------------------------------------------------------------
 
-#: Stockfish search threads. Tuned for usable per-move latency on a single-user box.
-ENGINE_THREADS: int = 2
 
-#: Stockfish transposition-table size in MiB.
-ENGINE_HASH_MB: int = 128
+def _detect_threads() -> int:
+    """Stockfish search threads: ENGINE_THREADS env override, else cpu_count - 2.
 
-#: Default fixed search depth (target depth 18 per spec).
+    The ``or 4`` guard is mandatory — ``os.cpu_count()`` may return None, and a
+    module-level TypeError would break this module's import-safety invariant.
+    """
+    configured = os.environ.get("ENGINE_THREADS")
+    if configured:
+        return max(1, int(configured))
+    return max(1, (os.cpu_count() or 4) - 2)
+
+
+#: Stockfish search threads (env ENGINE_THREADS, else autodetected at import).
+ENGINE_THREADS: int = _detect_threads()
+
+#: Stockfish transposition-table size in MiB (env ENGINE_HASH_MB override).
+ENGINE_HASH_MB: int = int(os.environ.get("ENGINE_HASH_MB", "256"))
+
+#: Fixed search depth for BACKGROUND analyses (analyze_multi / review path).
+#: Interactive calls use SPEED_PRESETS instead — no depth limit.
 DEFAULT_DEPTH: int = 18
 
 #: Environment variable that, if set, points at the Stockfish binary.
 STOCKFISH_PATH_ENV: str = "STOCKFISH_PATH"
 
-#: Soft time cap (seconds) passed to Stockfish for interactive (per-move) analyses.
-#: Overridable via ENGINE_SOFT_TIME env var. Must be < ENGINE_HARD_TIMEOUT_S.
-INTERACTIVE_SOFT_TIME_S: float = float(os.environ.get("ENGINE_SOFT_TIME", "3.0"))
+#: Interactive speed presets. `nodes` is the primary budget (consistent
+#: quality/latency across quiet and sharp positions); `time` is a per-call
+#: safety ceiling — python-chess stops at whichever bound hits first. Every
+#: `time` here must stay < ENGINE_HARD_TIMEOUT_S.
+SPEED_PRESETS: dict = {
+    "fast": chess_engine.Limit(nodes=400_000, time=0.5),
+    "balanced": chess_engine.Limit(nodes=800_000, time=0.8),
+    "deep": chess_engine.Limit(nodes=12_000_000, time=1.4),
+}
+
+#: Preset used when the caller omits or sends an unknown speed string.
+DEFAULT_SPEED: str = "balanced"
 
 #: Hard per-call asyncio watchdog (seconds). If the executor thread has not returned
 #: by this deadline, the engine is poisoned and EngineUnavailable is raised.
-#: Overridable via ENGINE_HARD_TIMEOUT env var. Must be > INTERACTIVE_SOFT_TIME_S.
+#: Overridable via ENGINE_HARD_TIMEOUT env var. Must be > every preset time cap.
 ENGINE_HARD_TIMEOUT_S: float = float(os.environ.get("ENGINE_HARD_TIMEOUT", "8.0"))
+
+
+def _preset_limit(speed: str) -> chess_engine.Limit:
+    """Resolve a preset name to its Limit; unknown names fall back to balanced.
+
+    Server-side safety net — API-level validation rejects bad strings upstream.
+    """
+    return SPEED_PRESETS.get(speed, SPEED_PRESETS[DEFAULT_SPEED])
 
 
 class EngineUnavailable(RuntimeError):
@@ -143,7 +174,7 @@ class StockfishEngine:
         engine.start()                      # or rely on lazy start in analyze()
 
         # in a route:
-        result = await engine.analyze(fen, depth=18)
+        result = await engine.analyze(fen, speed="balanced")
 
         # in a lifespan/shutdown handler:
         engine.close()
@@ -332,6 +363,11 @@ class StockfishEngine:
             loop = asyncio.get_running_loop()
 
             def _call() -> List[chess_engine.InfoDict]:
+                # Warm-TT invariant: no call site passes game=, so python-chess
+                # never sends `ucinewgame` between calls and the transposition
+                # table stays warm across moves (verified against the installed
+                # lib). Do NOT introduce game=/ucinewgame casually — it would
+                # cold-start the TT on every call.
                 result = engine.analyse(board, limit, multipv=multipv)
                 # Normalize: always return a list (multipv=None/1 may return dict).
                 if isinstance(result, list):
@@ -406,7 +442,7 @@ class StockfishEngine:
         except ValueError as exc:
             raise ValueError(f"Invalid FEN: {fen!r} ({exc})") from exc
 
-        # Background reviews use depth-only limit (no soft time cap).
+        # Background reviews use depth-only limit (no time/node cap).
         infos = await self._run_analyse(
             board, chess_engine.Limit(depth=depth), multipv=multipv
         )
@@ -441,19 +477,19 @@ class StockfishEngine:
     async def analyze_interactive_multi(
         self,
         fen: str,
-        depth: int = DEFAULT_DEPTH,
+        speed: str = DEFAULT_SPEED,
         multipv: int = 1,
     ) -> List[AnalysisResult]:
         """Interactive multi-line analysis: up to *multipv* ranked lines.
 
-        Same soft-time-capped limit as :meth:`analyze` (``INTERACTIVE_SOFT_TIME_S``)
-        so latency stays bounded on sharp positions — unlike :meth:`analyze_multi`,
-        which is depth-only for background reviews. Used by ``/api/move`` to surface
-        a 2nd-best line without adding an engine call.
+        Same preset-driven limit as :meth:`analyze` (``SPEED_PRESETS``) so latency
+        stays bounded on sharp positions — unlike :meth:`analyze_multi`, which is
+        depth-only for background reviews. Used by ``/api/move`` to surface a
+        2nd-best line without adding an engine call.
 
         Args:
             fen: The position to analyze, in Forsyth-Edwards Notation.
-            depth: Fixed search depth (target; the soft time cap may fire first).
+            speed: Preset name (``SPEED_PRESETS`` key); unknown → balanced.
             multipv: Number of distinct lines to return (best-first).
 
         Returns:
@@ -469,10 +505,10 @@ class StockfishEngine:
         except ValueError as exc:
             raise ValueError(f"Invalid FEN: {fen!r} ({exc})") from exc
 
-        # Interactive: soft time cap (bounded UI latency) + depth target.
+        # Interactive: node budget + time safety ceiling from the preset table.
         infos = await self._run_analyse(
             board,
-            chess_engine.Limit(depth=depth, time=INTERACTIVE_SOFT_TIME_S),
+            _preset_limit(speed),
             multipv=multipv,
         )
 
@@ -503,20 +539,19 @@ class StockfishEngine:
 
         return results
 
-    async def analyze(self, fen: str, depth: int = DEFAULT_DEPTH) -> AnalysisResult:
-        """Analyze a position to a fixed depth.
+    async def analyze(self, fen: str, speed: str = DEFAULT_SPEED) -> AnalysisResult:
+        """Analyze a position at an interactive speed preset.
 
         Lazily starts the engine if needed, then runs the BLOCKING
         ``engine.analyse(...)`` in a thread-pool executor while holding the
         module's ``asyncio.Lock`` so no two analyses overlap (SimpleEngine is not
-        thread-safe). A soft time cap (``INTERACTIVE_SOFT_TIME_S``) is passed to
-        Stockfish; a hard asyncio watchdog (``ENGINE_HARD_TIMEOUT_S``) guards
-        against a totally hung process.
+        thread-safe). The preset's node budget + time ceiling bound the search;
+        a hard asyncio watchdog (``ENGINE_HARD_TIMEOUT_S``) guards against a
+        totally hung process.
 
         Args:
             fen: The position to analyze, in Forsyth-Edwards Notation.
-            depth: Fixed search depth (target; may not be reached if the soft time
-                cap fires first). Defaults to ``DEFAULT_DEPTH``.
+            speed: Preset name (``SPEED_PRESETS`` key); unknown → balanced.
 
         Returns:
             An :class:`AnalysisResult` with the raw ``PovScore`` and the PV (as
@@ -533,11 +568,10 @@ class StockfishEngine:
         except ValueError as exc:
             raise ValueError(f"Invalid FEN: {fen!r} ({exc})") from exc
 
-        # Interactive searches get a soft time cap so sharp positions don't stall
-        # the UI; depth is still passed so Stockfish stops at depth if reached first.
+        # Interactive: node budget + time safety ceiling from the preset table.
         infos = await self._run_analyse(
             board,
-            chess_engine.Limit(depth=depth, time=INTERACTIVE_SOFT_TIME_S),
+            _preset_limit(speed),
         )
         info = infos[0]
 
