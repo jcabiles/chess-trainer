@@ -1033,3 +1033,55 @@ input[type="file"].review-file-input {
   line-height: 1.5;
   margin: 0;
 }
+
+/* ============================================================
+   Eval graph — whole-game eval line in the review bar
+   ============================================================ */
+
+.review-eval-graph {
+  margin-top: var(--space-2);
+}
+
+.review-eval-graph[hidden] {
+  display: none;
+}
+
+.review-eval-graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.reg-mid {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+
+.reg-line {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+}
+
+.reg-dot { stroke: none; }
+.reg-dot-blunder { fill: var(--q-blunder); }
+.reg-dot-mistake { fill: var(--q-mistake); }
+
+.reg-marker {
+  fill: var(--accent);
+  stroke: var(--surface-raised);
+  stroke-width: 1;
+}
+
+.reg-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.reg-hit:hover {
+  fill: var(--accent);
+  fill-opacity: 0.35;
+}
