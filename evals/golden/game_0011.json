@@ -1,0 +1,416 @@
+{
+ "eval_arc": {
+  "middlegame": {
+   "end": 1.0,
+   "max": 1.0,
+   "min": 0.1326
+  },
+  "opening": {
+   "end": 0.4862,
+   "max": 0.5541,
+   "min": 0.4623
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 77.8,
+   "black_elo": 1501,
+   "black_moves": 31,
+   "my_color": "black",
+   "white_accuracy": 81.4,
+   "white_elo": 1663,
+   "white_moves": 31
+  },
+  "black": "Me",
+  "date": "2026.06.26",
+  "eco": "D02",
+  "my_color": "black",
+  "opening": "London System: Poisoned Pawn Variation",
+  "result": "1-0",
+  "white": "Opponent"
+ },
+ "moments": [
+  {
+   "facts": {
+    "fen_before": "2kr3r/ppp2pp1/2nqpnp1/3p4/3P1P2/2PB1Q1P/PP1N1PP1/R4RK1 w - - 3 14",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qe3",
+     "Ne7",
+     "Nf3",
+     "Nf5",
+     "Qc1",
+     "Qe7",
+     "a4",
+     "Nh4",
+     "Ne5",
+     "Nd7",
+     "a5",
+     "Nxe5",
+     "fxe5"
+    ],
+    "win_prob_drop": 0.2308
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 14,
+   "ply": 27,
+   "san": "c4",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Nxd4",
+    "best_uci": "c6d4",
+    "category": "hanging",
+    "fen_before": "2kr3r/ppp2pp1/2nqpnp1/3p4/2PP1P2/3B1Q1P/PP1N1PP1/R4RK1 b - - 0 14",
+    "foreseeable": false,
+    "hung_square": "d5",
+    "phase": "middlegame",
+    "pv_san": [
+     "Nxd4",
+     "Qe3",
+     "Nc6",
+     "Nf3",
+     "dxc4",
+     "Bxc4",
+     "Nd5",
+     "Bxd5",
+     "exd5",
+     "Ne5",
+     "d4",
+     "Qg3",
+     "Nxe5",
+     "fxe5"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.24687967526082588
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 14,
+   "ply": 28,
+   "san": "Nb4",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "2kr3r/ppp1qpp1/4p1p1/2Pp4/3PnP2/P2Q3P/1P1N1PP1/R4RK1 w - - 1 18",
+    "phase": "middlegame",
+    "pv_san": [
+     "Nf3",
+     "g5",
+     "Ne5",
+     "c6",
+     "b4",
+     "Qc7",
+     "fxg5",
+     "Nxg5",
+     "b5",
+     "f6",
+     "Ng6",
+     "Rh6",
+     "bxc6"
+    ],
+    "win_prob_drop": 0.1212
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 18,
+   "ply": 35,
+   "san": "Nxe4",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Rh4",
+    "best_uci": "h8h4",
+    "category": "hanging",
+    "fen_before": "2kr3r/ppp1qpp1/4p1p1/2P5/3PQP2/P6P/1P3PP1/R4RK1 b - - 0 19",
+    "foreseeable": true,
+    "hung_square": "e6",
+    "lead_in_ply": 36,
+    "phase": "middlegame",
+    "pv_san": [
+     "Rh4",
+     "c6",
+     "Qd6",
+     "cxb7+",
+     "Kb8",
+     "Qe5",
+     "Qxe5",
+     "dxe5",
+     "Rxf4",
+     "Rad1"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.187829642847278
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 19,
+   "ply": 38,
+   "san": "f5",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "2kr3r/ppp1q1p1/4p1p1/2P2p2/3PQP2/P6P/1P3PP1/R4RK1 w - - 0 20",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qe3",
+     "Qf6",
+     "Rad1",
+     "Rd5",
+     "Rfe1",
+     "Re8",
+     "Rd3",
+     "c6"
+    ],
+    "win_prob_drop": 0.1492
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 20,
+   "ply": 39,
+   "san": "Qd3",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "2kr4/ppp1q1p1/4p1p1/2P2p2/3P1P1r/P2Q3P/1P3PP1/R4RK1 w - - 2 21",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qe3",
+     "g5",
+     "fxg5",
+     "Re4",
+     "Qc1",
+     "Rdxd4",
+     "c6",
+     "Kb8",
+     "cxb7",
+     "Kxb7",
+     "Qc3",
+     "Qxg5",
+     "Rac1"
+    ],
+    "win_prob_drop": 0.1224
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 21,
+   "ply": 41,
+   "san": "b4",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Qc7",
+    "best_uci": "e7c7",
+    "category": "discovered",
+    "fen_before": "1k6/pp2q1p1/2p1p3/QPPr1pp1/5r2/P6P/5PP1/2R2RK1 b - - 0 26",
+    "foreseeable": false,
+    "hung_square": "a7",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qc7",
+     "b6",
+     "axb6",
+     "Qxb6",
+     "Qxb6",
+     "cxb6",
+     "Kc8",
+     "Rfe1",
+     "Kd7",
+     "Re3",
+     "g4"
+    ],
+    "threat_motif": "discovered",
+    "win_prob_drop": 0.2040852222270142
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 26,
+   "ply": 52,
+   "san": "Rxc5",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "b6",
+    "best_uci": "b7b6",
+    "category": "hanging",
+    "fen_before": "1k6/pp2q1p1/2p1p3/QPR2pp1/5r2/P6P/5PP1/5RK1 b - - 0 27",
+    "foreseeable": true,
+    "hung_square": "c6",
+    "lead_in_ply": 52,
+    "phase": "middlegame",
+    "pv_san": [
+     "b6",
+     "Qd2",
+     "bxc5",
+     "Rb1",
+     "Rd4",
+     "bxc6+",
+     "Kc7",
+     "Qe2"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.4852759384118718
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 27,
+   "ply": 54,
+   "san": "Qxc5",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "1k6/pp4p1/2p1p3/QPq2pp1/5r2/P6P/5PP1/5RK1 w - - 0 28",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qd8#"
+    ],
+    "win_prob_drop": 0.7692
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 28,
+   "ply": 55,
+   "san": "Rb1",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "1k6/p5p1/1pp1p3/QPq2pp1/5r2/P6P/5PP1/1R4K1 w - - 0 29",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qe1",
+     "cxb5",
+     "Qxe6",
+     "Kb7",
+     "Qf7+",
+     "Ka6",
+     "Rf1",
+     "g4",
+     "hxg4",
+     "Rxg4",
+     "Qd7",
+     "Rc4",
+     "Qxg7"
+    ],
+    "win_prob_drop": 0.1474
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 29,
+   "ply": 57,
+   "san": "Qa6",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "c5",
+    "best_uci": "c6c5",
+    "category": "hanging",
+    "fen_before": "1k6/p5p1/Qpp1p3/1P3pp1/5r2/P6P/5qPK/1R6 b - - 1 30",
+    "foreseeable": false,
+    "hung_square": "b6",
+    "phase": "middlegame",
+    "pv_san": [
+     "c5",
+     "Rd1",
+     "Rd4",
+     "Rxd4",
+     "Qxd4",
+     "Kh1",
+     "g6",
+     "Kh2",
+     "c4",
+     "Qa4"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.5024620904160733
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 30,
+   "ply": 60,
+   "san": "g4",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Kc7",
+    "best_uci": "b8c7",
+    "category": "mate",
+    "fen_before": "1k6/p5p1/QpP1p3/5p2/5rp1/P6P/5qPK/1R6 b - - 0 31",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "middlegame",
+    "pv_san": [
+     "Kc7",
+     "Rc1",
+     "g3+",
+     "Kh1",
+     "Re4",
+     "Qxa7+",
+     "Kd6",
+     "Qd7+",
+     "Ke5",
+     "Qxg7+",
+     "Kf4",
+     "Qh6+",
+     "Ke5",
+     "Qh8+",
+     "Kf4",
+     "Qc3"
+    ],
+    "threat_motif": "mate",
+    "win_prob_drop": 0.41164679702450635
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 31,
+   "ply": 62,
+   "san": "gxh3",
+   "severity": "blunder",
+   "side": "black"
+  }
+ ],
+ "moments_dropped": 12,
+ "my_color": "black",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 77.8,
+    "black_elo": 1501,
+    "black_moves": 31,
+    "my_color": "black",
+    "white_accuracy": 81.4,
+    "white_elo": 1663,
+    "white_moves": 31
+   },
+   "black": "Me",
+   "date": "2026.06.26",
+   "eco": "D02",
+   "my_color": "black",
+   "opening": "London System: Poisoned Pawn Variation",
+   "result": "1-0",
+   "white": "Opponent"
+  }
+ }
+}

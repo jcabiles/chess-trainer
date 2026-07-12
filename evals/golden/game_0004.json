@@ -1,0 +1,401 @@
+{
+ "eval_arc": {
+  "middlegame": {
+   "end": 0.8933,
+   "max": 0.9277,
+   "min": 0.5
+  },
+  "opening": {
+   "end": 0.8307,
+   "max": 0.8307,
+   "min": 0.5202
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 75.1,
+   "black_elo": 1379,
+   "black_moves": 24,
+   "my_color": "white",
+   "white_accuracy": 78.6,
+   "white_elo": 1537,
+   "white_moves": 24
+  },
+  "black": "Opponent",
+  "date": "2026.06.26",
+  "eco": "A04",
+  "my_color": "white",
+  "opening": "Zukertort Opening: Wade Defense",
+  "result": "1-0",
+  "white": "Me"
+ },
+ "moments": [
+  {
+   "facts": {
+    "fen_before": "r2qkbnr/ppp2p2/2npp1p1/7p/2PPP3/1Q2BB2/PP3PPP/RN2K2R b KQkq - 1 8",
+    "phase": "opening",
+    "pv_san": [
+     "Bg7",
+     "Qa4",
+     "Qd7",
+     "Qd1",
+     "Nf6",
+     "h3",
+     "e5"
+    ],
+    "win_prob_drop": 0.2729
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 8,
+   "ply": 16,
+   "san": "Na5",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Qb7+",
+    "best_uci": "c6b7",
+    "category": "hanging",
+    "fen_before": "r2q1bnr/p3kp2/2Qpp1p1/p6p/2PPP3/5B2/PP3PPP/RN2K2R w KQ - 1 13",
+    "foreseeable": false,
+    "hung_square": "c6",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qb7+",
+     "Kf6",
+     "e5+",
+     "dxe5",
+     "dxe5+",
+     "Kg7",
+     "Qxa8"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.13599825374625918
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 13,
+   "ply": 25,
+   "san": "O-O",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r2q1bnr/p3kp2/2Qpp1p1/p6p/2PPP3/5B2/PP3PPP/RN3RK1 b - - 2 13",
+    "phase": "middlegame",
+    "pv_san": [
+     "Rc8",
+     "Qa6",
+     "Rb8",
+     "Nc3",
+     "Qb6",
+     "Qxb6",
+     "axb6",
+     "b3"
+    ],
+    "win_prob_drop": 0.2192
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 13,
+   "ply": 26,
+   "san": "Kf6",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "e5+",
+    "best_uci": "e4e5",
+    "category": "missed_threat",
+    "fen_before": "r2q1bnr/p4p2/2Qppkp1/p6p/2PPP3/5B2/PP3PPP/RN3RK1 w - - 3 14",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "middlegame",
+    "pv_san": [
+     "e5+",
+     "Kg7",
+     "Qxa8",
+     "Qb6",
+     "Nd2",
+     "Qxb2",
+     "Rad1",
+     "Qxd4"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.22085394342580345
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 14,
+   "ply": 27,
+   "san": "Nc3",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r2q1bnr/p4p2/2Qppkp1/p6p/2PPP3/2N2B2/PP3PPP/R4RK1 b - - 4 14",
+    "phase": "middlegame",
+    "pv_san": [
+     "Rb8",
+     "b3",
+     "Ne7",
+     "Qa6",
+     "Kg7",
+     "Rad1",
+     "Qb6",
+     "Qxb6",
+     "axb6",
+     "Nb5",
+     "Rd8",
+     "h3"
+    ],
+    "win_prob_drop": 0.2339
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 14,
+   "ply": 28,
+   "san": "Ne7",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Qxa8",
+    "best_uci": "c6a8",
+    "category": "hanging",
+    "fen_before": "r2q1b1r/p3np2/2Q1pkp1/p6p/2P5/2N2B2/PP3PPP/R3R1K1 w - - 2 18",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "middlegame",
+    "pv_san": [
+     "Qxa8",
+     "Qxa8",
+     "Bxa8",
+     "Nf5",
+     "Bf3",
+     "Bb4",
+     "Ne4+",
+     "Ke7",
+     "Red1",
+     "Rc8",
+     "a3",
+     "Bd6",
+     "g3",
+     "Rxc4",
+     "Nxd6",
+     "Nxd6"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.26375088732231866
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 18,
+   "ply": 35,
+   "san": "Ne4+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r2q1b1r/p4pk1/4p1p1/pQ3n1p/2P1N3/5B2/PP3PPP/3RR1K1 b - - 7 20",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qb8",
+     "Qd7",
+     "Qf4",
+     "Ng3",
+     "Bb4",
+     "Nxf5+",
+     "gxf5",
+     "Bxa8",
+     "Bxe1",
+     "Rxe1",
+     "Rxa8"
+    ],
+    "win_prob_drop": 0.1203
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 20,
+   "ply": 40,
+   "san": "Qc7",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Rd7",
+    "best_uci": "d1d7",
+    "category": "hanging",
+    "fen_before": "r4b1r/p1q2pk1/4p1p1/pQ3n1p/2P1N3/5B2/PP3PPP/3RR1K1 w - - 8 21",
+    "foreseeable": false,
+    "hung_square": "h2",
+    "phase": "middlegame",
+    "pv_san": [
+     "Rd7",
+     "a6",
+     "Rxc7",
+     "axb5",
+     "Ng5",
+     "Be7",
+     "Bxa8",
+     "Bxg5",
+     "Be4",
+     "bxc4",
+     "Bxf5",
+     "gxf5"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.21150704775432394
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 21,
+   "ply": 41,
+   "san": "b3",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "1r3b1r/p1qQ1pk1/4p1p1/p4n1p/2P1N3/1P3B2/P4PPP/3RR1K1 b - - 2 22",
+    "phase": "middlegame",
+    "pv_san": [
+     "Rc8",
+     "Qd2",
+     "Ba3",
+     "Qc3+",
+     "e5",
+     "Rd7",
+     "Qxd7",
+     "Qxe5+",
+     "f6",
+     "Qxf6+",
+     "Kh6",
+     "Qg5+",
+     "Kg7"
+    ],
+    "win_prob_drop": 0.1689
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 22,
+   "ply": 44,
+   "san": "Qb7",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "1r3b1r/pq1Q1pk1/4p1p1/p4nNp/2P5/1P3B2/P4PPP/3RR1K1 b - - 4 23",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qxd7",
+     "Rxd7",
+     "Be7",
+     "Ne4",
+     "a6",
+     "c5",
+     "Rhd8",
+     "Ra7",
+     "Rbc8",
+     "Rc1",
+     "Rd4"
+    ],
+    "win_prob_drop": 0.3672
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 23,
+   "ply": 46,
+   "san": "Bb4",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Bxb7",
+    "best_uci": "f3b7",
+    "category": "hanging",
+    "fen_before": "1r5r/pq1Q1pk1/4p1p1/p4nNp/1bP5/1P3B2/P4PPP/3RR1K1 w - - 5 24",
+    "foreseeable": false,
+    "hung_square": "d1",
+    "phase": "middlegame",
+    "pv_san": [
+     "Bxb7",
+     "Ne7",
+     "Qd4+",
+     "e5",
+     "Qxe5+",
+     "f6",
+     "Qe4",
+     "fxg5"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.36813658083347567
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 24,
+   "ply": 47,
+   "san": "Rf1",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "1r5r/pq1Q1pk1/4p1p1/p4nNp/1bP5/1P3B2/P4PPP/3R1RK1 b - - 6 24",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qxd7",
+     "Rxd7",
+     "Be7",
+     "Ne4",
+     "a6",
+     "Rfd1",
+     "Rhd8",
+     "Kf1",
+     "Rbc8",
+     "Be2"
+    ],
+    "win_prob_drop": 0.3337
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 24,
+   "ply": 48,
+   "san": "Rhe8",
+   "severity": "blunder",
+   "side": "black"
+  }
+ ],
+ "moments_dropped": 8,
+ "my_color": "white",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 75.1,
+    "black_elo": 1379,
+    "black_moves": 24,
+    "my_color": "white",
+    "white_accuracy": 78.6,
+    "white_elo": 1537,
+    "white_moves": 24
+   },
+   "black": "Opponent",
+   "date": "2026.06.26",
+   "eco": "A04",
+   "my_color": "white",
+   "opening": "Zukertort Opening: Wade Defense",
+   "result": "1-0",
+   "white": "Me"
+  }
+ }
+}

@@ -1,0 +1,420 @@
+{
+ "eval_arc": {
+  "endgame": {
+   "end": 0.0,
+   "max": 0.9492,
+   "min": 0.0
+  },
+  "middlegame": {
+   "end": 0.5794,
+   "max": 0.9389,
+   "min": 0.5313
+  },
+  "opening": {
+   "end": 0.8026,
+   "max": 0.8026,
+   "min": 0.3696
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 88.2,
+   "black_elo": 1969,
+   "black_moves": 74,
+   "my_color": "black",
+   "white_accuracy": 87.9,
+   "white_elo": 1956,
+   "white_moves": 75
+  },
+  "black": "Me",
+  "date": "2026.06.24",
+  "eco": "B20",
+  "my_color": "black",
+  "opening": "Sicilian Defense: Grob Variation",
+  "result": "0-1",
+  "white": "Opponent"
+ },
+ "moments": [
+  {
+   "facts": {
+    "fen_before": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "phase": "opening",
+    "pv_san": [
+     "Nf3",
+     "e6",
+     "Nc3",
+     "Nc6",
+     "d4",
+     "cxd4",
+     "Nxd4",
+     "Bb4",
+     "Nxc6",
+     "dxc6",
+     "Qxd8+",
+     "Kxd8"
+    ],
+    "win_prob_drop": 0.1325
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 2,
+   "ply": 3,
+   "san": "g4",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "e5",
+    "best_uci": "e6e5",
+    "category": "hanging",
+    "fen_before": "rnbqk1nr/pp3ppp/3bp3/2p5/3pPNP1/3P4/PPP2P1P/R1BQKBNR b KQkq - 0 6",
+    "foreseeable": false,
+    "hung_square": "e6",
+    "phase": "opening",
+    "pv_san": [
+     "e5",
+     "Nd5",
+     "Ne7",
+     "c4",
+     "dxc3",
+     "bxc3",
+     "Nxd5",
+     "exd5",
+     "O-O",
+     "Bg2",
+     "f5",
+     "Nf3"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.1989051674980684
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 6,
+   "ply": 12,
+   "san": "g5",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "rnbqk1nr/pp3p1p/3bp3/2p3p1/3pPNP1/3P4/PPP2P1P/R1BQKBNR w KQkq - 0 7",
+    "phase": "opening",
+    "pv_san": [
+     "Nh5",
+     "h6",
+     "h4",
+     "gxh4"
+    ],
+    "win_prob_drop": 0.2068
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 7,
+   "ply": 13,
+   "san": "Nfh3",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "h6",
+    "best_uci": "h7h6",
+    "category": "hanging",
+    "fen_before": "rnbqk1nr/pp3p1p/3bp3/2p3p1/3pP1P1/3P3N/PPP2P1P/R1BQKBNR b KQkq - 1 7",
+    "foreseeable": false,
+    "hung_square": "d8",
+    "phase": "opening",
+    "pv_san": [
+     "h6",
+     "f4",
+     "gxf4",
+     "Bxf4",
+     "Qh4+",
+     "Bg3",
+     "Bxg3+",
+     "hxg3",
+     "Qxg3+",
+     "Nf2",
+     "Nc6",
+     "Qd2",
+     "Nf6",
+     "O-O-O"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.1225039560745963
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 7,
+   "ply": 14,
+   "san": "Nc6",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "1k5r/pp6/2n5/4pBQb/3pP3/q2P1P2/3BK2P/1RR5 w - - 2 34",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qg7",
+     "Qe7",
+     "Qxh8+",
+     "Qe8",
+     "Qxe8+",
+     "Bxe8",
+     "Kd1",
+     "a5",
+     "Bg4",
+     "a4",
+     "Ba5",
+     "Nxa5",
+     "Rc8+",
+     "Ka7"
+    ],
+    "win_prob_drop": 0.1232
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 34,
+   "ply": 67,
+   "san": "Rxc6",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "1k5r/pp6/2R5/4pBQ1/3pP3/4BK2/7P/1q6 w - - 0 37",
+    "phase": "middlegame",
+    "pv_san": [
+     "Rh6",
+     "Qf1+",
+     "Kg3",
+     "Rf8",
+     "Rd6"
+    ],
+    "win_prob_drop": 0.2483
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 37,
+   "ply": 73,
+   "san": "Rc8+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Qf1+",
+    "best_uci": "b1f1",
+    "category": "hanging",
+    "fen_before": "1kB5/pp6/8/4p1Q1/3pP3/4BK2/7P/1q6 b - - 0 38",
+    "foreseeable": false,
+    "hung_square": "b7",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qf1+",
+     "Kg3",
+     "dxe3",
+     "Bg4",
+     "Qf2+",
+     "Kh3",
+     "Qf1+",
+     "Kh4",
+     "Qf2+",
+     "Kh5",
+     "Qxh2+",
+     "Kg6",
+     "Qh8",
+     "Qxe3",
+     "Qg8+",
+     "Kf5",
+     "Qc8+",
+     "Kg5",
+     "Qg8+",
+     "Kh4",
+     "a5",
+     "Qc5"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.29131013167609976
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 38,
+   "ply": 76,
+   "san": "Kxc8",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "8/pp1Q4/8/4B3/2k1P3/5K2/7P/1q6 w - - 9 46",
+    "phase": "endgame",
+    "pv_san": [
+     "Qd5+",
+     "Kb4",
+     "Qxb7+",
+     "Kc5",
+     "Qxb1",
+     "Kc6",
+     "Qb4",
+     "a5",
+     "Qd6+",
+     "Kb7"
+    ],
+    "win_prob_drop": 0.1852
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 46,
+   "ply": 91,
+   "san": "Qd6",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Kg4",
+    "best_uci": "f3g4",
+    "category": "missed_threat",
+    "fen_before": "8/pp6/4K3/4B3/4q3/1Q3k2/7P/8 b - - 7 53",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "endgame",
+    "pv_san": [
+     "Kg4",
+     "Qg3+",
+     "Kh5",
+     "Kf6",
+     "Qg4",
+     "Qd3",
+     "Qg5+",
+     "Ke6",
+     "Qg6+",
+     "Qxg6+",
+     "Kxg6",
+     "Bd6",
+     "Kg5",
+     "Bb8",
+     "a6",
+     "Bd6",
+     "Kh4"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.13132048238107175
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 53,
+   "ply": 106,
+   "san": "Kg2",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "8/pp6/4K3/4B3/4q3/7Q/4k2P/8 w - - 12 56",
+    "phase": "endgame",
+    "pv_san": [
+     "Qg3",
+     "b5",
+     "h4",
+     "b4",
+     "h5",
+     "Qc6+",
+     "Kf5"
+    ],
+    "win_prob_drop": 0.6532
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 56,
+   "ply": 111,
+   "san": "Qg4+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Qd6",
+    "best_uci": "d4d6",
+    "category": "missed_threat",
+    "fen_before": "8/5K2/8/8/3qk3/8/8/8 b - - 7 69",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "endgame",
+    "pv_san": [
+     "Qd6",
+     "Kg8",
+     "Qd7",
+     "Kh8",
+     "Kf5",
+     "Kg8",
+     "Kf6",
+     "Kh8",
+     "Qg7#"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.1313691382702844
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 69,
+   "ply": 138,
+   "san": "Qb6",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "8/5K2/1q6/8/4k3/8/8/8 w - - 8 70",
+    "phase": "endgame",
+    "pv_san": [
+     "Ke7",
+     "Qd4",
+     "Ke6",
+     "Qd5+",
+     "Kf6",
+     "Qd6+",
+     "Kg5",
+     "Kd4",
+     "Kf5",
+     "Qf8+",
+     "Ke6"
+    ],
+    "win_prob_drop": 0.1314
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 70,
+   "ply": 139,
+   "san": "Kg7",
+   "severity": "mistake",
+   "side": "white"
+  }
+ ],
+ "moments_dropped": 9,
+ "my_color": "black",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 88.2,
+    "black_elo": 1969,
+    "black_moves": 74,
+    "my_color": "black",
+    "white_accuracy": 87.9,
+    "white_elo": 1956,
+    "white_moves": 75
+   },
+   "black": "Me",
+   "date": "2026.06.24",
+   "eco": "B20",
+   "my_color": "black",
+   "opening": "Sicilian Defense: Grob Variation",
+   "result": "0-1",
+   "white": "Opponent"
+  }
+ }
+}

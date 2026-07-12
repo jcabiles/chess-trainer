@@ -1,0 +1,419 @@
+{
+ "eval_arc": {
+  "endgame": {
+   "end": 0.5,
+   "max": 1.0,
+   "min": 0.4936
+  },
+  "middlegame": {
+   "end": 0.8609,
+   "max": 0.9108,
+   "min": 0.6034
+  },
+  "opening": {
+   "end": 0.8691,
+   "max": 0.8964,
+   "min": 0.5147
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 87.5,
+   "black_elo": 1938,
+   "black_moves": 65,
+   "my_color": "white",
+   "white_accuracy": 88.1,
+   "white_elo": 1964,
+   "white_moves": 66
+  },
+  "black": "Opponent",
+  "date": "2026.06.25",
+  "eco": "C44",
+  "my_color": "white",
+  "opening": "Scotch Game: Benima Defense",
+  "result": "1/2-1/2",
+  "white": "Me"
+ },
+ "moments": [
+  {
+   "facts": {
+    "fen_before": "r1b1k1nr/pppp1pp1/2n2q1p/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 b kq - 3 6",
+    "phase": "opening",
+    "pv_san": [
+     "Nge7",
+     "Nd5",
+     "Nxd5",
+     "exd5",
+     "Ne7",
+     "Nd2",
+     "Qg6",
+     "Ne4",
+     "Bb6",
+     "a4",
+     "a6",
+     "a5"
+    ],
+    "win_prob_drop": 0.1372
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 6,
+   "ply": 12,
+   "san": "Nd4",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r1b1k1nr/pppp1pp1/5q1p/2bNp3/2BnP3/3P1N2/PPP2PPP/R1BQ1RK1 b kq - 5 7",
+    "phase": "opening",
+    "pv_san": [
+     "Nxf3+",
+     "Kh1",
+     "Qd6",
+     "Qxf3",
+     "Nf6",
+     "Qg3",
+     "Nxd5",
+     "Bxd5",
+     "Qf6",
+     "f4"
+    ],
+    "win_prob_drop": 0.1221
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 7,
+   "ply": 14,
+   "san": "Qd6",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r1b1k1nr/pppp1pp1/3q3p/2bN4/2BpP3/3P1Q2/PPP2PPP/R1B2RK1 b kq - 1 9",
+    "phase": "opening",
+    "pv_san": [
+     "c6",
+     "Nc7+",
+     "Qxc7",
+     "Qxf7+",
+     "Kd8",
+     "Qxg7",
+     "d5",
+     "Qxh8",
+     "Qf7",
+     "exd5",
+     "cxd5",
+     "Qe5"
+    ],
+    "win_prob_drop": 0.1226
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 9,
+   "ply": 18,
+   "san": "Nf6",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "e5",
+    "best_uci": "e4e5",
+    "category": "hanging",
+    "fen_before": "r1b1k2r/pppp1pp1/3q1n1p/2bN4/2BpP3/3P1Q2/PPP2PPP/R1B2RK1 w kq - 2 10",
+    "foreseeable": false,
+    "hung_square": "h2",
+    "phase": "opening",
+    "pv_san": [
+     "e5",
+     "Qf8",
+     "exf6",
+     "c6",
+     "fxg7",
+     "Qxg7",
+     "Nf6+",
+     "Kf8"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.20741153636293463
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 10,
+   "ply": 19,
+   "san": "Re1",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r1b1k2r/pppp1pp1/3q1n1p/2bN4/2BpP3/3P1Q2/PPP2PPP/R1B1R1K1 b kq - 3 10",
+    "phase": "opening",
+    "pv_san": [
+     "Nxd5",
+     "exd5+",
+     "Kd8",
+     "Qxf7",
+     "Qf8",
+     "Qh5",
+     "Be7",
+     "Re4",
+     "d6",
+     "Rxd4",
+     "Bd7",
+     "Be3",
+     "Bf6",
+     "Rf4",
+     "Qe8",
+     "Qxe8+",
+     "Bxe8"
+    ],
+    "win_prob_drop": 0.1801
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 10,
+   "ply": 20,
+   "san": "c6",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "e5",
+    "best_uci": "e4e5",
+    "category": "hanging",
+    "fen_before": "r1b1k2r/pp1p1pp1/2pq1n1p/2bN4/2BpP3/3P1Q2/PPP2PPP/R1B1R1K1 w kq - 0 11",
+    "foreseeable": false,
+    "hung_square": "h2",
+    "phase": "opening",
+    "pv_san": [
+     "e5",
+     "Qf8",
+     "exf6+",
+     "Kd8",
+     "Bf4",
+     "d6",
+     "Ne7",
+     "gxf6",
+     "Nxc8",
+     "Kxc8",
+     "Bb3"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.26562532926199833
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 11,
+   "ply": 21,
+   "san": "Nxf6+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r1b1k2r/pp3pp1/2p2q1p/2b1R2Q/2Bp4/3P4/PPP2PPP/R1B3K1 b kq - 0 14",
+    "phase": "middlegame",
+    "pv_san": [
+     "Be7",
+     "Qe2",
+     "Kd8",
+     "Bf4",
+     "Qxf4",
+     "Rxe7",
+     "Rf8",
+     "Re4",
+     "Qf6",
+     "Re1"
+    ],
+    "win_prob_drop": 0.2567
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 14,
+   "ply": 28,
+   "san": "Be6",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Re1",
+    "best_uci": "f1e1",
+    "category": "hanging",
+    "fen_before": "5r2/6p1/1p2k1pp/2p1P3/p2p1PP1/8/PPPB3P/5RK1 w - - 0 27",
+    "foreseeable": false,
+    "hung_square": "f4",
+    "phase": "endgame",
+    "pv_san": [
+     "Re1",
+     "h5",
+     "h3",
+     "c4",
+     "c3",
+     "Rd8",
+     "cxd4",
+     "Rxd4"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.12898587674646622
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 27,
+   "ply": 53,
+   "san": "f5+",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "bxc5",
+    "best_uci": "b4c5",
+    "category": "hanging",
+    "fen_before": "8/8/6p1/1ppk3p/1P1p3P/3K4/2PB4/8 w - - 0 37",
+    "foreseeable": false,
+    "hung_square": "d3",
+    "phase": "endgame",
+    "pv_san": [
+     "bxc5",
+     "Kxc5",
+     "Bg5",
+     "Kd5",
+     "Bf6",
+     "b4",
+     "Bxd4",
+     "g5",
+     "hxg5",
+     "h4",
+     "g6",
+     "b3",
+     "cxb3",
+     "h3",
+     "g7"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.20637206333364755
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 37,
+   "ply": 73,
+   "san": "c3",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Ke3",
+    "best_uci": "f4e3",
+    "category": "missed_threat",
+    "fen_before": "8/8/8/2Q5/5K2/1p6/8/1k6 w - - 8 56",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "endgame",
+    "pv_san": [
+     "Ke3",
+     "Kb2",
+     "Kd3",
+     "Ka2",
+     "Qa5+",
+     "Kb2",
+     "Kd2",
+     "Kb1",
+     "Kc3",
+     "b2",
+     "Qa4",
+     "Kc1",
+     "Qc2#"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.13736406646514476
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 56,
+   "ply": 111,
+   "san": "Qf5+",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "8/8/8/5Q2/5K2/1p6/8/1k6 b - - 9 56",
+    "phase": "endgame",
+    "pv_san": [
+     "Kc1",
+     "Qc5+",
+     "Kd2",
+     "Qd4+",
+     "Kc2",
+     "Ke3",
+     "b2"
+    ],
+    "win_prob_drop": 0.1374
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 56,
+   "ply": 112,
+   "san": "Ka1",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Kc3",
+    "best_uci": "d2c3",
+    "category": "missed_threat",
+    "fen_before": "8/8/8/8/8/1p1Q4/k2K4/8 w - - 24 64",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "endgame",
+    "pv_san": [
+     "Kc3",
+     "Ka1",
+     "Qd1+",
+     "Ka2",
+     "Qxb3+",
+     "Ka1",
+     "Qb2#"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.4559296988800414
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 64,
+   "ply": 127,
+   "san": "Kc1",
+   "severity": "blunder",
+   "side": "white"
+  }
+ ],
+ "moments_dropped": 8,
+ "my_color": "white",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 87.5,
+    "black_elo": 1938,
+    "black_moves": 65,
+    "my_color": "white",
+    "white_accuracy": 88.1,
+    "white_elo": 1964,
+    "white_moves": 66
+   },
+   "black": "Opponent",
+   "date": "2026.06.25",
+   "eco": "C44",
+   "my_color": "white",
+   "opening": "Scotch Game: Benima Defense",
+   "result": "1/2-1/2",
+   "white": "Me"
+  }
+ }
+}

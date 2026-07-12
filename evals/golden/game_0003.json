@@ -1,0 +1,399 @@
+{
+ "eval_arc": {
+  "middlegame": {
+   "end": 1.0,
+   "max": 1.0,
+   "min": 0.1597
+  },
+  "opening": {
+   "end": 0.5677,
+   "max": 1.0,
+   "min": 0.2737
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 73.8,
+   "black_elo": 1321,
+   "black_moves": 19,
+   "my_color": "black",
+   "white_accuracy": 72.8,
+   "white_elo": 1276,
+   "white_moves": 19
+  },
+  "black": "Me",
+  "date": "2026.06.26",
+  "eco": "C44",
+  "my_color": "black",
+  "opening": "Scotch Game",
+  "result": "1-0",
+  "white": "Opponent"
+ },
+ "moments": [
+  {
+   "facts": {
+    "fen_before": "r1bqkbnr/pppp1ppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 2 4",
+    "phase": "opening",
+    "pv_san": [
+     "Nxd4",
+     "Nf6",
+     "Nxc6",
+     "bxc6",
+     "Bd3",
+     "d5",
+     "Qe2",
+     "dxe4",
+     "Nc3"
+    ],
+    "win_prob_drop": 0.1695
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 4,
+   "ply": 7,
+   "san": "Ng5",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r1bqkbnr/pppp1pp1/2n4p/6N1/3pP3/8/PPP2PPP/RNBQKB1R w KQkq - 0 5",
+    "phase": "opening",
+    "pv_san": [
+     "Nf3",
+     "Bc5",
+     "Bb5",
+     "a6",
+     "Bxc6",
+     "dxc6",
+     "O-O",
+     "Nf6",
+     "e5"
+    ],
+    "win_prob_drop": 0.1133
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 5,
+   "ply": 9,
+   "san": "Nxf7",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "d5",
+    "best_uci": "d7d5",
+    "category": "missed_threat",
+    "fen_before": "r1bq1bnr/pppp1kp1/2n4p/8/2BpP3/8/PPP2PPP/RNBQK2R b KQ - 1 6",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "opening",
+    "pv_san": [
+     "d5",
+     "Bxd5+",
+     "Kg6",
+     "O-O",
+     "Kh7",
+     "Bc4",
+     "Nf6",
+     "f4",
+     "g6",
+     "Bd3",
+     "Nb4",
+     "h3",
+     "Nxd3",
+     "cxd3",
+     "Be6"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.7262643485404467
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 6,
+   "ply": 12,
+   "san": "Ke8",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r1bq1bnr/ppppk1p1/2n4p/7Q/2BpP3/8/PPP2PPP/RNB1K2R w KQ - 4 8",
+    "phase": "opening",
+    "pv_san": [
+     "Qf7+",
+     "Kd6",
+     "e5+",
+     "Nxe5",
+     "Qd5+",
+     "Ke7",
+     "Qxe5#"
+    ],
+    "win_prob_drop": 0.5
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 8,
+   "ply": 15,
+   "san": "Bg5+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r1bq1b1r/ppppk1p1/2n2n1p/6BQ/2BpP3/8/PPP2PPP/RN2K2R w KQ - 6 9",
+    "phase": "opening",
+    "pv_san": [
+     "Bxf6+",
+     "gxf6",
+     "Qf7+",
+     "Kd6",
+     "Qd5+",
+     "Ke7"
+    ],
+    "win_prob_drop": 0.1491
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 9,
+   "ply": 17,
+   "san": "Qf7+",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Kc5",
+    "best_uci": "d6c5",
+    "category": "missed_threat",
+    "fen_before": "r1bq1b1r/pppp1Qp1/2nk1n1p/8/2BpPB2/8/PPP2PPP/RN2K2R b KQ - 9 10",
+    "foreseeable": true,
+    "hung_square": null,
+    "lead_in_ply": 17,
+    "phase": "opening",
+    "pv_san": [
+     "Kc5",
+     "c3",
+     "Kb6",
+     "cxd4",
+     "Qe7",
+     "Nc3",
+     "Qxf7",
+     "Bxf7",
+     "Nxd4",
+     "Be3"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.24776817793368688
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 10,
+   "ply": 20,
+   "san": "Ne5",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Kd6",
+    "best_uci": "e5d6",
+    "category": "missed_threat",
+    "fen_before": "r1bq1b1r/pppp1Qp1/5n1p/4k3/2BpPP2/8/PPP3PP/RN2K2R b KQ - 0 12",
+    "foreseeable": true,
+    "hung_square": null,
+    "lead_in_ply": 22,
+    "phase": "middlegame",
+    "pv_san": [
+     "Kd6",
+     "e5+",
+     "Kc6",
+     "exf6",
+     "d5",
+     "fxg7",
+     "Bxg7",
+     "Qxg7",
+     "dxc4",
+     "O-O",
+     "b6",
+     "Nd2",
+     "Rg8",
+     "Qxh6+",
+     "Kb7",
+     "Rae1",
+     "Qd5",
+     "Rf2",
+     "c3",
+     "bxc3",
+     "dxc3",
+     "Ne4",
+     "Re8",
+     "Qg5"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.43682358235664054
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 12,
+   "ply": 24,
+   "san": "Kxe4",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r1bq1b1r/pppp2p1/5nQp/4k3/2Bp4/8/PPP3PP/RN2KR2 w Q - 2 15",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qg3+",
+     "Ke4",
+     "Qf4#"
+    ],
+    "win_prob_drop": 0.7196
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 15,
+   "ply": 29,
+   "san": "Qf5+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r1bq1b1r/pppp2p1/5n1p/2k5/2Bp1Q2/8/PPP3PP/RN2KR2 w Q - 6 17",
+    "phase": "middlegame",
+    "pv_san": [
+     "a4",
+     "a5",
+     "Nc3",
+     "Qe7+",
+     "Be2",
+     "Kb6",
+     "Qxd4+",
+     "c5",
+     "Qc4",
+     "Ka7",
+     "Nb5+",
+     "Kb8"
+    ],
+    "win_prob_drop": 0.12
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 17,
+   "ply": 33,
+   "san": "Qf5+",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "d5",
+    "best_uci": "d7d5",
+    "category": "missed_threat",
+    "fen_before": "r1bq1b1r/pppp2p1/5n1p/2k2Q2/2Bp4/8/PPP3PP/RN2KR2 b Q - 7 17",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "middlegame",
+    "pv_san": [
+     "d5",
+     "Qe5",
+     "Bd6",
+     "b4+",
+     "Kc6",
+     "Rxf6",
+     "Qxf6",
+     "Qxd5+",
+     "Kd7"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.8403209554949015
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 17,
+   "ply": 34,
+   "san": "Kxc4",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r1bq1b1r/pppp2p1/5n1p/5Q2/2kp4/8/PPP3PP/RN2KR2 w Q - 0 18",
+    "phase": "middlegame",
+    "pv_san": [
+     "b3+",
+     "Kb4",
+     "a3#"
+    ],
+    "win_prob_drop": 0.7083
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 18,
+   "ply": 35,
+   "san": "Na3+",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Bxa3",
+    "best_uci": "f8a3",
+    "category": "missed_threat",
+    "fen_before": "r1bq1b1r/pppp2p1/5n1p/5Q2/2kp4/N7/PPP3PP/R3KR2 b Q - 1 18",
+    "foreseeable": true,
+    "hung_square": null,
+    "lead_in_ply": 34,
+    "phase": "middlegame",
+    "pv_san": [
+     "Bxa3",
+     "b3+",
+     "Kb4",
+     "c3+",
+     "Kxc3",
+     "Qa5+",
+     "Kb2",
+     "Qd2+",
+     "Kxa1",
+     "Qxd4+",
+     "Kxa2"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.708349465214807
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 18,
+   "ply": 36,
+   "san": "Kb4",
+   "severity": "blunder",
+   "side": "black"
+  }
+ ],
+ "moments_dropped": 15,
+ "my_color": "black",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 73.8,
+    "black_elo": 1321,
+    "black_moves": 19,
+    "my_color": "black",
+    "white_accuracy": 72.8,
+    "white_elo": 1276,
+    "white_moves": 19
+   },
+   "black": "Me",
+   "date": "2026.06.26",
+   "eco": "C44",
+   "my_color": "black",
+   "opening": "Scotch Game",
+   "result": "1-0",
+   "white": "Opponent"
+  }
+ }
+}
