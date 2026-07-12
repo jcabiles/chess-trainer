@@ -73,7 +73,8 @@ let analyzeColor = (readUiPrefs().analyzeColor) || 'both';
 // Engine speed preset: 'fast' | 'balanced' | 'deep'. Persisted (like analyzeColor).
 // Sent on every /api/move and /api/analyze call in this module's play-mode path.
 const VALID_ENGINE_SPEEDS = ['fast', 'balanced', 'deep'];
-let engineSpeed = VALID_ENGINE_SPEEDS.includes(readUiPrefs().engineSpeed) ? readUiPrefs().engineSpeed : 'balanced';
+const _savedSpeed = readUiPrefs().engineSpeed;
+let engineSpeed = VALID_ENGINE_SPEEDS.includes(_savedSpeed) ? _savedSpeed : 'balanced';
 // Evaluation master switch. Session-only (NOT persisted) — reload always returns to on.
 // When false, Stockfish is never called and the Analysis panel FREEZES its last eval.
 let evalEnabled = true;

@@ -56,7 +56,10 @@ def _detect_threads() -> int:
     """
     configured = os.environ.get("ENGINE_THREADS")
     if configured:
-        return max(1, int(configured))
+        try:
+            return max(1, int(configured))
+        except ValueError:
+            pass  # garbage env value must not break import — fall through
     return max(1, (os.cpu_count() or 4) - 2)
 
 
