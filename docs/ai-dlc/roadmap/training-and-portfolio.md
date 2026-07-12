@@ -24,13 +24,14 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 
 ### Chapter 1 — training (serves N1)
 
-- [ ] **1. Book-badge race fix** — problem: move played while a reset position's
+- [x] **1. Book-badge race fix** — problem: move played while a reset position's
       analysis is in flight gets its Book badge overwritten by the stale eval render
-      (backlog #14) · outcome-link: N1 (trust in labels) · pass/fail: regression
-      test or scripted Playwright repro passes — rapid move-after-reset keeps the
-      Book badge; full pytest green · appetite: hours · no-gos: no broader
-      analysisToken refactor · contracts: `contracts/appjs-split.md`,
-      `contracts/eval-toggle.md` · ICE 2·5·5=50
+      (backlog #14) · outcome-link: N1 (trust in labels) · **CLOSED 2026-07-12 as
+      already-fixed**: commit `2dec2cb` (PR #44) added an unconditional
+      `analysisToken++` after every committed move in `onUserMove` — book moves
+      included — so the stale reset-refresh render is token-dropped
+      (app.js:410/419/432 guards). Backlog #14 predates that fix; verified via
+      `git log -L` on the block + reading the guards. No code change needed.
 - [ ] **2. Eval graph** — problem: no game-level shape of a reviewed game; can't
       spot the collapse point at a glance (backlog #3) · outcome-link: N1 ·
       pass/fail: open a reviewed game → line chart of per-ply eval renders from

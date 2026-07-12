@@ -27,6 +27,11 @@ Impact = value to the user · Effort = build + verify cost. Ordered by rough imp
 | 12 | ~~**Blunder Trainer**~~ | **SHIPPED** — see `specs/blunder-trainer.md` (Leitner SR over motif buckets, Train section in Review tab). | — | — | Done. |
 | 13 | **Game-review polish** | Self-hang (not missed-threat) narration; surface time-trouble from `%clk`; auto-fetch games from lichess/chess.com APIs. | M | M | Captured-but-unused: `game_plies.clock_centis` holds clock data; self-hang blunders currently lean on the best-move suggestion; import is manual only. |
 
+| 14 | ~~**Book-badge race on rapid move-after-reset**~~ | **FIXED** (already) — PR #44's unconditional `analysisToken++` after every committed move covers the book path; the stale reset-refresh render is token-dropped. Closed 2026-07-12 during roadmap triage. | — | — | Was: pre-existing, found during blunder-trainer verification. |
+
+> **Promoted 2026-07-12:** items #1 (light theme), #2 (command palette), #3 (eval
+> graph), #13's `%clk`/auto-fetch parts, and #14 moved to the durable roadmap —
+> see `roadmap/training-and-portfolio.md`. This file stays the un-promoted idea pool.
+
 ## How to pick up an item
 Run `/ai-dlc <item>` to turn one into requirements → spec → tickets, same as the overhaul.
-| 14 | **Book-badge race on rapid move-after-reset** | A move played while the reset position's analysis is in flight gets its Book badge overwritten by the stale eval render (book responses never bump analysisToken). | L | L | Pre-existing; found during blunder-trainer verification. Fix: bump analysisToken in onUserMove's book path or token-guard applyMoveResponse. |
