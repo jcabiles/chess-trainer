@@ -37,11 +37,14 @@ far more than any opening novelty.
 
 **3. The opening phase leaks more than it should for a prepared player.**
 134 of 328 leaks (41%) happen in the opening phase — 52 of them full blunders
-(Q3). The worst offenders cluster in **Sicilian sidelines I face, not lines I
-chose**: Closed/Anti-Sveshnikov (14 blunders in 7 games), Coles Gambit (7 in
-3), Kalashnikov (5 in 2) (Q6). My prepared-repertoire trunk lines (Italian,
-Open Sicilian mainlines) barely appear in the blunder table. The problem is
-*opponent deviation handling*, not the repertoire itself.
+(Q3). The blunder table's top entries are all **opponent-chosen sidelines and
+systems, not lines I prepared**: Closed Sicilian/Anti-Sveshnikov (14 blunders
+in 7 games), Scotch/Benima (8 in 2), Coles Gambit (7 in 3), Colle (7 in 2),
+London (7 in 2), Kalashnikov (5 in 2) (Q6) — 48 blunders in 18 games across
+six lines, split between anti-Sicilian sidelines and 1.d4/1.e4 systems my
+opponents steer into. My prepared trunk lines (Italian, Open Sicilian
+mainlines) barely appear. The problem is *opponent deviation handling*, not
+the repertoire itself.
 
 **4. Colors are symmetric; there is no "weak color" story.**
 41 wins each side; 173 leaks as Black vs 155 as White (Q2, Q10) —
@@ -70,9 +73,12 @@ the parked training-effectiveness analysis, not a claim.
 2. **Drill the `hanging` bucket in the blunder trainer weekly** — it re-serves
    exactly these positions with Leitner spacing; the bucket is by far the
    deepest (Q7).
-3. **Prepare anti-sideline files** for the three Sicilian sidelines in Q6
-   (Anti-Sveshnikov, Coles Gambit, Kalashnikov) — 26 blunders in 12 games is
-   the most concentrated fixable cluster in the database.
+3. **Prepare anti-sideline files** for the six lines in Q6 — the
+   anti-Sicilians (Anti-Sveshnikov, Coles Gambit, Kalashnikov) *and* the
+   system openings (Scotch/Benima, Colle, London). 48 blunders in 18 games
+   is the most concentrated fixable cluster in the database; the Scotch and
+   London/Colle entries rank as high as the Sicilian ones and deserve equal
+   prep time.
 4. **Fetch clocked games** (auto-fetch ships with this roadmap): until
    `clock_centis` populates, the time-trouble branch of the KPI tree is
    blind — and blitz time-pressure is a plausible hidden confounder behind
@@ -122,10 +128,10 @@ SELECT SUM(l.lead_in_ply < l.ply - 1), COUNT(*)
 FROM leaks l JOIN games g ON l.game_id=g.id
 WHERE l.color=g.my_color AND g.analysis_status='done';
 
--- Q5 hope-chess games
+-- Q5 hope-chess games (exact category match — mirrors profile._hope_chess_rate)
 SELECT COUNT(DISTINCT l.game_id)
 FROM leaks l JOIN games g ON l.game_id=g.id
-WHERE l.color=g.my_color AND l.category LIKE '%threat%';
+WHERE l.color=g.my_color AND l.category = 'missed_threat';
 
 -- Q6 blunder hotspots by opening
 SELECT g.opening, COUNT(*) AS my_blunders, COUNT(DISTINCT g.id) AS games
