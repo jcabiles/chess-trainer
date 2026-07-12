@@ -69,13 +69,15 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       AA contrast hold · appetite: days · no-gos: no new backend endpoints;
       registry built from existing `api.actions` · contracts:
       `contracts/appjs-split.md` · ICE 3·4·3=36
-- [ ] **6. Light theme** — problem: dark-only; OS-light users get mismatch
-      (backlog #1) · outcome-link: N1 (weak) + N2 (visual range); user runs dark —
-      lowest rank · pass/fail: theme toggle (light/dark/system) persists via
-      prefs seam; all tokens flip via `[data-theme]` scope; AA contrast verified
-      on both themes; screenshots in PR · appetite: days · no-gos: no per-panel
-      restyling — tokens only · contracts: `contracts/ux-refinement-ux.md` ·
-      ICE 2·4·3=24
+- [x] **6. Light theme** — problem: dark-only; OS-light users get mismatch
+      (backlog #1) · outcome-link: N1 (weak) + N2 (visual range) · **CLOSED
+      2026-07-12 as already-shipped**: `static/theme.js` + `#theme-toggle`
+      header button already implement the full system→light→dark cycle with
+      prefs persistence, a pre-paint inline script, live OS-scheme tracking,
+      and complete `html[data-theme="light"]` token overrides documented as
+      AA-verified per pair (style.css:95-135). Backlog #1 predates the
+      Nocturne reskin (PR #41). Every pass/fail criterion already met in
+      shipped code; no work needed.
 
 ### Chapter 2 — portfolio (serves N2; starts after Chapter 1 is fully checked)
 

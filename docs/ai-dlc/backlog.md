@@ -13,7 +13,7 @@ Impact = value to the user · Effort = build + verify cost. Ordered by rough imp
 
 | # | Item | What it is | Impact | Effort | Notes / why deferred |
 |---|------|-----------|--------|--------|----------------------|
-| 1 | **Light / system theme** | A light mode + follow-OS / manual toggle, on top of the dark default. | M | M | Cheap now that colors are OKLCH tokens — flip a `[data-theme]` scope. Deferred: user runs dark; doubles visual test surface. |
+| 1 | ~~**Light / system theme**~~ | **SHIPPED** — theme.js + #theme-toggle (system→light→dark cycle, prefs-persisted, pre-paint script, AA-verified light tokens). Landed with the Nocturne reskin (PR #41); backlog entry was stale. | — | — | Done. |
 | 2 | **Command palette (Cmd/Ctrl-K)** | Fuzzy launcher: load FEN, flip, switch mode/tab, jump to a trap/line. | M | M | Big perceived-pro upgrade for a power user; additive module + a registry of the existing actions. |
 | 3 | **Eval graph** | A line chart of the eval across the whole game (click a point → jump). | M | M | **Unblocked for saved games:** game review now stores per-ply evals (`game_plies`), so a graph over a reviewed game is a small frontend add. Live-play games still need eval history captured. |
 | 4 | **Move-list extras** | Variation tree (branches), eval-per-move sparkline/number, NAG glyphs. | M | H | Variation tree means replacing the flat `moves[]` with a tree model — touches persist/restore + the whole move pipeline. Big. |
