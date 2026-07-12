@@ -1,5 +1,11 @@
 # Training + Portfolio Roadmap — updated 2026-07-12
 
+> **Progress 2026-07-12 (autonomous run):** every slice was implemented or
+> closed in one pass, delivered as stacked PRs **#48→#54** (merge in order;
+> each PR's base is the previous branch). Boxes below stay unchecked until
+> their full pass/fail — including the browser/live steps only the user can
+> run — actually passes. Per-slice status notes inline.
+
 Two chapters, one queue: **Chapter 1 (training features)** runs first; **Chapter 2
 (recruiter/portfolio polish)** starts only when every Chapter-1 slice is checked.
 Slices are worked strictly one at a time via `/ai-dlc` — resume from the first
@@ -39,7 +45,9 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       to that ply; works on an un-analyzed game (empty state) · appetite: days ·
       no-gos: no live-play eval history capture (saved games only); no new
       endpoints if existing review payload suffices · contracts:
-      `contracts/game-review-coaching.md` · ICE 4·4·3=48
+      `contracts/game-review-coaching.md` · ICE 4·4·3=48 ·
+      **STATUS: implemented (PR #49)** — pytest green; remaining pass/fail
+      step: user opens a reviewed game in the browser and click-jumps once
 - [ ] **3. Auto-fetch games** — problem: manual PGN import is friction; 0 of 7,551
       stored plies have clock data because pasted PGNs lack `%clk` — blocks
       time-trouble analytics (verified 2026-07-12) · outcome-link: N1 (more games,
@@ -50,17 +58,19 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       appetite: days · no-gos: no OAuth (public APIs only); no background polling
       daemon (fetch on demand); never commit fetched game data · contracts:
       `contracts/auto-analyze.md`, `contracts/game-review-coaching.md`; external
-      APIs are greenfield — /ai-dlc maps them · ICE 4·4·3=48
-- [x] **4. Time-trouble insights** — problem: user blunders under clock pressure
-      but nothing surfaces it; clock columns were empty until slice 3
-      (backlog #13 part) · outcome-link: N1 · **CLOSED 2026-07-12 as
-      already-built + chain-tested**: the card (insights.js `renderTimeTrouble`)
-      and clock-bucket analytics (`insights._time_trouble`: <10s…>2m buckets,
-      min-sample guard, honest unclocked-games note) shipped with Insights
-      Phase 2 and were dark only for lack of clock data. Slice 3 supplies the
-      data; a new integration test (`test_fetch_api.py::TestFetchLightsUpTimeTrouble`)
-      proves the full fetch → %clk → clock_centis → time-trouble chain exits
-      the empty state. Live population happens on the user's first real fetch.
+      APIs are greenfield — /ai-dlc maps them · ICE 4·4·3=48 ·
+      **STATUS: implemented (PR #50)** — 10 mock-transport tests green
+      (clocks/dedupe/tagging/errors); remaining pass/fail step: one live
+      fetch against the user's real account
+- [ ] **4. Time-trouble insights** — problem: user blunders under clock pressure
+      but nothing surfaces it; clock columns exist and are empty until slice 3
+      lands (backlog #13 part) · outcome-link: N1 · pass/fail: with clocked games
+      imported, Mistakes tab time-trouble card populates (blunder rate at low
+      clock vs otherwise, min-sample guard); empty state remains honest with no
+      clock data · appetite: days · no-gos: no per-move clock UI in replay (card
+      only, this slice) · contracts: `contracts/insights-endgames.md` (insights
+      seams) · **hard-gated: cannot start before slice 3 lands (sort floor = after
+      slice 3), regardless of ICE tie** · ICE 3·4·4=48
 - [ ] **5. Command palette** — problem: power-user navigation (load FEN, switch
       tab/mode, jump to trap/line) takes many clicks (backlog #2) · outcome-link:
       N1 (weak — friction) + N2 (perceived polish); flagged: weakest N1 link in
@@ -69,7 +79,9 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       trap, open repertoire line; keyboard-only operable; `:focus-visible` +
       AA contrast hold · appetite: days · no-gos: no new backend endpoints;
       registry built from existing `api.actions` · contracts:
-      `contracts/appjs-split.md` · ICE 3·4·3=36
+      `contracts/appjs-split.md` · ICE 3·4·3=36 ·
+      **STATUS: implemented (PR #52)** — remaining pass/fail step: user
+      presses Cmd-K once and runs a command in the browser
 - [x] **6. Light theme** — problem: dark-only; OS-light users get mismatch
       (backlog #1) · outcome-link: N1 (weak) + N2 (visual range) · **CLOSED
       2026-07-12 as already-shipped**: `static/theme.js` + `#theme-toggle`
@@ -91,7 +103,10 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       source (module/table), and an honest caveat; linked from README ≤2 clicks;
       reviewed by fresh-context reviewer for BA rigor · appetite: days (writing)
       · no-gos: no new app code; no invented metrics the app doesn't compute ·
-      contracts: none (doc-only)
+      contracts: none (doc-only) ·
+      **STATUS: delivered (PR #53)** — fresh-context verifier code-checked
+      every definition; two wording errors found and fixed. Check the box on
+      merge
 - [ ] **8. "State of my chess" analysis report** — problem: no artifact proves
       data→insight→recommendation skill — the core analytics screen · outcome-link:
       N2 · pass/fail: `docs/analytics/state-of-my-chess.md`: written analysis over
@@ -101,7 +116,10 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       fresh-context reviewer confirms every number reproduces · appetite: days ·
       no-gos: no notebooks as the deliverable; no auto-generation; personal data
       stays aggregated (no full game dumps committed) · contracts: read-only over
-      `app/profile.py` / `app/insights.py` seams
+      `app/profile.py` / `app/insights.py` seams ·
+      **STATUS: delivered (PR #53)** — verifier re-ran every appendix query
+      (all numbers reproduced); one framing issue (cherry-picked openings)
+      found and fixed. Check the box on merge
 - [ ] **9. LLM eval harness for AI commentary** — problem: the one LLM feature has
       zero quality evidence; eval design is the #1 AI-native hiring signal ·
       outcome-link: N2 · pass/fail: golden set of ≥10 reviewed games checked in
@@ -113,7 +131,11 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       README-linked; full pytest suite still passes offline · appetite: ~week ·
       no-gos: judge runs are on-demand scripts, not CI-blocking; API spend
       ceiling ~$5/run; no prompt rewrites in this slice (measure first) ·
-      contracts: `contracts/narrative-review.md`
+      contracts: `contracts/narrative-review.md` ·
+      **STATUS: harness delivered (PR #54)** — golden set (10 real sanitized
+      games), grounding checks in CI (11 tests), judge runner + agreement
+      machinery ready; remaining pass/fail steps need ANTHROPIC_API_KEY:
+      first judge run + human ratings for the agreement table
 
 ## NEXT (validated problems · not yet spec'd)
 
