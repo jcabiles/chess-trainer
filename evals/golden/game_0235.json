@@ -1,0 +1,324 @@
+{
+ "eval_arc": {
+  "endgame": {
+   "end": 0.0,
+   "max": 0.0603,
+   "min": 0.0
+  },
+  "middlegame": {
+   "end": 0.0253,
+   "max": 0.5577,
+   "min": 0.0253
+  },
+  "opening": {
+   "end": 0.5377,
+   "max": 0.5875,
+   "min": 0.2701
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 94.4,
+   "black_elo": 2248,
+   "black_moves": 51,
+   "my_color": "black",
+   "white_accuracy": 91.2,
+   "white_elo": 2104,
+   "white_moves": 52
+  },
+  "black": "Me",
+  "date": "2026.07.07",
+  "eco": "D06",
+  "my_color": "black",
+  "opening": "Queen's Gambit Declined: Marshall Defense, Tan Gambit",
+  "result": "0-1",
+  "white": "Opponent"
+ },
+ "moments": [
+  {
+   "facts": {
+    "best_san": "Qxd5",
+    "best_uci": "d8d5",
+    "fen_before": "rn1qkb1r/ppp1pppp/8/3N1b2/3P4/8/PP2PPPP/R1BQKBNR b KQkq - 0 5",
+    "gap": 0.2937,
+    "phase": "opening",
+    "pv_san": [
+     "Qxd5",
+     "f3",
+     "Bd7",
+     "e4",
+     "Qa5+",
+     "Bd2",
+     "Qb6",
+     "Bc3"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 5,
+   "ply": 10,
+   "san": "Qxd5",
+   "severity": null,
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r3kb1r/ppp1pppp/2n5/3q1b2/3P4/4P3/PP3PPP/R1BQKBNR w KQkq - 1 7",
+    "phase": "opening",
+    "pv_san": [
+     "Ne2",
+     "e5",
+     "Nc3",
+     "Bb4",
+     "a3",
+     "Bxc3+",
+     "bxc3",
+     "exd4",
+     "cxd4",
+     "Na5",
+     "Qa4+",
+     "Bd7",
+     "Qc2",
+     "Nb3",
+     "Rb1",
+     "Qa5+",
+     "Bd2",
+     "Nxd2",
+     "Qxd2",
+     "Qxa3",
+     "Rxb7",
+     "O-O",
+     "Rxc7",
+     "Rfb8"
+    ],
+    "win_prob_drop": 0.1785
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 7,
+   "ply": 13,
+   "san": "b3",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Nb4",
+    "best_uci": "c6b4",
+    "category": "discovered",
+    "fen_before": "r3kb1r/ppp1pppp/2n5/3q1b2/3P4/1P2P3/P4PPP/R1BQKBNR b KQkq - 0 7",
+    "foreseeable": false,
+    "hung_square": null,
+    "phase": "opening",
+    "pv_san": [
+     "Nb4",
+     "f4",
+     "Nc2+",
+     "Kf2",
+     "Nxa1",
+     "Bc4",
+     "Qa5",
+     "Bd2",
+     "Qxa2",
+     "Nf3",
+     "e6",
+     "Ne5"
+    ],
+    "threat_motif": "discovered",
+    "win_prob_drop": 0.17945285748443418
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 7,
+   "ply": 14,
+   "san": "e6",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Bd2",
+    "best_uci": "c1d2",
+    "fen_before": "r3k2r/ppp2ppp/2n1p3/3q1b2/1b1P4/1P2PN2/P4PPP/R1BQKB1R w KQkq - 2 9",
+    "gap": 0.2898,
+    "phase": "opening",
+    "pv_san": [
+     "Bd2",
+     "Be4",
+     "Be2",
+     "Ba3",
+     "O-O",
+     "Bb2",
+     "Rb1",
+     "Bxb1"
+    ]
+   },
+   "is_user_move": false,
+   "kind": "narrow_choice",
+   "move_number": 9,
+   "ply": 17,
+   "san": "Bd2",
+   "severity": null,
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Rxb5",
+    "best_uci": "d5b5",
+    "fen_before": "5rk1/ppp1qppp/2n1p3/1P1r4/3P4/P3PB1P/5PP1/R2Q1RK1 b - - 0 18",
+    "gap": 0.2394,
+    "phase": "middlegame",
+    "pv_san": [
+     "Rxb5",
+     "Bxc6",
+     "bxc6",
+     "Qa4",
+     "a5",
+     "Rfc1",
+     "Qd6"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 18,
+   "ply": 36,
+   "san": "Rxb5",
+   "severity": null,
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "bxc6",
+    "best_uci": "b7c6",
+    "fen_before": "5rk1/ppp1qppp/2B1p3/1r6/3P4/P3P2P/5PP1/R2Q1RK1 b - - 0 19",
+    "gap": 0.3191,
+    "phase": "middlegame",
+    "pv_san": [
+     "bxc6",
+     "Qa4",
+     "a5",
+     "Rfc1",
+     "Qd6",
+     "Qc2",
+     "Rb6",
+     "Qd3"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 19,
+   "ply": 38,
+   "san": "bxc6",
+   "severity": null,
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "5rk1/p1p2ppp/3qp3/P1p2r2/3P1P2/4P2P/6P1/R1Q2RK1 w - - 1 24",
+    "phase": "middlegame",
+    "pv_san": [
+     "dxc5",
+     "Rxc5",
+     "Qa3",
+     "Rc8",
+     "Rfd1",
+     "Qf8",
+     "Rdb1",
+     "a6"
+    ],
+    "win_prob_drop": 0.1141
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 24,
+   "ply": 47,
+   "san": "g4",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Rd5",
+    "best_uci": "f5d5",
+    "fen_before": "5rk1/p1p2ppp/3qp3/P1p2r2/3P1PP1/4P2P/8/R1Q2RK1 b - - 0 24",
+    "gap": 0.1746,
+    "phase": "middlegame",
+    "pv_san": [
+     "Rd5",
+     "Qa3",
+     "cxd4",
+     "Qxd6",
+     "cxd6",
+     "e4",
+     "Rc5",
+     "Rfb1",
+     "g5",
+     "fxg5",
+     "Rxg5",
+     "Rb7",
+     "a6"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 24,
+   "ply": 48,
+   "san": "Rd5",
+   "severity": null,
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Qxd4+",
+    "best_uci": "d6d4",
+    "fen_before": "5rk1/p1p2ppp/3qp3/P7/3R1PP1/7P/8/R1Q3K1 b - - 0 27",
+    "gap": 0.6695,
+    "phase": "middlegame",
+    "pv_san": [
+     "Qxd4+",
+     "Kg2",
+     "Rd8",
+     "a6",
+     "h6",
+     "Ra3",
+     "c5",
+     "Rc3",
+     "Rc8",
+     "Qc2",
+     "c4",
+     "f5",
+     "exf5"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 27,
+   "ply": 54,
+   "san": "Qxd4+",
+   "severity": null,
+   "side": "black"
+  }
+ ],
+ "moments_dropped": 0,
+ "my_color": "black",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 94.4,
+    "black_elo": 2248,
+    "black_moves": 51,
+    "my_color": "black",
+    "white_accuracy": 91.2,
+    "white_elo": 2104,
+    "white_moves": 52
+   },
+   "black": "Me",
+   "date": "2026.07.07",
+   "eco": "D06",
+   "my_color": "black",
+   "opening": "Queen's Gambit Declined: Marshall Defense, Tan Gambit",
+   "result": "0-1",
+   "white": "Opponent"
+  }
+ }
+}

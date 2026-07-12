@@ -1,0 +1,404 @@
+{
+ "eval_arc": {
+  "endgame": {
+   "end": 0.855,
+   "max": 0.8665,
+   "min": 0.4936
+  },
+  "middlegame": {
+   "end": 0.7846,
+   "max": 0.8067,
+   "min": 0.6913
+  },
+  "opening": {
+   "end": 0.6287,
+   "max": 0.7725,
+   "min": 0.2173
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 85.2,
+   "black_elo": 1834,
+   "black_moves": 66,
+   "my_color": "black",
+   "white_accuracy": 85.4,
+   "white_elo": 1843,
+   "white_moves": 66
+  },
+  "black": "Me",
+  "date": "2026.06.26",
+  "eco": "D04",
+  "my_color": "black",
+  "opening": "Queen's Pawn Game: Colle System, Anti-Colle",
+  "result": "1-0",
+  "white": "Opponent"
+ },
+ "moments": [
+  {
+   "facts": {
+    "best_san": "cxd4",
+    "best_uci": "c5d4",
+    "category": "hanging",
+    "fen_before": "r2qk2r/1p3ppp/p1nbpnb1/2pp4/2PP2PP/1P2PP2/PB2B3/RN1QNRK1 b kq - 0 12",
+    "foreseeable": false,
+    "hung_square": "c5",
+    "phase": "opening",
+    "pv_san": [
+     "cxd4",
+     "h5",
+     "dxe3",
+     "f4",
+     "Be4",
+     "g5",
+     "Nd7",
+     "Bxg7"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.14677507653296296
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 12,
+   "ply": 24,
+   "san": "h5",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r3k1r1/1pq2p2/p1nbpBb1/2np2Pp/2P4P/1P2PP2/P3B3/RN1QNRK1 w q - 3 17",
+    "phase": "opening",
+    "pv_san": [
+     "f4",
+     "Ne4",
+     "cxd5",
+     "exd5",
+     "Bb2",
+     "Bc5",
+     "Ng2",
+     "d4",
+     "Nd2",
+     "O-O-O",
+     "Nxe4",
+     "Bxe4",
+     "Qc1",
+     "Qe7"
+    ],
+    "win_prob_drop": 0.1378
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 17,
+   "ply": 33,
+   "san": "Nc3",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Bh2+",
+    "best_uci": "d6h2",
+    "category": "hanging",
+    "fen_before": "r3k1r1/1pq2p2/p1nbpBb1/2np2Pp/2P4P/1PN1PP2/P3B3/R2QNRK1 b q - 4 17",
+    "foreseeable": false,
+    "hung_square": "d5",
+    "phase": "opening",
+    "pv_san": [
+     "Bh2+",
+     "Kg2",
+     "Qg3+",
+     "Kh1",
+     "Qxh4",
+     "Ng2",
+     "Qh3"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.3503819903501221
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 17,
+   "ply": 34,
+   "san": "Bg3",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "3R4/5pk1/p5nr/8/5P1N/1P5K/P3B3/8 w - - 5 39",
+    "phase": "endgame",
+    "pv_san": [
+     "Kg3",
+     "Nxh4",
+     "Rd5",
+     "Ng6",
+     "Bc4",
+     "Ne7",
+     "Ra5",
+     "Rh8",
+     "Rxa6",
+     "Nf5+",
+     "Kf3",
+     "Nh4+",
+     "Ke4",
+     "Re8+",
+     "Kd4"
+    ],
+    "win_prob_drop": 0.1811
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 39,
+   "ply": 77,
+   "san": "f5",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "3R4/5pk1/p6r/5P2/7n/1P5K/P3B3/8 w - - 0 40",
+    "phase": "endgame",
+    "pv_san": [
+     "Kg4",
+     "Ng2",
+     "Kg3",
+     "Ne3",
+     "Kf4",
+     "Ng2+",
+     "Ke5",
+     "Rc6",
+     "Bd3",
+     "f6+",
+     "Kd4"
+    ],
+    "win_prob_drop": 0.2268
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 40,
+   "ply": 79,
+   "san": "Bxa6",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Kg7",
+    "best_uci": "g6g7",
+    "category": "discovered",
+    "fen_before": "1R6/1P3p2/6k1/1r6/4K3/8/8/8 b - - 0 48",
+    "foreseeable": false,
+    "hung_square": "g6",
+    "phase": "endgame",
+    "pv_san": [
+     "Kg7",
+     "Kf4",
+     "Rb1",
+     "Ke5",
+     "Rb6",
+     "Kd5",
+     "f5"
+    ],
+    "threat_motif": "discovered",
+    "win_prob_drop": 0.3550549801448297
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 48,
+   "ply": 96,
+   "san": "Kg5",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "1R6/1P3p2/8/1r4k1/4K3/8/8/8 w - - 1 49",
+    "phase": "endgame",
+    "pv_san": [
+     "Rg8+",
+     "Kf6",
+     "b8=Q",
+     "Rxb8",
+     "Rxb8",
+     "Ke6",
+     "Rb2",
+     "f5+",
+     "Kf4",
+     "Kd6"
+    ],
+    "win_prob_drop": 0.3551
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 49,
+   "ply": 97,
+   "san": "Kd4",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Kf4",
+    "best_uci": "g5f4",
+    "category": "discovered",
+    "fen_before": "1R6/1P3p2/8/1r4k1/3K4/8/8/8 b - - 2 49",
+    "foreseeable": false,
+    "hung_square": "g5",
+    "phase": "endgame",
+    "pv_san": [
+     "Kf4",
+     "Kc4",
+     "Rb1",
+     "Kc5",
+     "f5",
+     "Kc6"
+    ],
+    "threat_motif": "discovered",
+    "win_prob_drop": 0.36835676407432794
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 49,
+   "ply": 98,
+   "san": "f6",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "1R6/1P6/5p2/2K3k1/8/8/8/1r6 w - - 4 52",
+    "phase": "endgame",
+    "pv_san": [
+     "Rg8+",
+     "Kf5",
+     "b8=Q",
+     "Rxb8",
+     "Rxb8",
+     "Ke4",
+     "Rg8",
+     "Ke3",
+     "Re8+",
+     "Kf4"
+    ],
+    "win_prob_drop": 0.35
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 52,
+   "ply": 103,
+   "san": "Kd6",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Kf4",
+    "best_uci": "g5f4",
+    "category": "discovered",
+    "fen_before": "1R6/1P6/3K1p2/6k1/8/8/8/1r6 b - - 5 52",
+    "foreseeable": false,
+    "hung_square": "g5",
+    "phase": "endgame",
+    "pv_san": [
+     "Kf4",
+     "Kc5",
+     "f5",
+     "Kc4",
+     "Rb6",
+     "Kc5"
+    ],
+    "threat_motif": "discovered",
+    "win_prob_drop": 0.3577656698131323
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 52,
+   "ply": 104,
+   "san": "Kg4",
+   "severity": "blunder",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "1R6/1P6/3K1p2/8/6k1/8/8/1r6 w - - 6 53",
+    "phase": "endgame",
+    "pv_san": [
+     "Rg8+",
+     "Kf3",
+     "b8=Q",
+     "Rxb8",
+     "Rxb8",
+     "Ke4",
+     "Ke6",
+     "f5",
+     "Rb4+",
+     "Kd3",
+     "Kxf5"
+    ],
+    "win_prob_drop": 0.3587
+   },
+   "is_user_move": false,
+   "kind": "opponent_blunder",
+   "move_number": 53,
+   "ply": 105,
+   "san": "Kc7",
+   "severity": "blunder",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Kc1",
+    "best_uci": "d2c1",
+    "category": "missed_threat",
+    "fen_before": "3R4/8/8/8/5K2/8/3k1p2/8 b - - 5 65",
+    "foreseeable": true,
+    "hung_square": null,
+    "lead_in_ply": 127,
+    "phase": "endgame",
+    "pv_san": [
+     "Kc1",
+     "Rc8+",
+     "Kb1",
+     "Rb8+",
+     "Ka2",
+     "Ra8+",
+     "Kb2",
+     "Rb8+",
+     "Kc2"
+    ],
+    "threat_motif": null,
+    "win_prob_drop": 0.3608813591131842
+   },
+   "is_user_move": true,
+   "kind": "user_blunder",
+   "move_number": 65,
+   "ply": 130,
+   "san": "Kc3",
+   "severity": "blunder",
+   "side": "black"
+  }
+ ],
+ "moments_dropped": 24,
+ "my_color": "black",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 85.2,
+    "black_elo": 1834,
+    "black_moves": 66,
+    "my_color": "black",
+    "white_accuracy": 85.4,
+    "white_elo": 1843,
+    "white_moves": 66
+   },
+   "black": "Me",
+   "date": "2026.06.26",
+   "eco": "D04",
+   "my_color": "black",
+   "opening": "Queen's Pawn Game: Colle System, Anti-Colle",
+   "result": "1-0",
+   "white": "Opponent"
+  }
+ }
+}

@@ -42,6 +42,10 @@ checked in, not just claimed:
   [State of my chess](docs/analytics/state-of-my-chess.md) is a reproducible
   analytical report over the real game database — findings → ranked
   recommendations, every number traceable to a query in the appendix.
+- **The LLM feature ships with evals** — [`docs/analytics/EVALS.md`](docs/analytics/EVALS.md):
+  a checked-in golden set, deterministic grounding checks that fail CI when
+  commentary invents a move, an LLM-as-judge runner, and an explicit
+  judge-trust policy ([`evals/`](evals/)).
 
 ![Stockfish Analysis Board — the analysis board after 5…Nxe4?, showing the eval
 jump to +3.53, a **Blunder** label, the retrospective best move (5…exd4) with a

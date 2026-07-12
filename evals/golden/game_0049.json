@@ -1,0 +1,268 @@
+{
+ "eval_arc": {
+  "endgame": {
+   "end": 1.0,
+   "max": 1.0,
+   "min": 0.9199
+  },
+  "middlegame": {
+   "end": 0.932,
+   "max": 0.9356,
+   "min": 0.7692
+  },
+  "opening": {
+   "end": 0.8378,
+   "max": 0.8378,
+   "min": 0.5147
+  }
+ },
+ "header": {
+  "accuracy": {
+   "black_accuracy": 93.0,
+   "black_elo": 2185,
+   "black_moves": 64,
+   "my_color": "white",
+   "white_accuracy": 95.3,
+   "white_elo": 2288,
+   "white_moves": 64
+  },
+  "black": "Opponent",
+  "date": "2026.06.29",
+  "eco": "C54",
+  "my_color": "white",
+  "opening": "Italian Game: Classical Variation, Giuoco Pianissimo",
+  "result": "1-0",
+  "white": "Me"
+ },
+ "moments": [
+  {
+   "facts": {
+    "best_san": "dxe4",
+    "best_uci": "d3e4",
+    "fen_before": "r2q1rk1/1pp2pp1/pbn4B/3np3/PPB1b3/2PP1N2/5PPP/R2Q1RK1 w - - 0 13",
+    "gap": 0.2738,
+    "phase": "opening",
+    "pv_san": [
+     "dxe4",
+     "Nxc3",
+     "Qc2",
+     "gxh6",
+     "Qxc3",
+     "Qf6",
+     "Ra3",
+     "Nd4"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 13,
+   "ply": 25,
+   "san": "dxe4",
+   "severity": null,
+   "side": "white"
+  },
+  {
+   "facts": {
+    "fen_before": "r2q1rk1/1pp2pp1/p1n5/4p3/PPBbP3/2n2N2/2QB1PPP/R4RK1 b - - 3 15",
+    "phase": "opening",
+    "pv_san": [
+     "b5",
+     "axb5",
+     "axb5",
+     "Bxf7+",
+     "Rxf7",
+     "Bxc3",
+     "Rxa1",
+     "Bxa1",
+     "Nxb4",
+     "Qb3",
+     "c5",
+     "Bxd4",
+     "exd4"
+    ],
+    "win_prob_drop": 0.1404
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 15,
+   "ply": 30,
+   "san": "Nxb4",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "r2q1rk1/1pp2pp1/p7/4p3/PnBbP3/1Qn2N2/3B1PPP/R4RK1 b - - 1 16",
+    "phase": "opening",
+    "pv_san": [
+     "Nba2",
+     "Rxa2",
+     "Nxa2",
+     "Qxa2",
+     "b5",
+     "Bd5",
+     "c5",
+     "Bxa8",
+     "Qxa8",
+     "Ng5"
+    ],
+    "win_prob_drop": 0.128
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 16,
+   "ply": 32,
+   "san": "Ne2+",
+   "severity": "mistake",
+   "side": "black"
+  },
+  {
+   "facts": {
+    "best_san": "Bxe2",
+    "best_uci": "c4e2",
+    "fen_before": "r2q1rk1/1pp2pp1/p7/4p3/PnBbP3/1Q3N2/3BnPPP/R4RK1 w - - 2 17",
+    "gap": 0.1689,
+    "phase": "opening",
+    "pv_san": [
+     "Bxe2",
+     "Bxa1",
+     "Bxb4",
+     "Bd4",
+     "Bxf8",
+     "Qxf8",
+     "Ng5",
+     "Qe7",
+     "Qxb7",
+     "Qe8",
+     "Qb3",
+     "Rb8",
+     "Qf3",
+     "g6",
+     "Bc4",
+     "Kg7",
+     "Qh3",
+     "Rb4"
+    ]
+   },
+   "is_user_move": true,
+   "kind": "narrow_choice",
+   "move_number": 17,
+   "ply": 33,
+   "san": "Bxe2",
+   "severity": null,
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Bc3",
+    "best_uci": "a5c3",
+    "category": "hanging",
+    "fen_before": "3r2k1/2p2pp1/p7/B3N3/P2qP2P/1Q6/5PP1/R5K1 w - - 1 25",
+    "foreseeable": false,
+    "hung_square": "g1",
+    "phase": "middlegame",
+    "pv_san": [
+     "Bc3",
+     "Qc5",
+     "Qxf7+",
+     "Kh7",
+     "Qf5+",
+     "Kg8",
+     "Qe6+",
+     "Kh7",
+     "Qg6+",
+     "Kg8",
+     "Qg3",
+     "Rf8"
+    ],
+    "threat_motif": "hanging",
+    "win_prob_drop": 0.16551281056565736
+   },
+   "is_user_move": true,
+   "kind": "user_mistake",
+   "move_number": 25,
+   "ply": 49,
+   "san": "Nc6",
+   "severity": "mistake",
+   "side": "white"
+  },
+  {
+   "facts": {
+    "best_san": "Qxa1+",
+    "best_uci": "d4a1",
+    "fen_before": "3r2k1/2p2pp1/p1N5/B7/P2qP2P/1Q6/5PP1/R5K1 b - - 2 25",
+    "gap": 0.1526,
+    "phase": "middlegame",
+    "pv_san": [
+     "Qxa1+",
+     "Kh2",
+     "Rd1",
+     "Ne7+",
+     "Kf8",
+     "Nd5",
+     "Rb1",
+     "Qc3",
+     "Qxc3",
+     "Nxc3",
+     "Rb3"
+    ]
+   },
+   "is_user_move": false,
+   "kind": "narrow_choice",
+   "move_number": 25,
+   "ply": 50,
+   "san": "Qd3",
+   "severity": null,
+   "side": "black"
+  },
+  {
+   "facts": {
+    "fen_before": "3r2k1/2p2pp1/p1N5/B7/P2qP2P/1Q6/5PP1/R5K1 b - - 2 25",
+    "phase": "middlegame",
+    "pv_san": [
+     "Qxa1+",
+     "Kh2",
+     "Rd1",
+     "Ne7+",
+     "Kf8",
+     "Nd5",
+     "Rb1",
+     "Qc3",
+     "Qxc3",
+     "Nxc3",
+     "Rb3"
+    ],
+    "win_prob_drop": 0.1664
+   },
+   "is_user_move": false,
+   "kind": "opponent_mistake",
+   "move_number": 25,
+   "ply": 50,
+   "san": "Qd3",
+   "severity": "mistake",
+   "side": "black"
+  }
+ ],
+ "moments_dropped": 0,
+ "my_color": "white",
+ "profile_context": {
+  "header": {
+   "accuracy": {
+    "black_accuracy": 93.0,
+    "black_elo": 2185,
+    "black_moves": 64,
+    "my_color": "white",
+    "white_accuracy": 95.3,
+    "white_elo": 2288,
+    "white_moves": 64
+   },
+   "black": "Opponent",
+   "date": "2026.06.29",
+   "eco": "C54",
+   "my_color": "white",
+   "opening": "Italian Game: Classical Variation, Giuoco Pianissimo",
+   "result": "1-0",
+   "white": "Me"
+  }
+ }
+}
