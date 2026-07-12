@@ -36,6 +36,12 @@ checked in, not just claimed:
   [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - **Deterministic at runtime** — the game-review coach is pure Stockfish +
   python-chess with template narration: no LLM calls, no tokens, fully local.
+- **Analytics, not just code** — a [KPI tree & metric dictionary](docs/analytics/kpi-tree.md)
+  decomposes "get better at chess" into the driver metrics the app computes
+  (each with definition, source, and an honest caveat), and
+  [State of my chess](docs/analytics/state-of-my-chess.md) is a reproducible
+  analytical report over the real game database — findings → ranked
+  recommendations, every number traceable to a query in the appendix.
 
 ![Stockfish Analysis Board — the analysis board after 5…Nxe4?, showing the eval
 jump to +3.53, a **Blunder** label, the retrospective best move (5…exd4) with a
