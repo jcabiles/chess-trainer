@@ -243,8 +243,6 @@
             <option value="white">White only</option>
             <option value="black">Black only</option>
           </select>
-          <button id="eval-toggle" class="eval-toggle" type="button" aria-pressed="true"
-                  title="Pause Stockfish evaluation for lines you already know; click to resume">On</button>
         </div>
 
         <label class="engine-speed-row">
@@ -255,6 +253,34 @@
             <option value="deep">Deep</option>
           </select>
         </label>
+
+        <!-- Analysis-mode settings: collapsible disclosure (movelist-toggle pattern).
+             Ships collapsed; app.js expands it if the saved pref says so. The header
+             hint surfaces a non-Full mode while collapsed (a persisted frozen panel
+             must have a visible cause). -->
+        <div class="analysis-settings-block collapsed">
+          <button id="analysis-settings-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="analysis-settings-body">
+            <span>Analysis mode <span id="analysis-mode-hint" class="analysis-mode-hint"></span></span>
+            <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+          </button>
+          <div id="analysis-settings-body" class="analysis-settings-body">
+            <div class="analysis-mode-row">
+              <span class="eval-label" id="analysis-mode-label">Mode</span>
+              <div id="analysis-mode-seg" class="analysis-mode-seg" role="group" aria-labelledby="analysis-mode-label">
+                <button type="button" data-mode="full" aria-pressed="true"
+                        title="Evaluate every move and show all quality labels">Full</button>
+                <button type="button" data-mode="blunders" aria-pressed="false"
+                        title="Evaluate every move but only flag blunders">Blunders only</button>
+                <button type="button" data-mode="off" aria-pressed="false"
+                        title="Pause Stockfish evaluation; the panel freezes its last eval">Off</button>
+              </div>
+            </div>
+            <label class="eval-bar-toggle-row">
+              <span class="eval-label">Win-chances bar</span>
+              <input type="checkbox" id="eval-bar-visible" checked>
+            </label>
+          </div>
+        </div>
 
         <div class="analysis-eval-row">
           <div class="analysis-eval-col">

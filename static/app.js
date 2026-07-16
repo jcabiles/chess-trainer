@@ -76,17 +76,22 @@ let analyzeColor = (readUiPrefs().analyzeColor) || 'both';
 const VALID_ENGINE_SPEEDS = ['fast', 'balanced', 'deep'];
 const _savedSpeed = readUiPrefs().engineSpeed;
 let engineSpeed = VALID_ENGINE_SPEEDS.includes(_savedSpeed) ? _savedSpeed : 'balanced';
-// Evaluation master switch. Session-only (NOT persisted) — reload always returns to on.
-// When false, Stockfish is never called and the Analysis panel FREEZES its last eval.
-let evalEnabled = true;
+// Analysis mode: 'full' (evaluate + label everything) | 'blunders' (evaluate
+// everything, only surface Blunder/Checkmate/Draw/Book) | 'off' (Stockfish never
+// called; the Analysis panel FREEZES its last eval). Persisted — deliberately
+// supersedes the old eval-toggle's session-only rule; the collapsed settings
+// header shows a hint when the restored mode isn't 'full'.
+const VALID_ANALYSIS_MODES = ['full', 'blunders', 'off'];
+const _savedAnalysisMode = readUiPrefs().analysisMode;
+let analysisMode = VALID_ANALYSIS_MODES.includes(_savedAnalysisMode) ? _savedAnalysisMode : 'full';
 
 function shouldAnalyzeMove(moverColor) {
-  if (!evalEnabled) return false;
+  if (analysisMode === 'off') return false;
   return analyzeColor === 'both' || moverColor === analyzeColor;
 }
 
 function shouldAnalyzeCursor(cursor) {
-  if (!evalEnabled) return false;
+  if (analysisMode === 'off') return false;
   if (analyzeColor === 'both') return true;
   if (cursor === 0) return true; // cursor 0 EXEMPT — always show opening eval
   const before = positionAt(cursor - 1);
@@ -407,14 +412,14 @@ async function refreshAnalysis() {
   emit('analysis:start');
   setStatus('Analyzing…');
   try {
-    // Evaluation off → FREEZE: leave the panel's last-rendered eval untouched.
+    // Analysis off → FREEZE: leave the panel's last-rendered eval untouched.
     // Must NOT renderSkipped() (that blanks it); just clear status + balance the event.
-    if (!evalEnabled) { setStatus(''); emit('analysis:end'); return; }
+    if (analysisMode === 'off') { setStatus(''); emit('analysis:end'); return; }
     if (!shouldAnalyzeCursor(state.cursor)) { renderSkipped(); setStatus(''); emit('analysis:end'); return; }
     if (state.cursor === 0) {
       const data = await postJSON('/api/analyze', { fen: state.baseFen, speed: engineSpeed });
       if (myToken !== analysisToken) { emit('analysis:end'); return; } // stale — drop
-      renderAnalysis(data.analysis);
+      renderAnalysis(data.analysis, analysisOpts(data.analysis));
     } else {
       const before = positionAt(state.cursor - 1);
       const data = await postJSON('/api/move', {
@@ -489,9 +494,9 @@ async function onUserMove(orig, dest) {
   const moverColor = before.pos.turn;
   const doAnalyze = shouldAnalyzeMove(moverColor);
 
-  // Eval off still round-trips /api/move (legality + move-write), but no engine runs —
-  // so don't flash "Analyzing…". Analyze-color skip (evalEnabled, wrong color) keeps it.
-  if (evalEnabled) setStatus('Analyzing…');
+  // Analysis off still round-trips /api/move (legality + move-write), but no engine
+  // runs — so don't flash "Analyzing…". Analyze-color skip (on, wrong color) keeps it.
+  if (analysisMode !== 'off') setStatus('Analyzing…');
   let data;
   try {
     data = await postJSON('/api/move', { fen: fenBefore, move: uci, useBook: true, analyze: doAnalyze, speed: engineSpeed });
@@ -540,8 +545,12 @@ async function onUserMove(orig, dest) {
   // the engine result for the wrong side. (onUserMove renders directly, outside the
   // refreshAnalysis token machinery, so it must bump the token itself.)
   analysisToken++;
-  // Eval off → FREEZE (render nothing, keep last panel). Analyze-color skip → renderSkipped().
-  if (doAnalyze) applyMoveResponse(data); else if (evalEnabled) renderSkipped();
+  // Render gate re-reads the CURRENT mode (doAnalyze was captured pre-await): a
+  // switch to Off while /api/move was in flight must keep the panel frozen, not
+  // repaint it. Off → FREEZE. Analyze-color skip → renderSkipped().
+  if (analysisMode === 'off') { /* freeze */ }
+  else if (doAnalyze) applyMoveResponse(data);
+  else renderSkipped();
   setStatus('');
   persist();
   refreshOpeningThenTraps(); // fire-and-forget: opening then traps check, sequential
@@ -555,6 +564,19 @@ async function onUserMove(orig, dest) {
 // Delegates to the panel module — this wrapper keeps internal call sites stable.
 function renderAnalysis(a, opts = {}) {
   renderAnalysisPanel(a, opts);
+}
+
+// Blunders-only display filter. Computed at RENDER time (current mode, not one
+// captured pre-await) and threaded only at this module's play-path call sites —
+// never a flag inside panel.js, which is shared with review replay (via
+// hub.renderAnalysis) and trap practice (direct renderAnalysisPanel calls);
+// those paths must not inherit the filter. Checkmate/Draw stay visible (they
+// are game-enders, not quality coaching); eval number/bar/best-line stay too.
+function analysisOpts(a) {
+  if (analysisMode !== 'blunders') return {};
+  const q = a && a.quality;
+  if (q === 'blunder' || q === 'checkmate' || q === 'draw') return {};
+  return { suppressQuality: true, suppressRetro: true };
 }
 
 // Book move: the server skipped Stockfish (the line is known theory), so there is
@@ -575,6 +597,13 @@ function renderSkipped() {
   for (let j = state.cursor - 1; j >= 0; j--) {
     if (state.moveRetro[j]) { carried = state.moveRetro[j]; pvCursor = j; break; }
   }
+  // Blunders-only: a filtered non-blunder's "should've played" must not resurface
+  // via this carry-over after a skipped opponent ply — drop it unless the carried
+  // move actually was a blunder.
+  if (analysisMode === 'blunders' && carried && state.moveQuality[pvCursor] !== 'blunder') {
+    carried = null;
+    pvCursor = -1;
+  }
   renderSkippedPanel(carried, pvCursor);
 }
 
@@ -583,7 +612,8 @@ function renderSkipped() {
 // fallback so undo back into book restores the badge instead of a blank panel.
 function applyMoveResponse(data) {
   if (data && data.book) { renderBookMove(data); return; }
-  renderAnalysis(data && data.legal ? data.analysis : null);
+  const a = data && data.legal ? data.analysis : null;
+  renderAnalysis(a, analysisOpts(a));
 }
 
 function setStatus(msg, isError = false) {
@@ -689,7 +719,9 @@ async function loadFen() {
   state.moveRetro = [];
   state.cursor = 0;
   syncBoard();
-  renderAnalysis(data.analysis);
+  // Off → keep the frozen panel (the server analyzed anyway — /api/load has no
+  // analyze flag; that engine cost is a pre-existing gap, display-gated here).
+  if (analysisMode !== 'off') renderAnalysis(data.analysis, analysisOpts(data.analysis));
   persist();
   refreshOpeningThenTraps();
   emit('toast:show', 'Position loaded');
@@ -950,6 +982,7 @@ function init() {
       stepForward: redo,
       getState: () => state,
       getGround: () => ground,
+      getAnalysisMode: () => analysisMode, // movelist reads this to filter quality dots
       closeAnyDialog,
       enterReview,           // called by review.js when the user opens a saved game
       exitReview,            // called by review.js "Return to my game"
@@ -1105,25 +1138,76 @@ function init() {
     });
   }
 
-  // Evaluation on/off toggle (session-only; resets to on at reload)
-  const evalToggleEl = byId('eval-toggle');
-  if (evalToggleEl) {
-    const syncEvalToggle = () => {
-      evalToggleEl.setAttribute('aria-pressed', String(evalEnabled));
-      evalToggleEl.textContent = evalEnabled ? 'On' : 'Off';
-      evalToggleEl.setAttribute('aria-label', evalEnabled ? 'Evaluation on' : 'Evaluation off');
-    };
-    syncEvalToggle(); // reflect the default (on) on first paint
-    evalToggleEl.addEventListener('click', () => {
-      evalEnabled = !evalEnabled;
-      syncEvalToggle();
-      if (evalEnabled) {
-        refreshAnalysis(); // re-enabled → catch the frozen panel up to the current position
-      } else {
-        // Off → invalidate any in-flight refreshAnalysis so its late response can't render
-        // and un-freeze the panel (same supersede signal onUserMove/loadFen use).
-        analysisToken++;
-      }
+  // Analysis-mode settings: collapsible block (collapsed by default; pref-restored)
+  // holding the Full / Blunders only / Off selector and the win-chances bar toggle.
+  const settingsToggleEl = byId('analysis-settings-toggle');
+  const settingsBlockEl = settingsToggleEl ? settingsToggleEl.closest('.analysis-settings-block') : null;
+  if (settingsToggleEl && settingsBlockEl) {
+    if (readUiPrefs().analysisPanelCollapsed === false) {
+      settingsBlockEl.classList.remove('collapsed');
+      settingsToggleEl.setAttribute('aria-expanded', 'true');
+    }
+    settingsToggleEl.addEventListener('click', () => {
+      const isNowCollapsed = settingsBlockEl.classList.toggle('collapsed');
+      settingsToggleEl.setAttribute('aria-expanded', String(!isNowCollapsed));
+      writeUiPref('analysisPanelCollapsed', isNowCollapsed);
+    });
+  }
+
+  // Mode selector (replaces the old eval-toggle button; 'off' keeps its freeze
+  // semantics). The header hint names a non-Full mode even while collapsed.
+  const modeSegEl = byId('analysis-mode-seg');
+  const modeHintEl = byId('analysis-mode-hint');
+  const MODE_HINTS = { blunders: '· Blunders only', off: '· Off' };
+  const syncAnalysisMode = () => {
+    if (modeSegEl) {
+      modeSegEl.querySelectorAll('button[data-mode]').forEach((b) => {
+        b.setAttribute('aria-pressed', String(b.dataset.mode === analysisMode));
+      });
+    }
+    if (modeHintEl) modeHintEl.textContent = MODE_HINTS[analysisMode] || '';
+  };
+  const setAnalysisMode = (mode) => {
+    if (!VALID_ANALYSIS_MODES.includes(mode) || mode === analysisMode) return;
+    analysisMode = mode;
+    writeUiPref('analysisMode', mode);
+    syncAnalysisMode();
+    emit('analysis-mode:change', mode); // movelist re-renders its quality dots
+    if (mode === 'off') {
+      // Off → invalidate any in-flight refreshAnalysis so its late response can't
+      // render and un-freeze the panel (same supersede signal onUserMove/loadFen use).
+      analysisToken++;
+    } else if (state.mode === 'play') {
+      // Full↔Blunders (or leaving Off): supersede any in-flight response rendered
+      // under the old mode's filter, then catch the panel up. Guarded to play mode —
+      // flipping the selector during review replay must never hit the live engine.
+      analysisToken++;
+      refreshAnalysis();
+    }
+  };
+  if (modeSegEl) {
+    syncAnalysisMode(); // reflect the restored mode on first paint
+    modeSegEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-mode]');
+      if (btn) setAnalysisMode(btn.dataset.mode);
+    });
+  }
+
+  // Win-chances bar show/hide. Pure CSS hide (class on .board-wrap) — setEvalBar
+  // keeps painting underneath so a re-show is instantly current.
+  const evalBarCheckEl = byId('eval-bar-visible');
+  const boardWrapEl = document.querySelector('.board-wrap');
+  let evalBarHidden = readUiPrefs().evalBarHidden === true;
+  const syncEvalBarHidden = () => {
+    if (boardWrapEl) boardWrapEl.classList.toggle('eval-bar-hidden', evalBarHidden);
+    if (evalBarCheckEl) evalBarCheckEl.checked = !evalBarHidden;
+  };
+  syncEvalBarHidden(); // apply the restored pref before first paint
+  if (evalBarCheckEl) {
+    evalBarCheckEl.addEventListener('change', () => {
+      evalBarHidden = !evalBarCheckEl.checked;
+      writeUiPref('evalBarHidden', evalBarHidden);
+      syncEvalBarHidden();
     });
   }
 

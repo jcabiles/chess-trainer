@@ -1,5 +1,14 @@
 # Contracts — Evaluation on/off toggle
 
+> **Superseded in part (2026-07-16)** by the Analysis-mode panel
+> ([`analysis-mode-panel.md`](analysis-mode-panel.md) /
+> [`../specs/analysis-mode-panel.md`](../specs/analysis-mode-panel.md)):
+> the `#eval-toggle` button is gone and boolean `evalEnabled` became the 3-way
+> `analysisMode` (`full`/`blunders`/`off`); contract #6 (session-only) no longer
+> holds — the mode now persists via ui-prefs, with a collapsed-header hint as
+> the visible cause. The freeze semantics, gate folding, and supersede-token
+> contracts below still hold for `analysisMode === 'off'`.
+
 Area: the main **play / Analysis** board's move→eval trigger in `static/app.js`, plus the
 Analysis-tab control strip in `static/index.html` / `static/style.css`. Frontend-only — reuses
 infra shipped by **analyze-my-color** (`docs/ai-dlc/contracts/analyze-my-color.md`).

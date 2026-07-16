@@ -32,6 +32,19 @@ function computeSans(baseFen, moves) {
   return { sans, startFull, startWhite };
 }
 
+// Blunders-only display filter: which quality values still color a move cell.
+// Checkmate/Draw are game-enders (not quality coaching) and Book is theory info —
+// all three stay visible; only Best/Good/Inaccuracy/Mistake dots are hidden.
+// History (state.moveQuality) is never touched — switching back to Full restores
+// every dot from the intact array.
+const BLUNDERS_MODE_VISIBLE = new Set(['blunder', 'checkmate', 'draw', 'book']);
+
+function visibleQuality(q) {
+  if (!q || !_api || !_api.actions.getAnalysisMode) return q;
+  if (_api.actions.getAnalysisMode() !== 'blunders') return q;
+  return BLUNDERS_MODE_VISIBLE.has(q) ? q : null;
+}
+
 // A clickable move cell. Ply index `i` → clicking jumps to cursor = i+1 (position AFTER
 // that move); current when cursor === i+1. Quality tints the text via the shared .q-* class.
 function moveCell(san, i, quality, cursor) {
@@ -92,14 +105,14 @@ function render() {
     row.appendChild(num);
 
     if (whiteToMove) {
-      row.appendChild(moveCell(sans[i], i, quality[i], cursor));
-      if (i + 1 < sans.length) row.appendChild(moveCell(sans[i + 1], i + 1, quality[i + 1], cursor));
+      row.appendChild(moveCell(sans[i], i, visibleQuality(quality[i]), cursor));
+      if (i + 1 < sans.length) row.appendChild(moveCell(sans[i + 1], i + 1, visibleQuality(quality[i + 1]), cursor));
       else row.appendChild(spanCell('movelist-empty-cell'));
       i += 2;
     } else {
       // Line begins with Black to move: "N. … <black>", then rows are normal.
       row.appendChild(spanCell('movelist-ellipsis', '…'));
-      row.appendChild(moveCell(sans[i], i, quality[i], cursor));
+      row.appendChild(moveCell(sans[i], i, visibleQuality(quality[i]), cursor));
       i += 1;
       whiteToMove = true;
     }
@@ -135,6 +148,10 @@ export function initMovelist(api) {
     });
   }
 
-  if (api && api.on) api.on('position:change', render);
+  if (api && api.on) {
+    api.on('position:change', render);
+    // Mode flip (Full ↔ Blunders only ↔ Off) re-filters the dots without a move.
+    api.on('analysis-mode:change', render);
+  }
   render(); // initial paint
 }

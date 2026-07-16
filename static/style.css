@@ -1007,25 +1007,101 @@ body.trap-practice-mode #fen-error { display: none; }
   border-color: var(--accent);
 }
 
-/* Evaluation on/off toggle — sits inline after the Evaluate select. Grey base
-   button (like Undo/Reset) when OFF; green-filled when ON. Sized to the select. */
-.eval-toggle {
-  padding: 0.35rem 0.7rem;
-  font-size: 0.85rem;
-  margin: 0;
+/* ============================================================
+   Analysis-mode settings — collapsible disclosure in the Analysis
+   tab. Header button reuses the movelist-toggle/chevron classes
+   (movelist.css) for a matching look; only the body + segmented
+   control are styled here.
+   ============================================================ */
+
+.analysis-settings-block {
+  margin: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
 }
 
-.eval-toggle[aria-pressed="true"] {
+.analysis-settings-block.collapsed .analysis-settings-body {
+  display: none;
+}
+
+/* Chevron points right when collapsed (same motion as the move list). */
+.analysis-settings-block.collapsed .movelist-chevron {
+  transform: rotate(-90deg);
+}
+
+/* Header hint: shows the active non-Full mode while collapsed. */
+.analysis-mode-hint {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.analysis-mode-row,
+.eval-bar-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+}
+
+/* Segmented Full / Blunders only / Off selector — one bordered pill,
+   accent-filled active segment (mirrors the old eval-toggle's ON look). */
+.analysis-mode-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+
+.analysis-mode-seg button {
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.analysis-mode-seg button:last-child {
+  border-right: none;
+}
+
+.analysis-mode-seg button:hover {
+  background: color-mix(in oklch, var(--accent) 15%, transparent);
+}
+
+.analysis-mode-seg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.analysis-mode-seg button[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-on);
-  border-color: var(--accent);
   font-weight: 700;
 }
 
-.eval-toggle[aria-pressed="true"]:hover {
-  filter: brightness(1.1);
-  background: var(--accent);
-  border-color: var(--accent);
+.eval-bar-toggle-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.eval-bar-toggle-row input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Win-chances bar hidden: class set on .board-wrap by app.js. Pure CSS hide —
+   setEvalBar keeps updating underneath so a re-show is instantly current. */
+.board-wrap.eval-bar-hidden #eval-bar {
+  display: none;
 }
 
 /* ============================================================
@@ -1451,6 +1527,13 @@ cg-board square.selected {
 
   /* Eval bar mirrors the board's edge so the pair reads as one instrument. */
   #eval-bar { min-height: calc(100vw - 54px); }
+
+  /* Bar hidden → the 22px of row chrome (14px bar + 8px gap) is gone; the
+     board reclaims it so no dead gutter is left (full content width). */
+  .board-wrap.eval-bar-hidden #board {
+    width: calc(100vw - 32px);
+    height: calc(100vw - 32px);
+  }
 
   /* FEN row + mode bars stretch to the column (same width as the full
      eval-bar + board row), keeping every left/right edge on one line. */
