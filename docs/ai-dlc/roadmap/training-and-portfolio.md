@@ -188,7 +188,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       architecture; **user approves the direction before B2 starts** ·
       appetite: 2–3 days · no-gos: no production code; no engine-invariant
       change (that happens only via B2+'s specs) · ICE 5·4·4=80
-- [ ] **B2. Walking skeleton: play one full game vs one bot** — problem:
+- [x] **B2. Walking skeleton: play one full game vs one bot** — problem:
       P1/P2 need a live opponent at all before realism matters · outcome-link:
       N3 · scope: new `bot-play` mode (mode-handler registry + PRACTICE_MODES);
       a "get bot move" server call per B1's architecture (interim Stockfish

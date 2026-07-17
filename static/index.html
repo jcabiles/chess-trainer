@@ -110,6 +110,43 @@
       </div>
       <div id="fen-error" class="error" hidden></div>
 
+      <!-- Play vs Bot — collapsible disclosure in the play area (analysis-mode
+           panel is the look/feel template: movelist-toggle/chevron header,
+           collapsed by default). Static markup only — botplay.js (T5) wires
+           behavior; app.js/T3 owns mode entry via the Start button. -->
+      <div id="botplay-block" class="botplay-block collapsed">
+        <button id="botplay-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="botplay-body">
+          <span>Play vs Bot</span>
+          <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+        </button>
+        <div id="botplay-body" class="botplay-body">
+          <div class="botplay-persona-row">
+            <span id="botplay-persona" class="botplay-persona">Casual sparring bot</span>
+            <span id="botplay-maia-indicator" class="botplay-maia-indicator" title="Maia (human-style) weights readiness — informational only, not yet used to pick moves">
+              <span class="botplay-maia-dot" aria-hidden="true"></span>
+              <span id="botplay-maia-label">Maia: checking…</span>
+            </span>
+          </div>
+
+          <div class="botplay-color-row">
+            <span class="eval-label" id="botplay-color-label">Play as</span>
+            <div id="botplay-color-seg" class="botplay-color-seg analysis-mode-seg" role="radiogroup" aria-labelledby="botplay-color-label">
+              <button type="button" id="botplay-color-white" data-color="white" role="radio" aria-checked="true">White</button>
+              <button type="button" id="botplay-color-black" data-color="black" role="radio" aria-checked="false">Black</button>
+            </div>
+          </div>
+
+          <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
+
+          <div class="botplay-controls">
+            <button id="botplay-start" class="botplay-start" type="button">Start</button>
+            <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
+            <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
+          </div>
+          <div id="botplay-hint" class="botplay-hint" hidden></div>
+        </div>
+      </div>
+
       <!-- Setup (pregame) editor — shown only in setup mode -->
       <div id="setup-bar" class="setup-bar" hidden>
         <div class="setup-hint">Drag pieces to rearrange · drag off-board to delete · pick a piece below to stamp it onto squares</div>

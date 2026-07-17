@@ -27,6 +27,7 @@ import chess
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field  # bot routes (B2) define request/response models
 
 from app import (
     accuracy,
@@ -46,6 +47,13 @@ from app import (
     traps,
 )
 from app.analysis import MATE_CP, classify, cp_loss, pov_score_to_white_cp
+from app.bot_engine import (
+    BotEngine,
+    _locate_binary,
+    detect_maia,
+    get_bot_engine,
+)
+from app.bot_engine import EngineUnavailable as BotEngineUnavailable
 from app.engine import DEFAULT_DEPTH, AnalysisResult, EngineUnavailable, StockfishEngine
 from app.models import (
     Analysis,
@@ -164,6 +172,14 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         engine.close()
+        # Bot-play engine (B2): a SEPARATE Stockfish process, lazily started on
+        # first /api/bot/move. Never eagerly started here (unlike the analysis
+        # engine) — the singleton may have never spawned a binary. close() is
+        # idempotent and never raises when the engine was never started.
+        try:
+            await get_bot_engine().close()
+        except Exception as exc:  # pragma: no cover - defensive shutdown
+            logger.warning("bot engine shutdown failed: %s", exc)
 
 
 def _import_games_folder() -> None:
@@ -541,6 +557,141 @@ async def restart_engine(engine: StockfishEngine = Depends(get_engine)):
     if pending > 0:
         _kick_auto_analysis(engine)
     return EngineRestartResponse(restarted=True, running=engine.is_running)
+
+
+# ---------------------------------------------------------------------------
+# Play-vs-bot routes (B2). The bot runs on an ISOLATED weakened-Stockfish
+# process (app.bot_engine) — a separate subprocess from the analysis engine,
+# reached only via the get_bot_engine dependency (overridable in tests). The
+# server stays stateless: the client owns the game history and sends only the
+# current FEN. bot_engine's EngineUnavailable is DISTINCT from the analysis
+# engine's and maps to 503 here (the analysis engine's health is irrelevant).
+# ---------------------------------------------------------------------------
+
+#: Fuzzy persona label — deliberately no precise Elo claim (B1 §7.6). The move
+#: source is a single weakened Stockfish; B5 introduces real personas.
+BOT_PERSONA_LABEL = "Casual sparring bot"
+
+
+class BotMoveRequest(BaseModel):
+    """Body for ``POST /api/bot/move`` — the position the bot must move in."""
+
+    fen: str = Field(description="Position for the bot to move in, in FEN.")
+
+
+class BotMoveResponse(BaseModel):
+    """Response for ``POST /api/bot/move`` (camelCase, like ``MoveResponse``)."""
+
+    moveUci: str = Field(description="The bot's chosen move in UCI.")
+    moveSan: str = Field(description="The bot's chosen move in SAN.")
+    fen: str = Field(description="Position AFTER the bot's move, in FEN.")
+
+
+class BotStatusResponse(BaseModel):
+    """Response for ``GET /api/bot/status``."""
+
+    available: bool = Field(
+        description="Whether the bot's Stockfish binary is resolvable (the lazy "
+        "engine may not be running yet)."
+    )
+    personaLabel: str = Field(description="Fuzzy persona label for the default bot.")
+    maia: dict = Field(
+        description="Maia/lc0 readiness signal: {lc0: bool, weights: [paths]}."
+    )
+
+
+# The route uses ``get_bot_engine`` (the bot_engine module singleton accessor)
+# DIRECTLY as its FastAPI dependency — mirroring ``get_engine`` — so tests
+# override it via ``app.dependency_overrides[get_bot_engine]`` per the spec.
+
+
+@app.post("/api/bot/move", response_model=BotMoveResponse)
+async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)):
+    """Ask the bot for its move in ``req.fen`` and return the resulting position.
+
+    Validation ladder (each rung a distinct 400 reason) — the route owns this,
+    ``candidates()`` does not:
+      1. Parse the FEN (unparseable → 400).
+      2. ``board.is_valid()`` (syntactically fine but illegal position → 400).
+      3. Terminal check (checkmate / stalemate / insufficient material → 400).
+
+    Then ``candidates(fen, 1)`` picks the bot's move; it is applied to the board
+    and the after-move FEN is returned. A bot-engine failure (binary missing,
+    spawn failure, timeout) surfaces as 503 — independent of the analysis engine.
+    """
+    # Rung 1: parseable FEN.
+    try:
+        board = chess.Board(req.fen)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"detail": "Unparseable FEN."})
+
+    # Rung 2: legal position (rejects syntactically-fine-but-illegal FENs).
+    if not board.is_valid():
+        return JSONResponse(
+            status_code=400, content={"detail": "Illegal position."}
+        )
+
+    # Rung 3: not terminal — a bot has no move to make in a finished game.
+    if board.is_checkmate():
+        return JSONResponse(
+            status_code=400, content={"detail": "Position is checkmate."}
+        )
+    if board.is_stalemate():
+        return JSONResponse(
+            status_code=400, content={"detail": "Position is stalemate."}
+        )
+    if board.is_insufficient_material():
+        return JSONResponse(
+            status_code=400, content={"detail": "Insufficient material."}
+        )
+
+    # Ask the isolated bot engine for one move (best-first) and play it.
+    try:
+        cands = await bot.candidates(req.fen, k=1)
+    except BotEngineUnavailable:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": (
+                    "Bot engine is not available. Install Stockfish "
+                    "(`brew install stockfish`) or set STOCKFISH_PATH, then retry."
+                )
+            },
+        )
+
+    # candidates() drops entries with no PV, so it can return [] even for a
+    # non-terminal position (e.g. the engine yielded no usable line at the fixed
+    # budget). Treat that as a recoverable engine failure (503 → client Retry),
+    # not an unhandled IndexError (500).
+    if not cands:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Bot engine returned no move. Please retry."},
+        )
+
+    move = chess.Move.from_uci(cands[0]["uci"])
+    move_san = board.san(move)  # render SAN BEFORE pushing
+    board.push(move)
+    return BotMoveResponse(moveUci=move.uci(), moveSan=move_san, fen=board.fen())
+
+
+@app.get("/api/bot/status", response_model=BotStatusResponse)
+async def bot_status():
+    """Report whether the bot binary is resolvable + persona + Maia readiness.
+
+    ``available`` means the binary is resolvable — it does NOT force-start the
+    engine (runtime failures surface as 503 on ``/api/bot/move``). Never raises.
+    """
+    try:
+        _locate_binary()
+        available = True
+    except BotEngineUnavailable:
+        available = False
+    return BotStatusResponse(
+        available=available,
+        personaLabel=BOT_PERSONA_LABEL,
+        maia=detect_maia(),
+    )
 
 
 # ---------------------------------------------------------------------------

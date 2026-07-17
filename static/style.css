@@ -1098,6 +1098,130 @@ body.trap-practice-mode #fen-error { display: none; }
   outline-offset: 1px;
 }
 
+/* ============================================================
+   Play vs Bot — collapsible disclosure in the play area (board
+   column). Same movelist-toggle/chevron header pattern as the
+   Analysis-mode block above; ships collapsed. Static shell only —
+   botplay.js (T5) wires state, app.js/T3 owns mode entry.
+   ============================================================ */
+
+.botplay-block {
+  width: 480px;
+  margin: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+}
+
+.botplay-block.collapsed .botplay-body {
+  display: none;
+}
+
+.botplay-block.collapsed .movelist-chevron {
+  transform: rotate(-90deg);
+}
+
+.botplay-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.botplay-persona-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.botplay-persona {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Maia readiness indicator — subtle informational dot + label, not a
+   control. Color is set via a data attribute botplay.js toggles
+   (ready/not-ready); default (no attribute) reads as unknown/muted. */
+.botplay-maia-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.botplay-maia-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.botplay-maia-indicator[data-ready="true"] .botplay-maia-dot {
+  background: var(--accent);
+}
+
+.botplay-maia-indicator[data-ready="false"] .botplay-maia-dot {
+  background: var(--border);
+}
+
+.botplay-color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Segmented White/Black picker reuses the analysis-mode-seg look (border,
+   pill, accent-filled active segment) via the shared class on the markup;
+   only the aria-checked→visual mapping is added here since this is a
+   radiogroup, not aria-pressed buttons. */
+.botplay-color-seg button[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--accent-on);
+  font-weight: 700;
+}
+
+.botplay-status {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  min-height: 1.2em;
+}
+
+.botplay-controls {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.botplay-resign:hover {
+  border-color: var(--q-blunder-border);
+}
+
+/* Disabled state — Start button when /api/bot/status.available is false.
+   A class (not the native disabled attribute) so botplay.js can pair it
+   with the hint text below without fighting pointer-events edge cases. */
+.botplay-start.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.botplay-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.botplay-hint[hidden] { display: none; }
+
+/* Global `button { display: inline-flex }` overrides the [hidden] attr's
+   UA display:none, so the Retry button needs an explicit guard (it's shown
+   only on engine-down). id+attr specificity beats the bare `button` rule. */
+#botplay-retry[hidden],
+#botplay-resign[hidden] { display: none; }
+
 /* Win-chances bar hidden: class set on .board-wrap by app.js. Pure CSS hide —
    setEvalBar keeps updating underneath so a re-show is instantly current. */
 .board-wrap.eval-bar-hidden #eval-bar {
@@ -1540,7 +1664,8 @@ cg-board square.selected {
   .fen-row,
   .setup-bar,
   .trap-bar,
-  .rep-bar { width: auto; }
+  .rep-bar,
+  .botplay-block { width: auto; }
 
   /* Long trap/line titles wrap above their action button instead of
      forcing the header row past the viewport. */

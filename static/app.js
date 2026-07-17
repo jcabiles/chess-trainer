@@ -38,6 +38,7 @@ import { initSetup, enterSetupUI, EMPTY_PLACEMENT, INITIAL_PLACEMENT } from './s
 import { initRepertoire } from './repertoire.js';
 import { initTraps } from './traps.js';
 import { initTrainer } from './trainer.js';
+import { initBotplay } from './botplay.js';
 import { initCmdk } from './cmdk.js';
 
 // EMPTY_PLACEMENT / INITIAL_PLACEMENT are imported from setup.js (their home
@@ -60,6 +61,19 @@ const state = {
 let ground = null;
 let playSnapshot = null;   // saved play state captured when entering setup (for Cancel)
 let reviewSnapshot = null; // saved play state captured when entering review mode (transient)
+// --- bot-play carriers (owned here; consumed by botplay.js via the api hub) ---
+// The prior play session to restore when the bot game exits. Set in-memory when
+// botplay.js enters bot-play (same-session exit), or rehydrated from the
+// persisted `priorPlay` on restore() (exit after a refresh). Shape = snapshotPlay().
+let botPriorPlay = null;
+// Latest bot-game descriptor, so persist() can re-serialize the game on every
+// board change without botplay.js re-passing the whole thing. Shape:
+// { baseFen, movesUci, cursor, userColor, personaLabel, result|null }.
+let botGame = null;
+// Set true by restore() when a persisted bot game came back on the bot's turn
+// (the user's move was saved but the reply never landed before refresh).
+// botplay.js reads this once on init and schedules the pending bot move.
+let botResumePending = false;
 // Analysis request coalescing — prevents pile-ups during rapid undo/redo/move-list navigation.
 let analysisInFlight = false; // true while a refreshAnalysis fetch is in progress
 let analysisPending = false;  // true if another refresh was requested while in-flight
@@ -126,7 +140,10 @@ const _modeHandlers = Object.create(null); // { [mode]: { onMove?, exit? } }
 
 // Modes whose board moves MUST have a registered handler — falling through to
 // onUserMove would silently no-op (its early-returns), hiding a wiring bug.
-const PRACTICE_MODES = new Set(['trap-practice', 'rep-practice', 'blunder-practice']);
+// 'bot-play' is included: its user-move path lives in botplay.js's onMove (the
+// play path treats every non-play response as stale), so a missing handler
+// there must fail loudly rather than route to onUserMove.
+const PRACTICE_MODES = new Set(['trap-practice', 'rep-practice', 'blunder-practice', 'bot-play']);
 
 function registerModeHandlers(mode, handlers) {
   _modeHandlers[mode] = handlers;
@@ -149,6 +166,36 @@ function setMode(mode) {
 const STORAGE_KEY = 'chess-training:session:v1';
 
 function persist() {
+  // bot-play: survive-refresh persistence. The single STORAGE_KEY slot means the
+  // bot entry must EMBED the prior play snapshot (priorPlay) rather than coexist
+  // with a separate play entry — otherwise exit-after-refresh has nothing to
+  // restore. This branch sits ABOVE the practice-mode early-returns because those
+  // modes are transient; bot-play is not. botGame/botPriorPlay are kept current by
+  // botplay.js through the api hub; if either is missing (persist fired before the
+  // game was set up) we skip rather than write a malformed entry.
+  if (state.mode === 'bot-play') {
+    if (!botGame || !botPriorPlay) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        mode: 'bot-play',
+        botGame: {
+          baseFen: botGame.baseFen,
+          movesUci: (botGame.movesUci || []).slice(),
+          cursor: botGame.cursor | 0,
+          userColor: botGame.userColor === 'black' ? 'black' : 'white',
+          personaLabel: botGame.personaLabel || '',
+          result: botGame.result || null,
+        },
+        priorPlay: {
+          baseFen: botPriorPlay.baseFen,
+          moves: (botPriorPlay.moves || []).slice(),
+          cursor: botPriorPlay.cursor | 0,
+          orientation: botPriorPlay.orientation === 'black' ? 'black' : 'white',
+        },
+      }));
+    } catch (_) { /* best-effort */ }
+    return;
+  }
   if (state.mode === 'trap-watch') return;   // trap modes are transient — never persisted
   if (state.mode === 'trap-practice') return;// (both watch + practice)
   if (state.mode === 'rep-practice') return; // repertoire practice is transient too
@@ -193,6 +240,61 @@ function restore() {
   try {
     if (!data) return null;
 
+    if (data.mode === 'bot-play') {
+      // Validate the embedded shape. A malformed entry falls through to null so
+      // the app boots into a clean play session rather than a half-loaded bot game.
+      const bg = data.botGame;
+      const pp = data.priorPlay;
+      if (!bg || typeof bg.baseFen !== 'string' || !Array.isArray(bg.movesUci)) return null;
+      if (!pp || typeof pp.baseFen !== 'string' || !Array.isArray(pp.moves)) return null;
+      // Replay the bot game onto state.{baseFen,moves,cursor}; an illegal/unparseable
+      // move throws → caught by the outer try → null (clean fallback).
+      const pos = positionFromFen(bg.baseFen);
+      for (const uci of bg.movesUci) {
+        if (typeof uci !== 'string') return null;
+        pos.play(parseUci(uci));
+      }
+      // Validate the embedded priorPlay the SAME way — it is replayed by
+      // botExit()→restorePlay()→syncBoard() later, so a shaped-but-malformed
+      // snapshot (bad FEN / illegal move) must be rejected here, not crash on exit.
+      const ppPos = positionFromFen(pp.baseFen);
+      for (const uci of pp.moves) {
+        if (typeof uci !== 'string') return null;
+        ppPos.play(parseUci(uci));
+      }
+      const cursor = Math.min(Math.max(0, bg.cursor | 0), bg.movesUci.length);
+      const userColor = bg.userColor === 'black' ? 'black' : 'white';
+      state.mode = 'bot-play';
+      state.baseFen = bg.baseFen;
+      state.moves = bg.movesUci.slice();
+      state.moveQuality = [];
+      state.moveRetro = [];
+      state.cursor = cursor;
+      state.orientation = userColor;
+      // Keep the hub carriers current so a subsequent persist() re-serializes cleanly
+      // and botplay.js's exit can restore the prior play session post-refresh.
+      botGame = {
+        baseFen: bg.baseFen,
+        movesUci: bg.movesUci.slice(),
+        cursor,
+        userColor,
+        personaLabel: bg.personaLabel || '',
+        result: bg.result || null,
+      };
+      botPriorPlay = {
+        baseFen: pp.baseFen,
+        moves: pp.moves.slice(),
+        cursor: pp.cursor | 0,
+        orientation: pp.orientation === 'black' ? 'black' : 'white',
+      };
+      // Turn check: if the game isn't already over and it is the BOT's turn, the
+      // reply never came back before the refresh — flag it so botplay.js schedules
+      // the pending bot move on init. (positionAt() uses state, set above.)
+      const botColor = userColor === 'white' ? 'black' : 'white';
+      botResumePending = !botGame.result && (positionAt(cursor).pos.turn === botColor);
+      return { mode: 'bot-play' };
+    }
+
     if (data.mode === 'setup') {
       if (typeof data.setupPlacement !== 'string') return null;
       state.mode = 'setup';
@@ -235,6 +337,7 @@ function snapshotPlay() {
     moveQuality: state.moveQuality.slice(),
     moveRetro: state.moveRetro.slice(),
     cursor: state.cursor,
+    orientation: state.orientation,
   };
 }
 
@@ -248,10 +351,137 @@ function restorePlay(snap) {
   state.moveQuality = (snap.moveQuality || []).slice();
   state.moveRetro = (snap.moveRetro || []).slice();
   state.cursor = snap.cursor | 0;
+  // Round-trip orientation so exiting bot-play restores the prior board side
+  // (bot entry flipped it to the user's color). Tolerate the legacy shape.
+  if (snap.orientation) state.orientation = snap.orientation === 'black' ? 'black' : 'white';
 }
 
 function getPlaySnapshot() { return playSnapshot; }
 function setPlaySnapshot(snap) { playSnapshot = snap; }
+
+// ---------------------------------------------------------------------------
+// Bot-play hub seam (owned here; the whole surface botplay.js — T5 — compiles
+// against). botplay.js receives the injected `api` and NEVER imports app.js, so
+// everything it needs is reachable through these functions.
+//
+//   botEnter(prior)          — enter bot-play. `prior` = a snapshotPlay()-shaped
+//                              object (or omitted → capture the current play
+//                              session). Stashed in-memory for same-session exit.
+//   botExit()                — leave bot-play: restore the prior play session
+//                              (in-memory snapshot, or the persisted priorPlay
+//                              after a refresh) and setMode('play').
+//   botSetGame(game)         — set/replace the current bot-game descriptor
+//                              { baseFen, movesUci, cursor, userColor,
+//                              personaLabel, result|null }. Persisted by persist().
+//   botGetGame()             — read the current bot-game descriptor (or null).
+//   botAppendMove(uci)       — truncate history at cursor (redo suffix), push
+//                              `uci`, advance cursor; mirrors state into botGame.
+//   botSetResult(result)     — record a terminal result string (or null) on the
+//                              bot game (drives persist + resume turn-check).
+//   botConsumeResumePending()— read-and-clear the restore-time "bot to move" flag
+//                              (true when a refresh landed on the bot's turn).
+//   setBoardPosition(fen)    — set the chessground board to a raw FEN (board part).
+//   setOrientation(color)    — orient the board to 'white' | 'black'.
+//   setMovable(color, dests) — set which side may move + its legal dests
+//                              (Map<string,string[]>); pass color=null to freeze
+//                              the board (bot's turn / finished game).
+// (persist, refreshAnalysis, setMode, snapshotPlay/restorePlay, positionFromFen,
+//  positionAt, fenOf, isPromotion, askPromotion, postJSON are already on the hub.)
+// ---------------------------------------------------------------------------
+
+// Enter bot-play. Captures the prior play session (in-memory) for same-session
+// exit; botplay.js calls this before setMode('bot-play'). If a snapshot is passed
+// it is used verbatim (e.g. a caller that already snapshotted).
+function botEnter(prior) {
+  botPriorPlay = prior || snapshotPlay();
+  botResumePending = false;
+}
+
+// Restore the prior play session and return to play mode. Prefers the in-memory
+// snapshot (same session); falls back to the persisted priorPlay rehydrated by
+// restore() after a refresh. Clears bot carriers, then normal play persist()
+// resumes ownership of the STORAGE_KEY slot.
+function botExit() {
+  // Invalidate any analysis started while in bot-play: restorePlay bumps
+  // moveToken, but an in-flight refreshAnalysis keys off analysisToken and would
+  // otherwise render a bot-position eval onto the restored play board.
+  analysisToken++;
+  const snap = botPriorPlay || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
+  restorePlay(snap);
+  botGame = null;
+  botPriorPlay = null;
+  botResumePending = false;
+  setMode('play');
+  syncBoard();
+  persist();
+}
+
+function botSetGame(game) {
+  botGame = game ? {
+    baseFen: game.baseFen,
+    movesUci: (game.movesUci || []).slice(),
+    cursor: game.cursor | 0,
+    userColor: game.userColor === 'black' ? 'black' : 'white',
+    personaLabel: game.personaLabel || '',
+    result: game.result || null,
+  } : null;
+  // Mirror into the canonical play-state so syncBoard/refreshAnalysis operate on it.
+  // This is a wholesale state swap (like restorePlay): bump both guards so a
+  // play-mode move-write or analysis response still in flight from BEFORE the swap
+  // (e.g. a late /api/move when both old and new cursor are 0) is dropped, not
+  // committed onto the bot game.
+  if (botGame) {
+    moveToken++;
+    analysisToken++;
+    state.baseFen = botGame.baseFen;
+    state.moves = botGame.movesUci.slice();
+    state.cursor = botGame.cursor;
+  }
+}
+
+function botGetGame() { return botGame; }
+
+// Append a user/bot move to the bot game's client history: truncate any redo
+// suffix at the cursor, push, advance. Keeps state.moves and botGame in lockstep.
+function botAppendMove(uci) {
+  if (!botGame) return;
+  const at = botGame.cursor;
+  botGame.movesUci = botGame.movesUci.slice(0, at);
+  botGame.movesUci.push(uci);
+  botGame.cursor = at + 1;
+  state.moves = botGame.movesUci.slice();
+  state.cursor = botGame.cursor;
+}
+
+function botSetResult(result) {
+  if (botGame) botGame.result = result || null;
+}
+
+function botConsumeResumePending() {
+  const v = botResumePending;
+  botResumePending = false;
+  return v;
+}
+
+// --- board control helpers (bot-play; thin wrappers over ground.set) ---------
+
+function setBoardPosition(fen) {
+  if (ground) ground.set({ fen: fen.split(' ')[0] });
+}
+
+function setOrientation(color) {
+  state.orientation = color === 'black' ? 'black' : 'white';
+  if (ground) ground.set({ orientation: state.orientation });
+}
+
+// color=null freezes the board (no side may move — bot's turn or finished game).
+function setMovable(color, dests) {
+  if (!ground) return;
+  ground.set({
+    movable: { free: false, color: color || undefined, dests: color ? dests : undefined },
+    draggable: { enabled: !!color, deleteOnDropOff: false },
+  });
+}
 
 // --- position helpers ------------------------------------------------------
 
@@ -474,7 +704,12 @@ async function onUserMove(orig, dest) {
   // the commit off `insertAt` (not a re-read of state.cursor) is the actual fix.
   const insertAt = state.cursor;
   const myMove = ++moveToken;
-  const stale = () => state.mode !== 'play' || myMove !== moveToken || state.cursor !== insertAt;
+  // Mode gate accepts play OR bot-play (Gate-1: live eval stays on during bot
+  // games). The token + cursor checks are the real staleness discipline: a late
+  // response after a bot reply moved the position (or after a mode exit) fails
+  // myMove/cursor and is dropped. botplay.js owns bot moves via its own onMove,
+  // so onUserMove won't normally run in bot-play, but the gate stays consistent.
+  const stale = () => (state.mode !== 'play' && state.mode !== 'bot-play') || myMove !== moveToken || state.cursor !== insertAt;
 
   let promo = '';
   if (isPromotion(before.pos, orig, dest)) {
@@ -795,6 +1030,7 @@ const MODE_INDICATOR = {
   'trap-practice': 'Practising a trap — pick any tab to leave.',
   'rep-practice': 'Practising a prepared line — pick any tab to leave.',
   'blunder-practice': 'In a blunder drill — pick any tab to leave.',
+  'bot-play': 'Playing vs a bot — pick any tab to leave.',
   review: 'Reviewing a saved game — pick any tab to leave.',
 };
 
@@ -1014,6 +1250,17 @@ function init() {
       fenOf,
       lastMoveSquares,
       refreshOpeningThenTraps,
+      // --- bot-play seam (consumed by botplay.js / T5) ---
+      botEnter,
+      botExit,
+      botSetGame,
+      botGetGame,
+      botAppendMove,
+      botSetResult,
+      botConsumeResumePending,
+      setBoardPosition,
+      setOrientation,
+      setMovable,
     },
     on,
     emit,
@@ -1078,12 +1325,26 @@ function init() {
   initRepertoire(api);
   initTraps(api);
   initTrainer(api);
+  initBotplay(api);
   initCmdk(api);
 
   // Play controls
   byId('undo').addEventListener('click', undo);
   byId('redo').addEventListener('click', redo);
   byId('flip').addEventListener('click', flip);
+  // Undo/redo are disabled in bot-play until B6 adds a real takeback control.
+  // undo()/redo() already no-op outside play mode (and shortcuts.js gates ArrowKeys
+  // + Ctrl-Z to play mode), so this only reflects that state on the buttons.
+  // Re-enabled on any transition back to a non-bot mode.
+  const undoBtnEl = byId('undo');
+  const redoBtnEl = byId('redo');
+  const syncTakebackButtons = (mode) => {
+    const disabled = mode === 'bot-play';
+    if (undoBtnEl) undoBtnEl.disabled = disabled;
+    if (redoBtnEl) redoBtnEl.disabled = disabled;
+  };
+  on('mode:change', syncTakebackButtons);
+  syncTakebackButtons(state.mode); // reflect a session restored directly into bot-play
   byId('reset').addEventListener('click', reset);
   byId('load-fen').addEventListener('click', loadFen);
   byId('fen-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadFen(); });
@@ -1177,10 +1438,12 @@ function init() {
       // Off → invalidate any in-flight refreshAnalysis so its late response can't
       // render and un-freeze the panel (same supersede signal onUserMove/loadFen use).
       analysisToken++;
-    } else if (state.mode === 'play') {
+    } else if (state.mode === 'play' || state.mode === 'bot-play') {
       // Full↔Blunders (or leaving Off): supersede any in-flight response rendered
-      // under the old mode's filter, then catch the panel up. Guarded to play mode —
-      // flipping the selector during review replay must never hit the live engine.
+      // under the old mode's filter, then catch the panel up. Gated to play/bot-play
+      // (Gate-1: eval panel stays usable during bot games) — flipping the selector
+      // during review replay must never hit the live engine. refreshAnalysis()'s
+      // own analysisToken guard drops a superseded response (e.g. after a bot reply).
       analysisToken++;
       refreshAnalysis();
     }

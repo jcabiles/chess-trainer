@@ -1,0 +1,493 @@
+// botplay.js — bot-play mode (B2 walking skeleton). Play one full untimed game
+// against one default weakened-Stockfish bot in the browser. Receives the
+// injected `api` hub at init and NEVER imports app.js back (hub → feature leaf).
+//
+// Owns: the module-scoped `busy` single-flight gate and `replyToken` staleness
+// counter. Everything about app state (history, board, persistence, analysis
+// refresh) is reached ONLY through the injected api hub's bot-play seam (T3):
+//   botEnter/botExit/botSetGame/botGetGame/botAppendMove/botSetResult/
+//   botConsumeResumePending, setBoardPosition/setOrientation/setMovable,
+//   plus the shared persist/refreshAnalysis/setMode/setStatus/postJSON and
+//   positionFromFen/positionAt/fenOf/isPromotion/askPromotion.
+//
+// Staleness discipline (the whole risk of this ticket): a bot reply is a token
+// minted BEFORE the think-timer. It is re-checked inside the timer callback AND
+// again after the /api/bot/move await (the traps.js scheduled-callback idiom +
+// app.js's mint-token-before-await pattern). The token is INVALIDATED on: mode
+// exit, new game, color change, resign, an already-recorded terminal result,
+// and restart. Any callback whose token no longer matches drops silently.
+
+import { INITIAL_FEN } from 'https://esm.sh/chessops@0.14.2/fen';
+import { chessgroundDests } from 'https://esm.sh/chessops@0.14.2/compat';
+
+let _api = null;
+let busy = false;          // single-flight: one in-flight bot request/timer max
+let replyToken = 0;        // staleness guard for the scheduled bot reply
+let thinkTimer = null;     // handle of the pending think-delay timer (if any)
+let retryFen = null;       // FEN we owe a bot move for (engine-down Retry target)
+
+const byId = (id) => document.getElementById(id);
+const state = () => _api.actions.getState();
+const hub = () => _api.hub;
+
+const THINK_MIN_MS = 400;
+const THINK_MAX_MS = 800;
+
+// --- helpers ---------------------------------------------------------------
+
+// Invalidate any scheduled/in-flight bot reply. Called on every event that must
+// abandon a pending bot move: exit, new game, color change, resign, terminal,
+// restart. Bumping the token makes both the timer callback and the post-await
+// re-check fail their equality test and drop silently; we also clear the timer
+// so a not-yet-fired think-delay never fires at all.
+function invalidateReply() {
+  replyToken++;
+  if (thinkTimer !== null) {
+    clearTimeout(thinkTimer);
+    thinkTimer = null;
+  }
+}
+
+// Current game FEN (full FEN) from the client-owned history via the hub.
+function currentFen() {
+  const { pos } = hub().positionAt(state().cursor);
+  return hub().fenOf(pos);
+}
+
+// chessops position at the current cursor.
+function currentPos() {
+  return hub().positionAt(state().cursor).pos;
+}
+
+// Does `pos` end the game automatically (mate / stalemate / insufficient)?
+// Returns a result string for botSetResult + a status line, or null if live.
+// Claimable draws (threefold / 50-move) are OUT of scope for the skeleton.
+function autoOutcome(pos) {
+  if (pos.isCheckmate()) {
+    // The side to move is checkmated → the OTHER side won.
+    const winner = pos.turn === 'white' ? 'black' : 'white';
+    return { result: winner === 'white' ? '1-0' : '0-1', text: `Checkmate — ${winner} wins.` };
+  }
+  if (pos.isStalemate()) return { result: '1/2-1/2', text: 'Stalemate — draw.' };
+  if (pos.isInsufficientMaterial()) return { result: '1/2-1/2', text: 'Insufficient material — draw.' };
+  return null;
+}
+
+// Freeze the board to no side (bot's turn or finished game).
+function freezeBoard() {
+  hub().setMovable(null, null);
+}
+
+// Human-readable line for a finished game from the user's perspective. Used when
+// a completed game is restored after a refresh (the exact end-reason isn't
+// persisted, only the result string).
+function resultLine(result, userColor) {
+  if (result === '1/2-1/2') return 'Game over — draw.';
+  const userWon = (result === '1-0' && userColor === 'white')
+               || (result === '0-1' && userColor === 'black');
+  return userWon ? 'Game over — you win.' : 'Game over — bot wins.';
+}
+
+// Roll the board back to the current game position after a rejected/failed user
+// move. Restores the FEN, and if it is still the user's live turn re-establishes
+// their legal dests (a rejected drag otherwise leaves the board un-interactive).
+function rollback() {
+  hub().setBoardPosition(currentFen());
+  const game = hub().botGetGame();
+  if (game && !game.result && !busy && state().mode === 'bot-play'
+      && currentPos().turn === game.userColor) {
+    giveUserTurn();
+  }
+}
+
+// Hand the turn to the user: movable = their color with legal dests (only when
+// it is actually their turn; chessground's turnColor already reflects the FEN).
+function giveUserTurn() {
+  const game = hub().botGetGame();
+  if (!game) return;
+  const pos = currentPos();
+  hub().setMovable(game.userColor, chessgroundDests(pos));
+}
+
+function setStatusLine(msg) {
+  const el = byId('botplay-status');
+  if (el) el.textContent = msg || '';
+}
+
+function showRetry(show) {
+  const el = byId('botplay-retry');
+  if (el) el.hidden = !show;
+}
+
+function showResign(show) {
+  const el = byId('botplay-resign');
+  if (el) el.hidden = !show;
+}
+
+// Sync the Resign/Retry/Start visibility + status for the current game phase.
+function reflectControls() {
+  const game = hub().botGetGame();
+  const active = state().mode === 'bot-play' && game && !game.result;
+  showResign(!!active);
+  const startBtn = byId('botplay-start');
+  if (startBtn) startBtn.textContent = (game && game.result) ? 'New game' : 'Start';
+}
+
+// --- collapse toggle + color radiogroup ------------------------------------
+
+function wireToggle() {
+  const block = byId('botplay-block');
+  const toggle = byId('botplay-toggle');
+  if (!block || !toggle) return;
+  toggle.addEventListener('click', () => {
+    const collapsed = block.classList.toggle('collapsed');
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  });
+}
+
+function chosenColor() {
+  const white = byId('botplay-color-white');
+  return (white && white.getAttribute('aria-checked') === 'true') ? 'white' : 'black';
+}
+
+function wireColorPicker() {
+  const white = byId('botplay-color-white');
+  const black = byId('botplay-color-black');
+  if (!white || !black) return;
+  const pick = (color) => {
+    // Inert while a request/timer is pending (single-flight) or a game is live.
+    if (busy) return;
+    const game = hub().botGetGame();
+    if (game && !game.result && state().mode === 'bot-play') return; // can't switch mid-game
+    white.setAttribute('aria-checked', String(color === 'white'));
+    black.setAttribute('aria-checked', String(color === 'black'));
+  };
+  white.addEventListener('click', () => pick('white'));
+  black.addEventListener('click', () => pick('black'));
+}
+
+// --- status probe (persona label + Maia dot + Start availability) ----------
+
+async function probeStatus() {
+  let data;
+  try {
+    const res = await fetch('/api/bot/status');
+    data = await res.json();
+  } catch (_) {
+    data = { available: false, personaLabel: '', maia: { lc0: false, weights: [] } };
+  }
+
+  const persona = byId('botplay-persona');
+  if (persona && data.personaLabel) persona.textContent = data.personaLabel;
+
+  const indicator = byId('botplay-maia-indicator');
+  const maiaLabel = byId('botplay-maia-label');
+  const ready = !!(data.maia && data.maia.lc0 && data.maia.weights && data.maia.weights.length);
+  if (indicator) indicator.dataset.ready = String(ready);
+  if (maiaLabel) maiaLabel.textContent = ready ? 'Maia: ready' : 'Maia: not installed';
+
+  const startBtn = byId('botplay-start');
+  const hint = byId('botplay-hint');
+  if (!data.available) {
+    if (startBtn) startBtn.classList.add('is-disabled');
+    if (hint) { hint.hidden = false; hint.textContent = 'Bot engine unavailable — install Stockfish to play.'; }
+  } else {
+    if (startBtn) startBtn.classList.remove('is-disabled');
+    if (hint) { hint.hidden = true; hint.textContent = ''; }
+  }
+  return data;
+}
+
+// --- start / new game ------------------------------------------------------
+
+function startGame() {
+  if (busy) return;
+  const startBtn = byId('botplay-start');
+  if (startBtn && startBtn.classList.contains('is-disabled')) return;
+
+  // Any prior scheduled reply is dead the moment a new game begins.
+  invalidateReply();
+  retryFen = null;
+  showRetry(false);
+
+  const userColor = chosenColor();
+
+  // Enter bot-play: capture the prior play session ONCE. If we're already in
+  // bot-play (a "New game" / mid-game restart), botEnter() must NOT re-run —
+  // by now the bot line has been mirrored into play-state, so a fresh
+  // snapshotPlay() would overwrite the real prior play session with the bot
+  // position and permanently lose the user's exit target. Only capture on the
+  // genuine play→bot transition. botEnter() must precede setMode (T3 contract).
+  const alreadyInBot = state().mode === 'bot-play' && hub().botGetGame();
+  if (!alreadyInBot) hub().botEnter();
+  hub().botSetGame({
+    baseFen: INITIAL_FEN,
+    movesUci: [],
+    cursor: 0,
+    userColor,
+    personaLabel: (byId('botplay-persona') || {}).textContent || '',
+    result: null,
+  });
+  hub().setMode('bot-play');
+  hub().setOrientation(userColor);
+  hub().setBoardPosition(INITIAL_FEN);
+
+  reflectControls();
+  hub().persist();
+  hub().refreshAnalysis();
+
+  if (userColor === 'black') {
+    // Bot is White → it moves first.
+    setStatusLine('Bot is thinking…');
+    freezeBoard();
+    scheduleBotReply();
+  } else {
+    setStatusLine('Your move.');
+    giveUserTurn();
+  }
+}
+
+// --- user move (onMove handler) --------------------------------------------
+//
+// Mirrors app.js onUserMove's promotion + legality flow, but writes to the
+// bot game's client history via the hub. There is no cross-await staleness risk
+// on the user's own move here beyond the promotion dialog: after promotion we
+// re-validate mode + that the game is still live before committing.
+
+async function onMove(orig, dest) {
+  const game = hub().botGetGame();
+  if (state().mode !== 'bot-play' || !game) return;
+  // Finished game or bot's turn or an in-flight request → reject, snap back.
+  if (game.result || busy) { rollback(); return; }
+
+  const pos = currentPos();
+  // The user may only move their own color.
+  if (pos.turn !== game.userColor) { rollback(); return; }
+
+  let promo = '';
+  if (hub().isPromotion(pos, orig, dest)) {
+    try {
+      promo = await hub().askPromotion();
+    } catch (_) {
+      rollback(); // dialog cancelled — restore board + user dests
+      return;
+    }
+    // Mode/game may have changed while the dialog was open.
+    const g2 = hub().botGetGame();
+    if (state().mode !== 'bot-play' || !g2 || g2.result || busy) {
+      rollback();
+      return;
+    }
+  }
+
+  const uci = orig + dest + promo;
+
+  // Validate legality against the current position's legal dests.
+  const dests = chessgroundDests(currentPos());
+  const fromDests = dests.get(orig);
+  if (!fromDests || !fromDests.includes(dest)) {
+    hub().setBoardPosition(currentFen());
+    return;
+  }
+
+  // Commit: append to client history, detect terminal, persist, refresh eval.
+  // ORDERING CONTRACT (T3): botAppendMove → botSetResult(if terminal) →
+  // persist → refreshAnalysis.
+  hub().botAppendMove(uci);
+  const after = currentPos();
+  const outcome = autoOutcome(after);
+  if (outcome) hub().botSetResult(outcome.result);
+  hub().persist();
+  hub().refreshAnalysis();
+
+  if (outcome) {
+    // User's move ended the game — no bot reply.
+    invalidateReply();
+    setStatusLine(outcome.text);
+    freezeBoard();
+    reflectControls();
+    return;
+  }
+
+  // Hand the turn to the bot: freeze the board and schedule the reply.
+  setStatusLine('Bot is thinking…');
+  freezeBoard();
+  scheduleBotReply();
+}
+
+// --- auto-reply (bot move) -------------------------------------------------
+//
+// Staleness idiom: mint `myToken` BEFORE the timer. Re-check inside the timer
+// callback (mode still bot-play, token current, no result). Then POST. After the
+// await, re-check the token again — if superseded, drop silently.
+
+function scheduleBotReply() {
+  const myToken = ++replyToken; // mint before the timer
+  busy = true;
+  const fen = currentFen();
+  retryFen = fen;
+
+  const delay = THINK_MIN_MS + Math.floor(Math.random() * (THINK_MAX_MS - THINK_MIN_MS + 1));
+  thinkTimer = setTimeout(() => {
+    thinkTimer = null;
+    // Guard: exit/new-game/color/resign/terminal/restart may have fired while
+    // we waited (traps.js scheduled-callback idiom). If our token is superseded,
+    // a NEWER operation owns the busy gate — return WITHOUT clearing busy (the
+    // owner clears it; the invalidating events all reset busy at their call site).
+    if (myToken !== replyToken) return;
+    const game = hub().botGetGame();
+    if (state().mode !== 'bot-play' || !game || game.result) { busy = false; return; }
+    void requestBotMove(myToken, fen);
+  }, delay);
+}
+
+async function requestBotMove(myToken, fen) {
+  let data;
+  try {
+    data = await hub().postJSON('/api/bot/move', { fen });
+  } catch (err) {
+    // Engine down / network failure. The token may already be stale (resign,
+    // exit) — in that case a newer op owns the gate, so drop WITHOUT clearing
+    // busy and DON'T surface an error.
+    if (myToken !== replyToken) return;
+    if (state().mode !== 'bot-play') { busy = false; return; }
+    const game = hub().botGetGame();
+    if (!game || game.result) { busy = false; return; }
+    busy = false;
+    retryFen = fen;
+    setStatusLine('Bot engine unavailable — your move is saved. Retry?');
+    showRetry(true);
+    return;
+  }
+
+  // Re-check the token AFTER the await (app.js mint-before-await pattern). If
+  // superseded, a newer op owns the gate — return without clearing busy.
+  if (myToken !== replyToken) return;
+  if (state().mode !== 'bot-play') { busy = false; return; }
+  const game = hub().botGetGame();
+  if (!game || game.result) { busy = false; return; }
+
+  // Defensive: the reply must apply to the position we asked about. If the
+  // client history moved on (shouldn't happen while the board is frozen), drop.
+  if (currentFen() !== fen) { busy = false; return; }
+
+  showRetry(false);
+  retryFen = null;
+
+  // Apply the bot move. ORDERING CONTRACT (T3): botAppendMove →
+  // botSetResult(if terminal) → persist → refreshAnalysis → hand turn back.
+  hub().botAppendMove(data.moveUci);
+  const after = currentPos();
+  const outcome = autoOutcome(after);
+  if (outcome) hub().botSetResult(outcome.result);
+  hub().persist();
+  hub().refreshAnalysis();
+  busy = false;
+
+  if (outcome) {
+    invalidateReply();
+    setStatusLine(outcome.text);
+    freezeBoard();
+    reflectControls();
+    return;
+  }
+
+  setStatusLine('Your move.');
+  giveUserTurn();
+}
+
+// --- resign / retry --------------------------------------------------------
+
+function resign() {
+  const game = hub().botGetGame();
+  if (state().mode !== 'bot-play' || !game || game.result) return;
+  // Resign kills any in-flight/scheduled bot reply — the reply, if it lands,
+  // must be dropped (token invalidated), and the result stands.
+  invalidateReply();
+  busy = false;
+  retryFen = null;
+  showRetry(false);
+  // Opponent (the bot) wins.
+  const result = game.userColor === 'white' ? '0-1' : '1-0';
+  hub().botSetResult(result);
+  hub().persist();
+  setStatusLine('You resigned — bot wins.');
+  freezeBoard();
+  reflectControls();
+}
+
+function retry() {
+  const game = hub().botGetGame();
+  if (state().mode !== 'bot-play' || !game || game.result || busy) return;
+  if (!retryFen) return;
+  showRetry(false);
+  setStatusLine('Bot is thinking…');
+  freezeBoard();
+  scheduleBotReply();
+}
+
+// --- exit (mode handler) ---------------------------------------------------
+//
+// botExit() (T3) restores the prior play session and returns to play mode. We
+// must invalidate any pending reply first so a late callback can't fire against
+// the restored play position.
+
+function exit() {
+  invalidateReply();
+  busy = false;
+  retryFen = null;
+  showResign(false);
+  showRetry(false);
+  setStatusLine('');
+  hub().botExit();
+}
+
+// --- resume after refresh --------------------------------------------------
+//
+// On init, if restore() landed on the bot's turn (a refresh killed a pending
+// reply), botConsumeResumePending() returns true. We are already in bot-play
+// mode with the game restored — schedule the bot move.
+
+function resumeIfPending() {
+  if (state().mode !== 'bot-play') return;
+  const game = hub().botGetGame();
+  if (!game) return;
+  if (game.result) {
+    // A finished game was restored after a refresh — show its result and offer
+    // "New game" rather than a blank status + "Start".
+    reflectControls();
+    setStatusLine(resultLine(game.result, game.userColor));
+    freezeBoard();
+    return;
+  }
+  if (hub().botConsumeResumePending()) {
+    setStatusLine('Bot is thinking…');
+    freezeBoard();
+    scheduleBotReply();
+  } else {
+    // Restored on the user's turn — show controls + hand them the board.
+    reflectControls();
+    setStatusLine('Your move.');
+    giveUserTurn();
+  }
+}
+
+// --- init ------------------------------------------------------------------
+
+export function initBotplay(api) {
+  _api = api;
+
+  wireToggle();
+  wireColorPicker();
+
+  byId('botplay-start').addEventListener('click', startGame);
+  byId('botplay-resign').addEventListener('click', resign);
+  byId('botplay-retry').addEventListener('click', retry);
+
+  // The hub dispatcher routes bot-play board moves here; exit is botExit.
+  api.hub.registerModeHandlers('bot-play', { onMove, exit });
+
+  // Probe engine status (persona label, Maia dot, Start availability), THEN —
+  // if a refresh restored a bot game on the bot's turn — resume the reply.
+  probeStatus().finally(() => resumeIfPending());
+}
