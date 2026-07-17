@@ -198,6 +198,70 @@ async function probeStatus() {
   return data;
 }
 
+// --- save into the review pipeline -----------------------------------------
+//
+// snapshot = { movesUci, userColor, personaLabel, result, startedAt, rated } —
+// captured SYNCHRONOUSLY by the caller BEFORE any teardown (botExit() nulls the
+// descriptor, New-game replaces it). We must never re-read botGetGame() after an
+// await here. Fire-and-forget: never blocks the UI. Success is an ImportResponse
+// with imported+duplicates >= 1 (a 400 resolves via postJSON with a
+// non-ImportResponse body → treated as failure). The identity-guarded
+// botMarkSaved prevents a stale save from marking a newer game.
+function saveGame(snapshot) {
+  if (!snapshot || !snapshot.movesUci || snapshot.movesUci.length === 0) return;
+  hub().postJSON('/api/bot/save', {
+    movesUci: snapshot.movesUci,
+    userColor: snapshot.userColor,
+    personaLabel: snapshot.personaLabel,
+    result: snapshot.result,
+    startedAt: snapshot.startedAt,
+    rated: snapshot.rated,
+  }).then((res) => {
+    // postJSON only throws on 503; a 400 (empty moves / result '*') resolves
+    // with a non-ImportResponse body. Require an ImportResponse that inserted
+    // or deduped at least one game.
+    const ok = res && typeof res.imported === 'number' && typeof res.duplicates === 'number'
+      && (res.imported + res.duplicates) >= 1;
+    if (ok) hub().botMarkSaved(snapshot.startedAt);
+    else console.warn('[botplay] save failed — game left unsaved', res);
+  }).catch((err) => {
+    console.warn('[botplay] save failed — game left unsaved', err);
+  });
+}
+
+// Snapshot the CURRENT bot game synchronously (before any await/teardown) so a
+// save can outlive the descriptor. `resultOverride` supplies the result to
+// persist when it differs from the descriptor (rated-abandon loss).
+function snapshotGame(game, resultOverride) {
+  return {
+    movesUci: (game.movesUci || []).slice(),
+    userColor: game.userColor,
+    personaLabel: game.personaLabel || '',
+    result: resultOverride || game.result,
+    startedAt: game.startedAt,
+    rated: !!game.rated,
+  };
+}
+
+// The exit / New-game save predicate — ONE ordered decision, evaluated on the
+// game being left. The ordering is load-bearing: a finished-but-unsaved game
+// (finish-POST failed) must be re-saved with its REAL result and must NOT be
+// mistaken for an abandon-loss. Captures the snapshot synchronously, then saves.
+function saveOnLeave(game) {
+  if (!game) return;
+  const hasMoves = (game.movesUci || []).length >= 1;
+  if (!hasMoves || game.saved) return; // 0 moves / already saved → discard.
+  if (game.result) {
+    // (a) Finished but unsaved (finish-POST failed) → retry with the REAL result.
+    saveGame(snapshotGame(game));
+  } else if (game.rated) {
+    // (b) Unfinished rated game genuinely abandoned → user loses.
+    const loss = game.userColor === 'white' ? '0-1' : '1-0';
+    saveGame(snapshotGame(game, loss));
+  }
+  // (c) casual with no result → discard, no save.
+}
+
 // --- start / new game ------------------------------------------------------
 
 function startGame() {
@@ -205,12 +269,18 @@ function startGame() {
   const startBtn = byId('botplay-start');
   if (startBtn && startBtn.classList.contains('is-disabled')) return;
 
+  // New-game re-entry: the game we're leaving may need saving BEFORE its
+  // descriptor is replaced below (finished-retry or rated-abandon-loss).
+  saveOnLeave(hub().botGetGame());
+
   // Any prior scheduled reply is dead the moment a new game begins.
   invalidateReply();
   retryFen = null;
   showRetry(false);
 
   const userColor = chosenColor();
+  const rated = !!(byId('bot-rated') || {}).checked;
+  const startedAt = new Date().toISOString();
 
   // Enter bot-play: capture the prior play session ONCE. If we're already in
   // bot-play (a "New game" / mid-game restart), botEnter() must NOT re-run —
@@ -227,6 +297,9 @@ function startGame() {
     userColor,
     personaLabel: (byId('botplay-persona') || {}).textContent || '',
     result: null,
+    startedAt,
+    rated,
+    saved: false,
   });
   hub().setMode('bot-play');
   hub().setOrientation(userColor);
@@ -301,7 +374,9 @@ async function onMove(orig, dest) {
   hub().refreshAnalysis();
 
   if (outcome) {
-    // User's move ended the game — no bot reply.
+    // User's move ended the game — no bot reply. Save it (casual + rated) once;
+    // snapshot captured synchronously from the just-updated descriptor.
+    saveGame(snapshotGame(hub().botGetGame()));
     invalidateReply();
     setStatusLine(outcome.text);
     freezeBoard();
@@ -385,6 +460,9 @@ async function requestBotMove(myToken, fen) {
   busy = false;
 
   if (outcome) {
+    // Bot's move ended the game — save it (casual + rated) once; snapshot
+    // captured synchronously from the just-updated descriptor.
+    saveGame(snapshotGame(hub().botGetGame()));
     invalidateReply();
     setStatusLine(outcome.text);
     freezeBoard();
@@ -411,6 +489,9 @@ function resign() {
   const result = game.userColor === 'white' ? '0-1' : '1-0';
   hub().botSetResult(result);
   hub().persist();
+  // Resign is a real result — save it (casual + rated) once; snapshot captured
+  // synchronously from the just-updated descriptor.
+  saveGame(snapshotGame(hub().botGetGame()));
   setStatusLine('You resigned — bot wins.');
   freezeBoard();
   reflectControls();
@@ -433,6 +514,10 @@ function retry() {
 // the restored play position.
 
 function exit() {
+  // Save-on-leave BEFORE teardown: botExit() nulls the descriptor, so the
+  // snapshot must be captured synchronously here (finished-retry or rated-
+  // abandon-loss; casual-no-result / 0-move / already-saved discard).
+  saveOnLeave(hub().botGetGame());
   invalidateReply();
   busy = false;
   retryFen = null;

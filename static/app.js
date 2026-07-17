@@ -68,7 +68,8 @@ let reviewSnapshot = null; // saved play state captured when entering review mod
 let botPriorPlay = null;
 // Latest bot-game descriptor, so persist() can re-serialize the game on every
 // board change without botplay.js re-passing the whole thing. Shape:
-// { baseFen, movesUci, cursor, userColor, personaLabel, result|null }.
+// { baseFen, movesUci, cursor, userColor, personaLabel, result|null,
+//   startedAt|'' (ISO minted at game start), saved (bool), rated (bool) }.
 let botGame = null;
 // Set true by restore() when a persisted bot game came back on the bot's turn
 // (the user's move was saved but the reply never landed before refresh).
@@ -185,6 +186,9 @@ function persist() {
           userColor: botGame.userColor === 'black' ? 'black' : 'white',
           personaLabel: botGame.personaLabel || '',
           result: botGame.result || null,
+          startedAt: botGame.startedAt || '',
+          saved: !!botGame.saved,
+          rated: !!botGame.rated,
         },
         priorPlay: {
           baseFen: botPriorPlay.baseFen,
@@ -280,6 +284,9 @@ function restore() {
         userColor,
         personaLabel: bg.personaLabel || '',
         result: bg.result || null,
+        startedAt: bg.startedAt || '',
+        saved: !!bg.saved,
+        rated: !!bg.rated,
       };
       botPriorPlay = {
         baseFen: pp.baseFen,
@@ -372,12 +379,16 @@ function setPlaySnapshot(snap) { playSnapshot = snap; }
 //                              after a refresh) and setMode('play').
 //   botSetGame(game)         — set/replace the current bot-game descriptor
 //                              { baseFen, movesUci, cursor, userColor,
-//                              personaLabel, result|null }. Persisted by persist().
+//                              personaLabel, result|null, startedAt, saved,
+//                              rated }. Persisted by persist().
 //   botGetGame()             — read the current bot-game descriptor (or null).
 //   botAppendMove(uci)       — truncate history at cursor (redo suffix), push
 //                              `uci`, advance cursor; mirrors state into botGame.
 //   botSetResult(result)     — record a terminal result string (or null) on the
 //                              bot game (drives persist + resume turn-check).
+//   botMarkSaved(startedAt)  — identity-guarded: mark the current bot game saved
+//                              (to the review pipeline) only if its startedAt
+//                              still matches, then persist.
 //   botConsumeResumePending()— read-and-clear the restore-time "bot to move" flag
 //                              (true when a refresh landed on the bot's turn).
 //   setBoardPosition(fen)    — set the chessground board to a raw FEN (board part).
@@ -424,6 +435,9 @@ function botSetGame(game) {
     userColor: game.userColor === 'black' ? 'black' : 'white',
     personaLabel: game.personaLabel || '',
     result: game.result || null,
+    startedAt: game.startedAt || '',
+    saved: !!game.saved,
+    rated: !!game.rated,
   } : null;
   // Mirror into the canonical play-state so syncBoard/refreshAnalysis operate on it.
   // This is a wholesale state swap (like restorePlay): bump both guards so a
@@ -455,6 +469,17 @@ function botAppendMove(uci) {
 
 function botSetResult(result) {
   if (botGame) botGame.result = result || null;
+}
+
+// Mark the current bot game as saved to the review pipeline — identity-guarded so
+// a stale save POST completing AFTER a New-game (which replaced botGame) can't
+// mark the NEW game saved. Only sets when the live descriptor's startedAt still
+// matches the one the save was launched for; then persists the flag.
+function botMarkSaved(startedAt) {
+  if (botGame && botGame.startedAt === startedAt) {
+    botGame.saved = true;
+    persist();
+  }
 }
 
 function botConsumeResumePending() {
@@ -1257,6 +1282,7 @@ function init() {
       botGetGame,
       botAppendMove,
       botSetResult,
+      botMarkSaved,
       botConsumeResumePending,
       setBoardPosition,
       setOrientation,

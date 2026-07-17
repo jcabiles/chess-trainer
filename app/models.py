@@ -312,6 +312,11 @@ class GameSummary(BaseModel):
     date: str | None = Field(default=None, description="PGN Date header.")
     my_color: str | None = Field(default=None, description="Player color ('white'/'black'/None).")
     ply_count: int | None = Field(default=None, description="Total half-moves in the game.")
+    source: str | None = Field(
+        default=None,
+        description="Provenance of the game ('import'/'lichess'/'chesscom'/'bot'); "
+        "drives the 'vs Bot' library badge. None for older rows.",
+    )
     analysis_status: str = Field(
         description="Analysis status: 'pending'|'analyzing'|'done'|'failed'."
     )

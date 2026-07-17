@@ -245,6 +245,9 @@ function renderLibrary(games, profile) {
       const badgeEl = el('span', { className: `review-badge review-badge-${badge}`, textContent: badge });
       meta.appendChild(badgeEl);
     }
+    if (String(game.source) === 'bot') {
+      meta.appendChild(el('span', { className: 'review-badge review-badge-bot', textContent: 'vs Bot' }));
+    }
     if (game.opening) {
       meta.appendChild(el('span', { className: 'review-game-opening', textContent: game.opening }));
     }

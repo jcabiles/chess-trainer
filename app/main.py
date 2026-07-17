@@ -22,9 +22,11 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import chess
-from fastapi import Depends, FastAPI, Request
+import chess.pgn
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field  # bot routes (B2) define request/response models
@@ -694,6 +696,86 @@ async def bot_status():
     )
 
 
+class BotSaveRequest(BaseModel):
+    """Body for ``POST /api/bot/save`` — a finished (or abandoned-rated) bot game.
+
+    The server builds the PGN from ``movesUci`` (replayed for SAN); the client
+    never sends PGN text. ``startedAt`` is minted client-side at game start and
+    reused across re-saves so refresh-then-save dedups (it feeds the Event
+    header ⇒ the content hash). ``result`` is always decisive/drawn — never '*'.
+    """
+
+    movesUci: list[str] = Field(description="Mainline moves in UCI, from the start position.")
+    userColor: Literal["white", "black"] = Field(description="The user's color this game.")
+    personaLabel: str = Field(description="Display name of the bot opponent.")
+    result: str = Field(description="PGN result — one of '1-0', '0-1', '1/2-1/2' (never '*').")
+    startedAt: str = Field(description="ISO-8601 game-start timestamp, minted client-side.")
+    rated: bool = Field(description="Whether the game counts (stored in headers_json).")
+
+
+@app.post("/api/bot/save", response_model=ImportResponse)
+async def bot_save(req: BotSaveRequest, engine: StockfishEngine = Depends(get_engine)):
+    """Persist a finished bot game through the shared import path with source='bot'.
+
+    Builds a python-chess ``Game`` server-side (replaying ``movesUci`` for SAN),
+    tags it ``source='bot'`` and ``headers_json={"rated": <bool>}``, then funnels
+    it through ``_import_pgn_batch`` — reusing dedup, per-ply writes, and the
+    auto-analysis kick. Refresh-safety: the same ``startedAt`` yields the same
+    content hash (via the Event header) ⇒ a re-save dedups, no duplicate row.
+
+    ``engine`` is the ANALYSIS engine (for the auto-analysis kick), NOT the
+    isolated bot engine.
+    """
+    if not req.movesUci:
+        raise HTTPException(status_code=400, detail="No moves to save.")
+    if req.result not in {"1-0", "0-1", "1/2-1/2"}:
+        # Whitelist decisive/drawn results; '*' and any junk are rejected so a
+        # malformed result can never pollute badges/stats downstream.
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid result {req.result!r}; must be '1-0', '0-1', or '1/2-1/2'.",
+        )
+    if not req.startedAt.strip():
+        # startedAt feeds the Event header ⇒ the dedup hash; an empty value would
+        # collapse otherwise-distinct games under one hash.
+        raise HTTPException(status_code=400, detail="startedAt is required.")
+
+    # Replay the UCI moves onto a fresh board to produce SAN (defensive: an
+    # unparseable/illegal sequence is a client bug ⇒ 400, not a 500).
+    game = chess.pgn.Game()
+    board = chess.Board()
+    node = game
+    try:
+        for uci in req.movesUci:
+            move = chess.Move.from_uci(uci)
+            if move not in board.legal_moves:
+                raise ValueError(f"illegal move {uci!r}")
+            node = node.add_variation(move)
+            board.push(move)
+    except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Illegal move sequence: {exc}") from exc
+
+    # Names: persona vs "You", ordered by the user's color.
+    if req.userColor == "white":
+        white_name, black_name = "You", req.personaLabel
+    else:
+        white_name, black_name = req.personaLabel, "You"
+
+    game.headers["White"] = white_name
+    game.headers["Black"] = black_name
+    game.headers["Result"] = req.result
+    # Date portion of startedAt in PGN form (YYYY.MM.DD).
+    game.headers["Date"] = req.startedAt[:10].replace("-", ".")
+    # Event carries the start timestamp into the dedup hash (pgn._compute_hash).
+    game.headers["Event"] = f"Bot game {req.startedAt}"
+
+    pgn_text = str(game)
+    headers_json = json.dumps({"rated": req.rated})
+    return await _import_pgn_batch(
+        pgn_text, req.userColor, engine, source="bot", headers_json=headers_json
+    )
+
+
 # ---------------------------------------------------------------------------
 # Opening trainer (additive; degrade gracefully when data is absent)
 # ---------------------------------------------------------------------------
@@ -780,6 +862,7 @@ def _game_summary(row: dict) -> GameSummary:
         date=row.get("date"),
         my_color=row.get("my_color"),
         ply_count=row.get("ply_count"),
+        source=row.get("source"),
         analysis_status=row.get("analysis_status", "pending"),
         imported_at=row["imported_at"],
     )
@@ -795,6 +878,7 @@ async def _import_pgn_batch(
     engine: StockfishEngine,
     source: str = "import",
     extra_aliases: list[str] | None = None,
+    headers_json: str | None = None,
 ) -> ImportResponse | JSONResponse:
     """Shared persist path for pasted-PGN import and API fetch.
 
@@ -802,6 +886,8 @@ async def _import_pgn_batch(
     optional ``my_color_override`` to every game in the batch, and kicks
     auto-analysis. ``extra_aliases`` widen the CHESS_USERNAME my-color
     inference (the fetch path passes the fetched account name).
+    ``headers_json`` is stored verbatim on every inserted row (the bot-save
+    path passes ``{"rated": <bool>}``); import/fetch pass None ⇒ unchanged.
     """
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -819,7 +905,7 @@ async def _import_pgn_batch(
         fields = {
             "content_hash": g.content_hash,
             "pgn": g.pgn,
-            "headers_json": None,
+            "headers_json": headers_json,
             "white": g.white,
             "black": g.black,
             "result": g.result,

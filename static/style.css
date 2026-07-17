@@ -1216,6 +1216,16 @@ body.trap-practice-mode #fen-error { display: none; }
 
 .botplay-hint[hidden] { display: none; }
 
+/* Rated toggle — reuses eval-bar-toggle-row's flex/checkbox styling; the
+   hint below it reuses botplay-hint's subdued caption look. */
+.botplay-rated-row {
+  margin: 0;
+}
+
+.botplay-rated-hint {
+  margin-top: calc(-1 * var(--space-2));
+}
+
 /* Global `button { display: inline-flex }` overrides the [hidden] attr's
    UA display:none, so the Retry button needs an explicit guard (it's shown
    only on engine-down). id+attr specificity beats the bare `button` rule. */
@@ -1226,6 +1236,15 @@ body.trap-practice-mode #fen-error { display: none; }
    setEvalBar keeps updating underneath so a re-show is instantly current. */
 .board-wrap.eval-bar-hidden #eval-bar {
   display: none;
+}
+
+/* "vs Bot" provenance badge (Game Library row, review.js) — reuses the
+   .review-badge base (review.css) sizing/shape; a neutral (non-result)
+   color modifier so it reads as provenance, not a win/loss/draw signal. */
+.review-badge-bot {
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
 }
 
 /* ============================================================

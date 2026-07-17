@@ -153,9 +153,12 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > takebacks after a stupid blunder; P4 no sense of own strength trend.
 > **Appetite: ~2 weeks committed = Phase A only.** Honest math (refuter
 > 2026-07-16): all eight slices sum to 15–21 working days (~3–4 weeks).
-> **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B6** (~6–9 days:
-> research, skeleton, N1 save-loop, takebacks — a complete playable core).
-> **Phase B (B4 → B5, B7, B8, ~9–12 days) exceeds the stated appetite and
+> **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B8 → B6** (~6–9 days:
+> research, skeleton, N1 save-loop, personal-ELO, takebacks — a complete
+> playable core). **B8 promoted 2026-07-16 (user call):** B3 now captures
+> rated-ness, so the personal-ELO estimate is the natural next slice — it
+> works against B2's single persona and B4 later enriches the persona ratings.
+> **Phase B (B4 → B5, B7, ~7–10 days) exceeds the stated appetite and
 > starts only on an explicit user re-up** after Phase A proves the loop is
 > fun. Contracts: `../contracts/bot-play.md` (headline: bot move generation
 > is greenfield; engine strength options are process-global on the one shared
@@ -202,13 +205,18 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       2–3 days · no-gos: no personas beyond one, no clocks, no save-to-DB, no
       blunder model (skeleton only) · **hard-gated on B1 user sign-off** ·
       ICE 5·4·3=60
-- [ ] **B3. Bot games auto-save into the review pipeline** — problem: N3's
+- [x] **B3. Bot games auto-save into the review pipeline** — problem: N3's
       core loop — sparring games must feed the profiler like imported games do
       · outcome-link: N3+N1 · scope: on game end, render a well-formed PGN
       (White/Black = persona vs user, Result; `%clk` comments once B7 lands)
       → existing `_import_pgn_batch` with `source='bot'` + explicit
       `my_color_override`; auto-analysis triggers as on import; profiler/
       insights/blunder-trainer pick the game up with zero changes ·
+      **Shipped 2026-07-16** — added a **Rated/Casual** toggle (casual saves
+      only on a real ending; rated always saves, quitting = a loss) with
+      rated-ness in `headers_json` (`{"rated": bool}`, kept off `source` so B4
+      personas + B8's rated query don't collide); browser-verified end-to-end
+      (finish/casual-abandon/rated-abandon/refresh-dedup) ·
       pass/fail: finish a bot game in the browser → it appears in the Game
       Library, auto-analyzes, is correctly color-tagged (SQL:
       `source='bot'` row present; profiler game count increments) ·
@@ -275,8 +283,9 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       1200-rated persona moves the estimate by the expected amount; reload →
       recomputed value equals displayed value · appetite: 1–2 days · no-gos:
       no schema change; bot games only (imported human games keep using
-      accuracy.py's per-game estimate) · depends on B3+B4 · Phase B ·
-      ICE 3·4·4=48
+      accuracy.py's per-game estimate) · depends on B3 (works with B2's single
+      persona; **B4 later enriches persona ratings but does not block this**) ·
+      **Phase A — promoted to follow B3 (user call 2026-07-16)** · ICE 3·4·4=48
 
 ## NEXT (validated problems · not yet spec'd)
 
