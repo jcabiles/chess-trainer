@@ -19,12 +19,15 @@
 
 import { INITIAL_FEN } from 'https://esm.sh/chessops@0.14.2/fen';
 import { chessgroundDests } from 'https://esm.sh/chessops@0.14.2/compat';
+import { readUiPrefs, writeUiPref } from './prefs.js';
 
 let _api = null;
 let busy = false;          // single-flight: one in-flight bot request/timer max
 let replyToken = 0;        // staleness guard for the scheduled bot reply
 let thinkTimer = null;     // handle of the pending think-delay timer (if any)
 let retryFen = null;       // FEN we owe a bot move for (engine-down Retry target)
+let personaCatalog = [];   // [{id,name,elo,style,description}] from /api/bot/status
+let defaultPersonaId = ''; // status.defaultPersonaId (picker fallback)
 
 const byId = (id) => document.getElementById(id);
 const state = () => _api.actions.getState();
@@ -131,6 +134,7 @@ function reflectControls() {
   showResign(!!active);
   const startBtn = byId('botplay-start');
   if (startBtn) startBtn.textContent = (game && game.result) ? 'New game' : 'Start';
+  reflectPersonaLock();
 }
 
 // --- collapse toggle + color radiogroup ------------------------------------
@@ -166,6 +170,94 @@ function wireColorPicker() {
   black.addEventListener('click', () => pick('black'));
 }
 
+// --- persona picker --------------------------------------------------------
+
+// The persona id chosen in the picker (or the persisted/default fallback if the
+// picker isn't populated yet). Mirrors chosenColor()'s "read the UI" idiom.
+function chosenPersonaId() {
+  const sel = byId('bot-persona');
+  if (sel && sel.value) return sel.value;
+  return readUiPrefs().botPersona || defaultPersonaId;
+}
+
+// Fill #botplay-persona-caption with a persona's description.
+function setPersonaCaption(id) {
+  const cap = byId('botplay-persona-caption');
+  if (!cap) return;
+  const p = personaCatalog.find((x) => x.id === id);
+  cap.textContent = p ? (p.description || '') : '';
+}
+
+// Reflect the selected persona's NAME in the #botplay-persona label so the
+// in-game opponent shown matches the chosen persona (not the server default).
+function setPersonaName(id) {
+  const el = byId('botplay-persona');
+  if (!el) return;
+  const p = personaCatalog.find((x) => x.id === id);
+  if (p && p.name) el.textContent = p.name;
+}
+
+// The catalog name for a persona id (used as the descriptor's display label).
+function personaNameFor(id) {
+  const p = personaCatalog.find((x) => x.id === id);
+  return p ? p.name : '';
+}
+
+// Build the <option> list from the status catalog and select the persisted
+// persona (readUiPrefs().botPersona) or the server default. Called from the
+// status-probe path once personas are known.
+function populatePersonaPicker(personas, defId) {
+  personaCatalog = Array.isArray(personas) ? personas : [];
+  defaultPersonaId = defId || '';
+  const sel = byId('bot-persona');
+  if (!sel) return;
+  if (personaCatalog.length === 0) return; // leave placeholder if none
+
+  const persisted = readUiPrefs().botPersona;
+  const wanted = personaCatalog.some((p) => p.id === persisted)
+    ? persisted
+    : (personaCatalog.some((p) => p.id === defaultPersonaId) ? defaultPersonaId : personaCatalog[0].id);
+
+  sel.innerHTML = '';
+  for (const p of personaCatalog) {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.name} (≈${p.elo}) — ${p.description}`;
+    sel.appendChild(opt);
+  }
+  sel.value = wanted;
+  setPersonaCaption(wanted);
+  setPersonaName(wanted);
+}
+
+function wirePersonaPicker() {
+  const sel = byId('bot-persona');
+  if (!sel) return;
+  sel.addEventListener('change', () => {
+    // Inert while a request/timer is pending (single-flight) or a game is live —
+    // mirror the color-picker guard. Revert the visible selection to the pref.
+    const game = hub().botGetGame();
+    const locked = busy || (game && !game.result && state().mode === 'bot-play');
+    if (locked) {
+      sel.value = readUiPrefs().botPersona || defaultPersonaId || sel.value;
+      return;
+    }
+    writeUiPref('botPersona', sel.value);
+    setPersonaCaption(sel.value);
+    setPersonaName(sel.value);
+  });
+}
+
+// Lock/unlock the persona picker (disabled attribute — T4's CSS targets
+// :disabled). Called alongside reflectControls so the picker is inert mid-game.
+function reflectPersonaLock() {
+  const sel = byId('bot-persona');
+  if (!sel) return;
+  const game = hub().botGetGame();
+  const live = state().mode === 'bot-play' && game && !game.result;
+  sel.disabled = !!(busy || live);
+}
+
 // --- status probe (persona label + Maia dot + Start availability) ----------
 
 async function probeStatus() {
@@ -174,11 +266,14 @@ async function probeStatus() {
     const res = await fetch('/api/bot/status');
     data = await res.json();
   } catch (_) {
-    data = { available: false, personaLabel: '', maia: { lc0: false, weights: [] } };
+    data = { available: false, personaLabel: '', personas: [], defaultPersonaId: '', maia: { lc0: false, weights: [] } };
   }
 
   const persona = byId('botplay-persona');
   if (persona && data.personaLabel) persona.textContent = data.personaLabel;
+
+  // Populate the persona picker from the catalog + select persisted/default.
+  populatePersonaPicker(data.personas, data.defaultPersonaId);
 
   const indicator = byId('botplay-maia-indicator');
   const maiaLabel = byId('botplay-maia-label');
@@ -200,7 +295,8 @@ async function probeStatus() {
 
 // --- save into the review pipeline -----------------------------------------
 //
-// snapshot = { movesUci, userColor, personaLabel, result, startedAt, rated } —
+// snapshot = { movesUci, userColor, personaLabel, personaId, result, startedAt,
+// rated } —
 // captured SYNCHRONOUSLY by the caller BEFORE any teardown (botExit() nulls the
 // descriptor, New-game replaces it). We must never re-read botGetGame() after an
 // await here. Fire-and-forget: never blocks the UI. Success is an ImportResponse
@@ -213,6 +309,7 @@ function saveGame(snapshot) {
     movesUci: snapshot.movesUci,
     userColor: snapshot.userColor,
     personaLabel: snapshot.personaLabel,
+    personaId: snapshot.personaId,
     result: snapshot.result,
     startedAt: snapshot.startedAt,
     rated: snapshot.rated,
@@ -237,6 +334,7 @@ function snapshotGame(game, resultOverride) {
     movesUci: (game.movesUci || []).slice(),
     userColor: game.userColor,
     personaLabel: game.personaLabel || '',
+    personaId: game.personaId || null,
     result: resultOverride || game.result,
     startedAt: game.startedAt,
     rated: !!game.rated,
@@ -281,6 +379,8 @@ function startGame() {
   const userColor = chosenColor();
   const rated = !!(byId('bot-rated') || {}).checked;
   const startedAt = new Date().toISOString();
+  const personaId = chosenPersonaId();
+  const seed = Math.floor(Math.random() * 1e9); // per-game seed for opening sampling
 
   // Enter bot-play: capture the prior play session ONCE. If we're already in
   // bot-play (a "New game" / mid-game restart), botEnter() must NOT re-run —
@@ -295,7 +395,9 @@ function startGame() {
     movesUci: [],
     cursor: 0,
     userColor,
-    personaLabel: (byId('botplay-persona') || {}).textContent || '',
+    personaLabel: personaNameFor(personaId),
+    personaId,
+    seed,
     result: null,
     startedAt,
     rated,
@@ -418,8 +520,18 @@ function scheduleBotReply() {
 
 async function requestBotMove(myToken, fen) {
   let data;
+  // Thread the persona/seed from the descriptor + ply = half-moves already
+  // played before this bot move. Read BEFORE the await; the busy/replyToken
+  // staleness machinery below is orthogonal and untouched.
+  const g = hub().botGetGame();
+  const body = { fen };
+  if (g) {
+    if (g.personaId) body.personaId = g.personaId;
+    if (typeof g.seed === 'number') body.seed = g.seed;
+    body.ply = (g.movesUci || []).length;
+  }
   try {
-    data = await hub().postJSON('/api/bot/move', { fen });
+    data = await hub().postJSON('/api/bot/move', body);
   } catch (err) {
     // Engine down / network failure. The token may already be stale (resign,
     // exit) — in that case a newer op owns the gate, so drop WITHOUT clearing
@@ -564,6 +676,7 @@ export function initBotplay(api) {
 
   wireToggle();
   wireColorPicker();
+  wirePersonaPicker();
 
   byId('botplay-start').addEventListener('click', startGame);
   byId('botplay-resign').addEventListener('click', resign);

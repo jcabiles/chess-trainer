@@ -153,14 +153,15 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > takebacks after a stupid blunder; P4 no sense of own strength trend.
 > **Appetite: ~2 weeks committed = Phase A only.** Honest math (refuter
 > 2026-07-16): all eight slices sum to 15–21 working days (~3–4 weeks).
-> **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B8 → B6** (~6–9 days:
-> research, skeleton, N1 save-loop, personal-ELO, takebacks — a complete
-> playable core). **B8 promoted 2026-07-16 (user call):** B3 now captures
-> rated-ness, so the personal-ELO estimate is the natural next slice — it
-> works against B2's single persona and B4 later enriches the persona ratings.
-> **Phase B (B4 → B5, B7, ~7–10 days) exceeds the stated appetite and
-> starts only on an explicit user re-up** after Phase A proves the loop is
-> fun. Contracts: `../contracts/bot-play.md` (headline: bot move generation
+> **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B4 → B8 → B6**
+> (research, skeleton, N1 save-loop, persona-ladder, personal-ELO, takebacks —
+> a complete playable core). **B4 pulled into Phase A + resequenced ahead of B8
+> 2026-07-16 (user call):** a personal-ELO trend is only meaningful against a
+> rated LADDER of opponents, so the persona ladder ships first; B8 then tracks
+> results across the ladder. **Phase B (B5, B7, ~5–8 days) exceeds the stated
+> appetite and starts only on an explicit user re-up** after Phase A proves the
+> loop is fun. (B5 = the causal human-like blunder model + behavioral style,
+> which B4 deliberately defers.) Contracts: `../contracts/bot-play.md` (headline: bot move generation
 > is greenfield; engine strength options are process-global on the one shared
 > Stockfish — B1 decides isolation). ICE scores below are reference input
 > only — hard dependency gating (B1 first) fully determines executable order
@@ -224,7 +225,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       headers_json/name fields only — anything more forces a spec first);
       never commit game data · depends on B2 · ICE 5·5·4=100 (cheapest
       N1-link in the chapter)
-- [ ] **B4. Persona ladder + opening variety** — problem: P1 (varied
+- [x] **B4. Persona ladder + opening variety** — problem: P1 (varied
       realistic replies) + P2 (graded difficulty) — one fixed bot trains
       neither · outcome-link: N3 · scope: 4–6 named personas (ELO ~800–2000,
       style params per B1: aggressive/solid/…), persona picker UI (persisted
@@ -235,7 +236,15 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       lower over N quick games); (c) picker persists across reload ·
       appetite: 3–4 days · no-gos: no avatar art (Next); no blunder-model
       work (B5) · **hard-gated on B1 · depends on B2** (needs the bot-play
-      mode) · Phase B · ICE 4·3·3=36
+      mode) · Phase A · ICE 4·3·3=36 · **Shipped 2026-07-16 (PR pending):**
+      Gate-1 narrowed to **4 personas UCI_Elo 1350–2000** (no sub-1320 Skill
+      rung) + **candidate-sampling** variety (no curated books); style =
+      temperature only (Contempt removed from SF; deep behavioral style → B5);
+      resign deferred to B5. Correctness locks (dual review): White→mover-POV
+      score flip, atomic strength-switch+search under one lock (survives
+      watchdog restart), mate→±MATE_CP, bare-`{fen}` B3-parity, save
+      server-resolves persona Elo. Variety measured: 5 distinct first moves /
+      12 seeds. Personas ride `headers_json` (personaId+personaElo) for B8.
 - [ ] **B5. Human-like blunder + style model** — problem: P2's core — the
       user's explicit requirement that low-ELO bots fail *causally* (miss your
       threat while pursuing their own plan), not randomly · outcome-link: N3 ·
@@ -283,9 +292,11 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       1200-rated persona moves the estimate by the expected amount; reload →
       recomputed value equals displayed value · appetite: 1–2 days · no-gos:
       no schema change; bot games only (imported human games keep using
-      accuracy.py's per-game estimate) · depends on B3 (works with B2's single
-      persona; **B4 later enriches persona ratings but does not block this**) ·
-      **Phase A — promoted to follow B3 (user call 2026-07-16)** · ICE 3·4·4=48
+      accuracy.py's per-game estimate) · depends on B3 + **B4 (shipped)** — the
+      persona ladder now supplies per-opponent ratings via `headers_json`
+      (`personaId`/`personaElo`), so the Elo update runs against a real range of
+      opponents · **Phase A — NEXT slice, follows B4 (user call 2026-07-16)** ·
+      ICE 3·4·4=48
 
 ## NEXT (validated problems · not yet spec'd)
 

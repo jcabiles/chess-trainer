@@ -40,6 +40,7 @@ from app import (
     moments,
     narrative,
     openings,
+    personas,
     pgn,
     profile,
     repertoire,
@@ -152,6 +153,10 @@ async def lifespan(app: FastAPI):
         )
     except Exception as exc:  # pragma: no cover - defensive; book degrades to empty
         logger.warning("Opening book unavailable (continuing without it): %s", exc)
+
+    # Bot persona ladder (B4): load data/personas.json (import-safe — keeps the
+    # built-in 4-persona default on a missing/invalid file, never raises).
+    personas.init()
 
     # Game-review storage: init DB, scan data/games/ for PGN files, reset stuck jobs.
     storage.init()
@@ -570,15 +575,31 @@ async def restart_engine(engine: StockfishEngine = Depends(get_engine)):
 # engine's and maps to 503 here (the analysis engine's health is irrelevant).
 # ---------------------------------------------------------------------------
 
-#: Fuzzy persona label — deliberately no precise Elo claim (B1 §7.6). The move
-#: source is a single weakened Stockfish; B5 introduces real personas.
-BOT_PERSONA_LABEL = "Casual sparring bot"
+#: Back-compat persona label for ``GET /api/bot/status`` — the DEFAULT persona's
+#: display name (B4). Derived from the persona catalog so status + this constant
+#: agree; a bare request (no personaId) reproduces B3 behavior with this bot.
+BOT_PERSONA_LABEL = personas.get(personas.default_id()).name
+
+#: Opening phase cutoff (half-moves): below this ply a persona request samples
+#: among ``SAMPLE_K`` candidates for mild variety; at/after it, best move only.
+OPENING_PLIES = 8
+#: Candidate count requested for opening-phase persona sampling.
+SAMPLE_K = 5
 
 
 class BotMoveRequest(BaseModel):
-    """Body for ``POST /api/bot/move`` — the position the bot must move in."""
+    """Body for ``POST /api/bot/move`` — the position the bot must move in.
+
+    ``personaId``/``ply``/``seed`` are all optional with defaults so a bare
+    ``{fen}`` still validates and behaves EXACTLY like B3 (legacy branch).
+    """
 
     fen: str = Field(description="Position for the bot to move in, in FEN.")
+    personaId: str | None = Field(
+        default=None, description="Persona id to play as; None ⇒ legacy B3 bot (Elo 1350)."
+    )
+    ply: int = Field(default=0, description="Current half-move index (drives opening sampling).")
+    seed: int | None = Field(default=None, description="Per-game seed for deterministic sampling.")
 
 
 class BotMoveResponse(BaseModel):
@@ -596,7 +617,11 @@ class BotStatusResponse(BaseModel):
         description="Whether the bot's Stockfish binary is resolvable (the lazy "
         "engine may not be running yet)."
     )
-    personaLabel: str = Field(description="Fuzzy persona label for the default bot.")
+    personaLabel: str = Field(description="Display name of the DEFAULT persona (back-compat).")
+    personas: list[dict] = Field(
+        description="The persona ladder: [{id,name,elo,style,description,temperature}]."
+    )
+    defaultPersonaId: str = Field(description="Id of the default persona (a bare request's bot).")
     maia: dict = Field(
         description="Maia/lc0 readiness signal: {lc0: bool, weights: [paths]}."
     )
@@ -647,9 +672,38 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
             status_code=400, content={"detail": "Insufficient material."}
         )
 
-    # Ask the isolated bot engine for one move (best-first) and play it.
+    # Resolve the persona (None ⇒ legacy B3 bot) BEFORE touching the engine so an
+    # unknown id is rejected without a search. The engine call + sampling differ
+    # per branch, but both funnel into one candidate-list guard + play block.
+    idx = 0
     try:
-        cands = await bot.candidates(req.fen, k=1)
+        if req.personaId is None:
+            # Legacy branch — byte-identical to B3: k=1, no strength change (Elo
+            # stays 1350), candidate 0, no sampling.
+            cands = await bot.candidates(req.fen, k=1)
+        else:
+            persona = personas.get(req.personaId)
+            if persona is None:
+                raise HTTPException(
+                    status_code=400, detail=f"Unknown personaId {req.personaId!r}."
+                )
+            if req.ply < OPENING_PLIES:
+                # Opening phase: sample among SAMPLE_K candidates for mild variety.
+                cands = await bot.candidates(req.fen, k=SAMPLE_K, elo=persona.elo)
+                if cands:
+                    mover = board.turn
+                    # Convert White-POV scoreCp to MOVER-POV before sampling — a
+                    # raw-White-POV softmax makes a Black bot prefer its worst moves.
+                    mover_scores = [
+                        c["scoreCp"] if mover == chess.WHITE else -c["scoreCp"]
+                        for c in cands
+                    ]
+                    idx = personas.weighted_choice(
+                        mover_scores, persona.temperature, hash((req.seed or 0, req.ply))
+                    )
+            else:
+                # Post-opening: play the best move (candidate 0), still at strength.
+                cands = await bot.candidates(req.fen, k=1, elo=persona.elo)
     except BotEngineUnavailable:
         return JSONResponse(
             status_code=503,
@@ -671,7 +725,7 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
             content={"detail": "Bot engine returned no move. Please retry."},
         )
 
-    move = chess.Move.from_uci(cands[0]["uci"])
+    move = chess.Move.from_uci(cands[idx]["uci"])
     move_san = board.san(move)  # render SAN BEFORE pushing
     board.push(move)
     return BotMoveResponse(moveUci=move.uci(), moveSan=move_san, fen=board.fen())
@@ -689,9 +743,12 @@ async def bot_status():
         available = True
     except BotEngineUnavailable:
         available = False
+    default = personas.get(personas.default_id())
     return BotStatusResponse(
         available=available,
-        personaLabel=BOT_PERSONA_LABEL,
+        personaLabel=default.name,
+        personas=[p.as_dict() for p in personas.all()],
+        defaultPersonaId=personas.default_id(),
         maia=detect_maia(),
     )
 
@@ -711,6 +768,10 @@ class BotSaveRequest(BaseModel):
     result: str = Field(description="PGN result — one of '1-0', '0-1', '1/2-1/2' (never '*').")
     startedAt: str = Field(description="ISO-8601 game-start timestamp, minted client-side.")
     rated: bool = Field(description="Whether the game counts (stored in headers_json).")
+    personaId: str | None = Field(
+        default=None,
+        description="Persona id — server resolves name/Elo from the catalog; None ⇒ B3.",
+    )
 
 
 @app.post("/api/bot/save", response_model=ImportResponse)
@@ -755,11 +816,27 @@ async def bot_save(req: BotSaveRequest, engine: StockfishEngine = Depends(get_en
     except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Illegal move sequence: {exc}") from exc
 
+    # Persona resolution (B4): NEVER trust a client-sent Elo/label. If personaId
+    # is given, resolve the PGN name + Elo from the catalog; absent ⇒ B3 shape.
+    if req.personaId is None:
+        bot_name = req.personaLabel
+        headers_json = json.dumps({"rated": req.rated})
+    else:
+        persona = personas.get(req.personaId)
+        if persona is None:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown personaId {req.personaId!r}."
+            )
+        bot_name = persona.name
+        headers_json = json.dumps(
+            {"rated": req.rated, "personaId": persona.id, "personaElo": persona.elo}
+        )
+
     # Names: persona vs "You", ordered by the user's color.
     if req.userColor == "white":
-        white_name, black_name = "You", req.personaLabel
+        white_name, black_name = "You", bot_name
     else:
-        white_name, black_name = req.personaLabel, "You"
+        white_name, black_name = bot_name, "You"
 
     game.headers["White"] = white_name
     game.headers["Black"] = black_name
@@ -770,7 +847,6 @@ async def bot_save(req: BotSaveRequest, engine: StockfishEngine = Depends(get_en
     game.headers["Event"] = f"Bot game {req.startedAt}"
 
     pgn_text = str(game)
-    headers_json = json.dumps({"rated": req.rated})
     return await _import_pgn_batch(
         pgn_text, req.userColor, engine, source="bot", headers_json=headers_json
     )

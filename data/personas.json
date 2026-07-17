@@ -1,0 +1,36 @@
+{
+  "personas": [
+    {
+      "id": "casey",
+      "name": "Casey",
+      "elo": 1350,
+      "style": "solid",
+      "description": "Casual club player — steady, but misses tactics.",
+      "temperature": 80
+    },
+    {
+      "id": "morgan",
+      "name": "Morgan",
+      "elo": 1550,
+      "style": "tactical",
+      "description": "Improving — punishes loose play and hangs onto material.",
+      "temperature": 130
+    },
+    {
+      "id": "alex",
+      "name": "Alex",
+      "elo": 1800,
+      "style": "aggressive",
+      "description": "Strong club player — sharp, presses for the attack.",
+      "temperature": 200
+    },
+    {
+      "id": "vera",
+      "name": "Vera",
+      "elo": 2000,
+      "style": "positional",
+      "description": "Expert — grinds small edges in long games.",
+      "temperature": 100
+    }
+  ]
+}

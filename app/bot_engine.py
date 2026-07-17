@@ -22,14 +22,21 @@ Design (mirrors ``app/engine.py``'s lifecycle discipline):
   silently drop ``UCI_LimitStrength`` / ``UCI_Elo`` and hand the user a
   full-strength bot (B1 §7.1: that gap must not be repeated here).
 
-Weakening: ``UCI_LimitStrength=true`` + ``UCI_Elo=1350`` caps playing strength
-(fallback source B; floor is 1320 — B1 §1). ``Threads=1`` / ``Hash=16`` keep the
-bot cheap so it never competes with the analysis engine for cores.
+Weakening: ``UCI_LimitStrength=true`` + a per-instance ``UCI_Elo`` (``self._elo``,
+default 1350) caps playing strength (fallback source B; floor is 1320 — B1 §1).
+``Threads=1`` / ``Hash=16`` keep the bot cheap so it never competes with the
+analysis engine for cores. The Elo lives in instance state (not the option dict)
+so a persona switch re-pins it and a watchdog restart re-applies the CURRENT
+persona's Elo — never a hardcoded default (B4).
 
-The seam API is ``candidates(fen, k=1)`` — a MultiPV=k list of moves best-first
-(B1 §7.1: candidate distributions, not a bare bestmove) — so B5's persona layer
-can consume ``k>1`` without an API break. B2 always calls ``k=1`` and plays
-``[0]``.
+The seam API is ``candidates(fen, k=1, elo=None)`` — a MultiPV=k list of moves
+best-first (B1 §7.1: candidate distributions, not a bare bestmove) — so B4's
+persona layer can consume ``k>1`` without an API break. B2 always calls ``k=1``
+and plays ``[0]``. Passing ``elo`` atomically switches strength (respawn under
+the single lock) before the search, so two interleaved different-persona calls
+can't cross-contaminate; ``elo=None`` leaves strength unchanged (legacy path).
+``scoreCp`` is White-POV centipawns and is always numeric — a forced mate maps
+to signed ``±MATE_CP`` (positive when mate favors White).
 """
 
 from __future__ import annotations
@@ -55,13 +62,24 @@ STOCKFISH_PATH_ENV: str = "STOCKFISH_PATH"
 
 #: Weakening + resource options applied on EVERY (re)spawn. Kept as one dict so
 #: ``start()`` and the watchdog restart path cannot drift — the whole set is
-#: always re-applied together (the gap ``engine.py`` has, avoided here).
+#: always re-applied together (the gap ``engine.py`` has, avoided here). The
+#: per-persona ``UCI_Elo`` is NOT in this dict — it lives in ``self._elo`` and is
+#: merged in by ``start()`` so a restart re-applies the current persona's Elo.
 BOT_ENGINE_OPTIONS: dict = {
     "Threads": 1,
     "Hash": 16,
     "UCI_LimitStrength": True,
-    "UCI_Elo": 1350,
 }
+
+#: Default per-instance ``UCI_Elo`` (fallback source B; floor 1320 — B1 §1). A
+#: bare (no-persona) request stays at this Elo, reproducing B3 behavior exactly.
+DEFAULT_BOT_ELO: int = 1350
+
+#: Signed White-POV centipawn magnitude a forced mate maps to (positive when the
+#: mate favors White, negative when it favors Black), so ``scoreCp`` is always
+#: numeric and mover-POV conversion downstream preserves "winning" vs "getting
+#: mated" (B4 sampling contract).
+MATE_CP: int = 100000
 
 #: Fixed per-move search budget. Small movetime keeps replies snappy and cheap;
 #: the bot is deliberately weak so extra thinking time buys little.
@@ -156,6 +174,10 @@ class BotEngine:
         # Serializes ALL engine access — SimpleEngine is not thread-safe and the
         # executor is concurrent, so at most one search is in flight at a time.
         self._lock = asyncio.Lock()
+        # Current persona strength (UCI_Elo). start() applies THIS value, so a
+        # watchdog restart re-pins the current persona's Elo, never a hardcoded
+        # default. candidates(elo=...) mutates it atomically under the lock.
+        self._elo: int = DEFAULT_BOT_ELO
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -167,9 +189,11 @@ class BotEngine:
     def start(self) -> None:
         """Launch and configure the bot's Stockfish process (idempotent).
 
-        Locates the binary, opens ONE UCI process, and applies the FULL
-        ``BOT_ENGINE_OPTIONS`` set (Threads + Hash + UCI_LimitStrength +
-        UCI_Elo). No-op if already running.
+        Locates the binary, opens ONE UCI process, and applies the FULL option
+        set — ``BOT_ENGINE_OPTIONS`` (Threads + Hash + UCI_LimitStrength) merged
+        with ``UCI_Elo=self._elo`` (the current persona's strength). Applying
+        ``self._elo`` here is what lets a watchdog restart re-pin the current
+        persona's Elo rather than a hardcoded default. No-op if already running.
 
         Raises:
             EngineUnavailable: if the binary is missing or fails to launch.
@@ -186,8 +210,9 @@ class BotEngine:
             ) from exc
 
         try:
-            # Apply the WHOLE weakening set on every spawn — never a subset.
-            engine.configure(dict(BOT_ENGINE_OPTIONS))
+            # Apply the WHOLE weakening set on every spawn — never a subset —
+            # with the CURRENT persona's Elo merged in (one dict, no drift).
+            engine.configure({**BOT_ENGINE_OPTIONS, "UCI_Elo": self._elo})
         except Exception as exc:
             try:
                 engine.quit()
@@ -271,6 +296,7 @@ class BotEngine:
         self,
         board: chess.Board,
         multipv: int,
+        elo: Optional[int] = None,
     ) -> List[chess_engine.InfoDict]:
         """Run ``engine.analyse`` at the fixed bot budget under lock + watchdog.
 
@@ -279,11 +305,23 @@ class BotEngine:
         watchdog. Returns a list of ``InfoDict`` (always a list; normalized from
         a bare dict when ``multipv`` is effectively 1).
 
+        The strength switch and the search share ONE lock acquisition: when
+        *elo* differs from ``self._elo``, the persona Elo is re-pinned and the
+        process respawned (``start()`` re-applies the new Elo) BEFORE the search,
+        all inside the same critical section — so two interleaved different-
+        persona calls can never cross-contaminate. ``elo=None`` leaves strength
+        unchanged (legacy path).
+
         Raises:
             EngineUnavailable: on timeout, EngineError, or EngineTerminatedError.
             asyncio.CancelledError: re-raised after poisoning.
         """
         async with self._lock:
+            # Atomic strength switch: re-pin the persona Elo and respawn so the
+            # fresh process applies it, all before this same-lock search runs.
+            if elo is not None and elo != self._elo:
+                self._elo = elo
+                self._poison(self._engine)
             if self._engine is None:
                 self.start()
             # Local reference: _call closes over this, NOT self._engine, so that
@@ -328,21 +366,29 @@ class BotEngine:
 
         return info
 
-    async def candidates(self, fen: str, k: int = 1) -> List[dict]:
+    async def candidates(
+        self, fen: str, k: int = 1, elo: Optional[int] = None
+    ) -> List[dict]:
         """Return up to *k* candidate moves for *fen*, best-first.
 
         Implemented as MultiPV=k at the fixed bot budget (``BOT_MOVETIME_S``).
-        B2 calls ``k=1`` and plays index 0; B5's persona layer consumes ``k>1``.
+        B2 calls ``k=1`` and plays index 0; B4's persona layer consumes ``k>1``.
 
         Args:
             fen: The position to move in, in Forsyth-Edwards Notation.
             k: Number of ranked candidate moves to return (>= 1).
+            elo: Persona strength to switch to before searching. When it differs
+                from the current ``self._elo`` the process is respawned at the
+                new Elo — the switch and the search share ONE lock acquisition,
+                so interleaved different-persona calls can't cross-contaminate.
+                ``None`` (default) leaves strength unchanged (legacy/B3 path).
 
         Returns:
-            A list of ``{"uci": str, "san": str, "scoreCp": int | None}`` dicts,
-            index 0 = best. ``scoreCp`` is White-POV centipawns, or ``None`` for
-            a mate score (the caller normalizes/classifies if it needs to). The
-            list may be shorter than *k* when fewer legal moves exist.
+            A list of ``{"uci": str, "san": str, "scoreCp": int}`` dicts, index
+            0 = best. ``scoreCp`` is White-POV centipawns and is always numeric:
+            a forced mate maps to signed ``±MATE_CP`` (positive for a mate
+            favoring White). The list may be shorter than *k* when fewer legal
+            moves exist.
 
         Raises:
             EngineUnavailable: if the binary is missing or the engine cannot run.
@@ -353,7 +399,7 @@ class BotEngine:
         except ValueError as exc:
             raise ValueError(f"Invalid FEN: {fen!r} ({exc})") from exc
 
-        infos = await self._run_search(board, multipv=max(1, k))
+        infos = await self._run_search(board, multipv=max(1, k), elo=elo)
 
         # --- post-processing (outside the lock; pure, no engine access) ---
         out: List[dict] = []
@@ -368,14 +414,34 @@ class BotEngine:
                 continue
 
             score = info.get("score")
-            score_cp: Optional[int] = None
-            if score is not None:
-                # White-POV centipawns; None when the line is a forced mate.
-                score_cp = score.white().score()
+            score_cp = self._score_to_white_cp(score)
 
             out.append({"uci": move.uci(), "san": san, "scoreCp": score_cp})
 
         return out
+
+    @staticmethod
+    def _score_to_white_cp(score: Optional[chess_engine.PovScore]) -> int:
+        """Map a ``PovScore`` to an always-numeric White-POV centipawn value.
+
+        A normal score returns White-POV centipawns. A forced mate returns
+        signed ``±MATE_CP`` — positive when the mate favors White, negative when
+        it favors Black — so downstream mover-POV conversion preserves "winning
+        mate" vs "getting mated" (B4 sampling contract). ``None`` (no score)
+        maps to 0 as a neutral fallback.
+        """
+        if score is None:
+            return 0
+        white = score.white()
+        cp = white.score()
+        if cp is not None:
+            return cp
+        # Forced mate: white.mate() is +N (White mates in N) or -N (White is
+        # mated in N); a mate-for-White is a winning White-POV score.
+        mate = white.mate()
+        if mate is None:  # pragma: no cover - PovScore is either cp or mate
+            return 0
+        return MATE_CP if mate > 0 else -MATE_CP
 
 
 #: Module-level singleton, mirroring the analysis engine's accessor idiom. Kept

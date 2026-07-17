@@ -68,7 +68,8 @@ let reviewSnapshot = null; // saved play state captured when entering review mod
 let botPriorPlay = null;
 // Latest bot-game descriptor, so persist() can re-serialize the game on every
 // board change without botplay.js re-passing the whole thing. Shape:
-// { baseFen, movesUci, cursor, userColor, personaLabel, result|null,
+// { baseFen, movesUci, cursor, userColor, personaLabel, personaId|'',
+//   seed (number), result|null,
 //   startedAt|'' (ISO minted at game start), saved (bool), rated (bool) }.
 let botGame = null;
 // Set true by restore() when a persisted bot game came back on the bot's turn
@@ -185,6 +186,8 @@ function persist() {
           cursor: botGame.cursor | 0,
           userColor: botGame.userColor === 'black' ? 'black' : 'white',
           personaLabel: botGame.personaLabel || '',
+          personaId: botGame.personaId || '',
+          seed: botGame.seed | 0,
           result: botGame.result || null,
           startedAt: botGame.startedAt || '',
           saved: !!botGame.saved,
@@ -283,6 +286,8 @@ function restore() {
         cursor,
         userColor,
         personaLabel: bg.personaLabel || '',
+        personaId: bg.personaId || '',
+        seed: bg.seed | 0,
         result: bg.result || null,
         startedAt: bg.startedAt || '',
         saved: !!bg.saved,
@@ -379,8 +384,8 @@ function setPlaySnapshot(snap) { playSnapshot = snap; }
 //                              after a refresh) and setMode('play').
 //   botSetGame(game)         — set/replace the current bot-game descriptor
 //                              { baseFen, movesUci, cursor, userColor,
-//                              personaLabel, result|null, startedAt, saved,
-//                              rated }. Persisted by persist().
+//                              personaLabel, personaId, seed, result|null,
+//                              startedAt, saved, rated }. Persisted by persist().
 //   botGetGame()             — read the current bot-game descriptor (or null).
 //   botAppendMove(uci)       — truncate history at cursor (redo suffix), push
 //                              `uci`, advance cursor; mirrors state into botGame.
@@ -434,6 +439,8 @@ function botSetGame(game) {
     cursor: game.cursor | 0,
     userColor: game.userColor === 'black' ? 'black' : 'white',
     personaLabel: game.personaLabel || '',
+    personaId: game.personaId || '',
+    seed: game.seed | 0,
     result: game.result || null,
     startedAt: game.startedAt || '',
     saved: !!game.saved,

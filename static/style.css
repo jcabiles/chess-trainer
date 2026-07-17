@@ -1183,6 +1183,48 @@ body.trap-practice-mode #fen-error { display: none; }
   font-weight: 700;
 }
 
+/* Persona picker — reuses the analyze-color-select/engine-speed-select select
+   idiom (surface-raised fill, border token, accent on hover/focus). Options
+   are populated by botplay.js (T6) from /api/bot/status.personas; disabled
+   mid-game via the native attribute (T6), styled below. */
+.botplay-persona-picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.botplay-persona-select {
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
+  max-width: 100%;
+}
+
+.botplay-persona-select:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.botplay-persona-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.botplay-persona-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.botplay-persona-caption {
+  margin-top: calc(-1 * var(--space-2));
+}
+
 .botplay-status {
   font-size: 0.85rem;
   color: var(--text-secondary);

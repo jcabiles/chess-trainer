@@ -217,11 +217,13 @@ class TestTimeoutRestartReappliesFullOptions:
         assert relaunch.configured, "restart must re-configure the fresh process"
         applied = relaunch.configured[-1]
         # All four weakening options re-applied — the engine.py gap must NOT recur.
+        # UCI_Elo now lives in instance state (self._elo) and is merged into the
+        # applied set by start(); BOT_ENGINE_OPTIONS holds the other three.
         assert applied["Threads"] == 1
         assert applied["Hash"] == 16
         assert applied["UCI_LimitStrength"] is True
         assert applied["UCI_Elo"] == 1350
-        assert set(applied) == set(BOT_ENGINE_OPTIONS)
+        assert set(applied) == set(BOT_ENGINE_OPTIONS) | {"UCI_Elo"}
 
 
 # ---------------------------------------------------------------------------
