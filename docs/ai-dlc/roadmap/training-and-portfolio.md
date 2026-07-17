@@ -155,7 +155,8 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > 2026-07-16): all eight slices sum to 15–21 working days (~3–4 weeks).
 > **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B4 → B8 → B6**
 > (research, skeleton, N1 save-loop, persona-ladder, personal-ELO, takebacks —
-> a complete playable core). **B4 pulled into Phase A + resequenced ahead of B8
+> a complete playable core). **Status 2026-07-17: B1–B4 + B8 all shipped; only
+> B6 (takebacks) remains to complete Phase A.** **B4 pulled into Phase A + resequenced ahead of B8
 > 2026-07-16 (user call):** a personal-ELO trend is only meaningful against a
 > rated LADDER of opponents, so the persona ladder ships first; B8 then tracks
 > results across the ladder. **Phase B (B5, B7, ~5–8 days) exceeds the stated
@@ -282,7 +283,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       `clock_centis IS NOT NULL` · appetite: 2 days · no-gos: no clock in
       ordinary analysis play mode; no bot think-time realism yet (Next) ·
       depends on B2 (and B3 for the saved-PGN check) · Phase B · ICE 4·4·3=48
-- [ ] **B8. Personal ELO estimate** — problem: P4 — no strength trend across
+- [x] **B8. Personal ELO estimate** — problem: P4 — no strength trend across
       sparring games · outcome-link: N3 · scope: running rating updated per
       bot-game result vs the persona's rating (standard Elo K-factor update;
       relationship to `accuracy.py`'s per-game est-Elo documented in the
@@ -295,8 +296,15 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       accuracy.py's per-game estimate) · depends on B3 + **B4 (shipped)** — the
       persona ladder now supplies per-opponent ratings via `headers_json`
       (`personaId`/`personaElo`), so the Elo update runs against a real range of
-      opponents · **Phase A — NEXT slice, follows B4 (user call 2026-07-16)** ·
-      ICE 3·4·4=48
+      opponents · ICE 3·4·4=48 · **Shipped 2026-07-17 (PR pending):** Gate-1
+      scoped to **bot-ELO + chess.com anchor only** (no move-quality est-Elo —
+      it overlaps chess.com + is uncalibrated); seed 1350, K=32; pure
+      `app/rating.py` read-model + `GET /api/rating` (recompute-from-history, no
+      persisted Elo, no schema change); rated bot games only (casual excluded),
+      pre-B4 rows lacking `personaElo` skipped. Dual-reviewed (refuter PASS ×2;
+      Codex spec-stage folded 6, diff-stage infra-blocked). Browser-verified:
+      a rated loss vs Alex(1800) moved 1350→1348 live, persisted across reload,
+      casual games ignored, chess.com anchor persists.
 
 ## NEXT (validated problems · not yet spec'd)
 

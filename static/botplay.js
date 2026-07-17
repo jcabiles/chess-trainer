@@ -258,6 +258,73 @@ function reflectPersonaLock() {
   sel.disabled = !!(busy || live);
 }
 
+// --- personal ELO readout + chess.com anchor (B8) --------------------------
+//
+// Bot-ELO is a server read-model (GET /api/rating, recomputed from history);
+// the chess.com rating is a client-only display reference persisted via prefs.js
+// (chess-training:ui:v1). The chess.com value is NEVER sent to the server.
+
+// Normalize a chess.com input value to a finite positive integer, or null.
+// Used on BOTH read (init) and change so a stored "NaN"/"abc"/null never renders
+// as a rating. Empty / non-numeric / NaN / <= 0 → null.
+function normChessCom(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.trunc(n);
+  return i > 0 ? i : null;
+}
+
+// Render the chess.com anchor line from the current pref (a normalized int or
+// null). Toggles visibility via the `hidden` attribute (T3 contract).
+function renderChessCom() {
+  const el = byId('botplay-chesscom');
+  if (!el) return;
+  const n = normChessCom(readUiPrefs().chessComRating);
+  if (n !== null) {
+    el.textContent = `chess.com: ${n}`;
+    el.removeAttribute('hidden');
+  } else {
+    el.setAttribute('hidden', '');
+  }
+}
+
+// Render the bot-ELO readout + the chess.com anchor from a /api/rating payload.
+function renderRating(data) {
+  const el = byId('botplay-elo');
+  if (el) {
+    if (typeof data.botElo === 'number') {
+      el.textContent = `Bot rating: ${data.botElo} (${data.gamesCounted} game(s))`;
+    } else {
+      el.textContent = 'Bot rating: — play a rated game to start';
+    }
+  }
+  renderChessCom();
+}
+
+// Best-effort fetch of the running bot-ELO; on failure leave the readout as-is.
+async function refreshRating() {
+  try {
+    const res = await fetch('/api/rating');
+    const data = await res.json();
+    renderRating(data);
+  } catch (_) { /* best-effort — keep the current readout */ }
+}
+
+// Initialize the chess.com input from the persisted pref (normalized) and wire
+// its change listener. Persists the normalized int (or null to clear) + re-renders.
+function wireChessComInput() {
+  const input = byId('chesscom-rating');
+  const stored = normChessCom(readUiPrefs().chessComRating);
+  if (input) input.value = stored === null ? '' : String(stored);
+  renderChessCom();
+  if (!input) return;
+  input.addEventListener('change', () => {
+    const n = normChessCom(input.value);
+    writeUiPref('chessComRating', n);
+    renderChessCom();
+  });
+}
+
 // --- status probe (persona label + Maia dot + Start availability) ----------
 
 async function probeStatus() {
@@ -319,8 +386,13 @@ function saveGame(snapshot) {
     // or deduped at least one game.
     const ok = res && typeof res.imported === 'number' && typeof res.duplicates === 'number'
       && (res.imported + res.duplicates) >= 1;
-    if (ok) hub().botMarkSaved(snapshot.startedAt);
-    else console.warn('[botplay] save failed — game left unsaved', res);
+    if (ok) {
+      hub().botMarkSaved(snapshot.startedAt);
+      // Only a RATED save moves the bot-ELO — refresh the readout without reload.
+      // Both finish paths and the rated-abandon saveOnLeave funnel through here,
+      // so this single hook covers all rated saves; casual saves must NOT refresh.
+      if (snapshot.rated) void refreshRating();
+    } else console.warn('[botplay] save failed — game left unsaved', res);
   }).catch((err) => {
     console.warn('[botplay] save failed — game left unsaved', err);
   });
@@ -677,6 +749,7 @@ export function initBotplay(api) {
   wireToggle();
   wireColorPicker();
   wirePersonaPicker();
+  wireChessComInput();
 
   byId('botplay-start').addEventListener('click', startGame);
   byId('botplay-resign').addEventListener('click', resign);
@@ -687,5 +760,9 @@ export function initBotplay(api) {
 
   // Probe engine status (persona label, Maia dot, Start availability), THEN —
   // if a refresh restored a bot game on the bot's turn — resume the reply.
-  probeStatus().finally(() => resumeIfPending());
+  // Also fetch the running bot-ELO once (best-effort) to populate the readout.
+  probeStatus().finally(() => {
+    resumeIfPending();
+    void refreshRating();
+  });
 }

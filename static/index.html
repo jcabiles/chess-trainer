@@ -150,6 +150,15 @@
           </label>
           <div class="botplay-hint botplay-rated-hint">Rated games count toward your ELO; quitting a rated game is a loss.</div>
 
+          <div class="botplay-rating-row">
+            <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
+            <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
+          </div>
+          <div class="botplay-chesscom-input-row">
+            <label class="eval-label" for="chesscom-rating">Your chess.com rating</label>
+            <input type="number" id="chesscom-rating" class="botplay-chesscom-input" min="0" step="1" placeholder="e.g. 1500">
+          </div>
+
           <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
 
           <div class="botplay-controls">
