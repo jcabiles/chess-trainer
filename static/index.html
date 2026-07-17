@@ -150,6 +150,15 @@
           </label>
           <div class="botplay-hint botplay-rated-hint">Rated games count toward your ELO; quitting a rated game is a loss.</div>
 
+          <div class="botplay-takeback-policy-row">
+            <label class="eval-label" for="bot-takeback-policy">Takebacks</label>
+            <select id="bot-takeback-policy" class="botplay-persona-select" aria-label="Takeback policy">
+              <option value="never">Never</option>
+              <option value="three" selected>Up to 3</option>
+              <option value="anytime">Anytime</option>
+            </select>
+          </div>
+
           <div class="botplay-rating-row">
             <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
             <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
@@ -165,7 +174,10 @@
             <button id="botplay-start" class="botplay-start" type="button">Start</button>
             <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
             <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
+            <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
+            <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
           </div>
+          <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
           <div id="botplay-hint" class="botplay-hint" hidden></div>
         </div>
       </div>

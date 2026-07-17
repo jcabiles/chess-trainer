@@ -1225,6 +1225,15 @@ body.trap-practice-mode #fen-error { display: none; }
   margin-top: calc(-1 * var(--space-2));
 }
 
+/* Takeback policy selector — reuses the persona-picker-row layout and the
+   persona-select control look (same select idiom, disabled mid-game by
+   botplay.js/T3). */
+.botplay-takeback-policy-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .botplay-status {
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -1240,6 +1249,24 @@ body.trap-practice-mode #fen-error { display: none; }
 
 .botplay-resign:hover {
   border-color: var(--q-blunder-border);
+}
+
+.botplay-takeback:hover {
+  border-color: var(--accent);
+}
+
+/* Takeback counter — sits inline next to the button in .botplay-controls,
+   reads as a muted caption (same tone as botplay-hint). */
+.botplay-takeback-count {
+  font-size: 0.78rem;
+  color: var(--muted);
+  align-self: center;
+}
+
+/* Rated→casual note — shown once a takeback flips a rated game to casual;
+   reuses botplay-hint's subdued caption look. */
+.botplay-takeback-note {
+  margin-top: calc(-1 * var(--space-2));
 }
 
 /* Disabled state — Start button when /api/bot/status.available is false.
@@ -1324,7 +1351,10 @@ body.trap-practice-mode #fen-error { display: none; }
    UA display:none, so the Retry button needs an explicit guard (it's shown
    only on engine-down). id+attr specificity beats the bare `button` rule. */
 #botplay-retry[hidden],
-#botplay-resign[hidden] { display: none; }
+#botplay-resign[hidden],
+#botplay-takeback[hidden] { display: none; }
+
+#botplay-takeback-note[hidden] { display: none; }
 
 /* Win-chances bar hidden: class set on .board-wrap by app.js. Pure CSS hide —
    setEvalBar keeps updating underneath so a re-show is instantly current. */

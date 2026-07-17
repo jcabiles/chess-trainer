@@ -192,6 +192,8 @@ function persist() {
           startedAt: botGame.startedAt || '',
           saved: !!botGame.saved,
           rated: !!botGame.rated,
+          takebacksUsed: botGame.takebacksUsed | 0,
+          ratedFlipped: !!botGame.ratedFlipped,
         },
         priorPlay: {
           baseFen: botPriorPlay.baseFen,
@@ -292,6 +294,8 @@ function restore() {
         startedAt: bg.startedAt || '',
         saved: !!bg.saved,
         rated: !!bg.rated,
+        takebacksUsed: bg.takebacksUsed | 0,
+        ratedFlipped: !!bg.ratedFlipped,
       };
       botPriorPlay = {
         baseFen: pp.baseFen,
@@ -445,6 +449,8 @@ function botSetGame(game) {
     startedAt: game.startedAt || '',
     saved: !!game.saved,
     rated: !!game.rated,
+    takebacksUsed: game.takebacksUsed | 0,
+    ratedFlipped: !!game.ratedFlipped,
   } : null;
   // Mirror into the canonical play-state so syncBoard/refreshAnalysis operate on it.
   // This is a wholesale state swap (like restorePlay): bump both guards so a
@@ -472,6 +478,34 @@ function botAppendMove(uci) {
   botGame.cursor = at + 1;
   state.moves = botGame.movesUci.slice();
   state.cursor = botGame.cursor;
+}
+
+// Rewind the last full move pair (user move + bot reply → 2 plies) so it's the
+// user's turn again. Bot-mode-local — reached only via the hub (botplay.js never
+// imports app.js); the global undo()/redo() stay untouched. Truncates botGame +
+// state in lockstep, bumps both guards (drop a stale in-flight bot-position eval
+// landing on the rewound board), re-renders via syncBoard() (renders from
+// state.cursor → correct fen/turnColor/lastMove, NOT a bare board-only reset),
+// and flips a rated game to casual once (idempotent). Returns the new counter +
+// rated state + whether THIS call flipped it, so botplay.js can update the UI;
+// returns null if fewer than 2 plies exist (no full pair to take back).
+function botTakeback() {
+  if (!botGame || botGame.movesUci.length < 2) return null;
+  botGame.movesUci = botGame.movesUci.slice(0, botGame.movesUci.length - 2);
+  botGame.cursor = botGame.movesUci.length;
+  // botGame↔state lockstep (same dual-write as botAppendMove).
+  state.moves = botGame.movesUci.slice();
+  state.cursor = botGame.cursor;
+  botGame.takebacksUsed = (botGame.takebacksUsed | 0) + 1;
+  let flippedToCasual = false;
+  if (botGame.rated) { botGame.rated = false; flippedToCasual = true; botGame.ratedFlipped = true; }
+  // Wholesale truncation: drop any move-write / analysis response still in flight
+  // from before the rewind (as botSetGame does on a state swap).
+  moveToken++;
+  analysisToken++;
+  syncBoard(); // full ground.set from state.cursor: fen + turnColor + lastMove.
+  persist();
+  return { takebacksUsed: botGame.takebacksUsed, rated: botGame.rated, flippedToCasual };
 }
 
 function botSetResult(result) {
@@ -1288,6 +1322,7 @@ function init() {
       botSetGame,
       botGetGame,
       botAppendMove,
+      botTakeback,
       botSetResult,
       botMarkSaved,
       botConsumeResumePending,

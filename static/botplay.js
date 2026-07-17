@@ -127,6 +127,106 @@ function showResign(show) {
   if (el) el.hidden = !show;
 }
 
+// --- takeback policy + guard (B6) ------------------------------------------
+//
+// Per-match policy persisted via prefs.js (`takebackPolicy`, default "three").
+// Normalized on read against the allowlist so a stale/unknown value falls back
+// to the default (mirrors normChessCom's normalize-on-read precedent). The
+// selector is a pre-game setting locked mid-game like the persona/color pickers.
+
+const TAKEBACK_POLICIES = ['never', 'three', 'anytime'];
+
+function takebackPolicy() {
+  const v = readUiPrefs().takebackPolicy;
+  return TAKEBACK_POLICIES.includes(v) ? v : 'three';
+}
+
+// Is a takeback currently allowed? Only when idle (`!busy`), on the user's turn,
+// in a live bot game with ≥2 plies played, and the policy permits it:
+//   never → never; three → used < 3; anytime → always.
+function canTakeback() {
+  const g = hub().botGetGame();
+  if (!(g && !g.result && !busy && state().mode === 'bot-play'
+        && currentPos().turn === g.userColor && (g.movesUci || []).length >= 2)) {
+    return false;
+  }
+  const policy = takebackPolicy();
+  if (policy === 'never') return false;
+  if (policy === 'three') return (g.takebacksUsed || 0) < 3;
+  return true; // anytime
+}
+
+// Take back the last full move pair (button handler). The hub truncates 2 plies,
+// mirrors state, bumps tokens (dropping a stale eval), flips rated→casual, and
+// re-renders the board. We then restore the user's dests and fetch a FRESH eval
+// (the token bump only DROPS the stale one; every other position change calls
+// refreshAnalysis), and reflect the controls.
+function takeback() {
+  if (!canTakeback()) return;
+  const res = hub().botTakeback();
+  if (!res) return;
+  giveUserTurn();
+  hub().refreshAnalysis();
+  reflectControls();
+}
+
+// Lock/unlock the takeback policy selector (disabled attribute — like the
+// persona picker). Inert while busy or a game is live.
+function reflectTakebackLock() {
+  const sel = byId('bot-takeback-policy');
+  if (!sel) return;
+  const game = hub().botGetGame();
+  const live = state().mode === 'bot-play' && game && !game.result;
+  sel.disabled = !!(busy || live);
+}
+
+// Reflect the takeback button/counter/note from descriptor state. The counter
+// text depends on the policy; the note is DERIVED from the persisted
+// `ratedFlipped` flag (set only when a takeback flipped a RATED game to casual)
+// so it survives a refresh and never shows for a casual-from-start game.
+function reflectTakeback() {
+  const game = hub().botGetGame();
+  const live = state().mode === 'bot-play' && game && !game.result;
+  const n = (game && game.takebacksUsed) || 0;
+
+  const btn = byId('botplay-takeback');
+  if (btn) btn.hidden = !canTakeback();
+
+  const count = byId('botplay-takeback-count');
+  if (count) {
+    const policy = takebackPolicy();
+    if (live && policy === 'three') count.textContent = `Takebacks: ${n}/3`;
+    else if (live && policy === 'anytime') count.textContent = `Takebacks: ${n}`;
+    else count.textContent = ''; // never, or not a live bot game
+  }
+
+  const note = byId('botplay-takeback-note');
+  // Only for a game that was RATED and a takeback flipped it to casual — the
+  // persisted `ratedFlipped` flag survives refresh and never fires for a
+  // casual-from-start game (which never counted toward the rating).
+  if (note) note.hidden = !(game && game.ratedFlipped);
+
+  reflectTakebackLock();
+}
+
+// Wire the policy selector: init from the pref; on change, revert if locked
+// (mid-game/busy) else persist + reflect (mirrors wirePersonaPicker).
+function wireTakebackPolicy() {
+  const sel = byId('bot-takeback-policy');
+  if (!sel) return;
+  sel.value = takebackPolicy();
+  sel.addEventListener('change', () => {
+    const game = hub().botGetGame();
+    const locked = busy || (game && !game.result && state().mode === 'bot-play');
+    if (locked) {
+      sel.value = takebackPolicy();
+      return;
+    }
+    writeUiPref('takebackPolicy', sel.value);
+    reflectControls();
+  });
+}
+
 // Sync the Resign/Retry/Start visibility + status for the current game phase.
 function reflectControls() {
   const game = hub().botGetGame();
@@ -135,6 +235,7 @@ function reflectControls() {
   const startBtn = byId('botplay-start');
   if (startBtn) startBtn.textContent = (game && game.result) ? 'New game' : 'Start';
   reflectPersonaLock();
+  reflectTakeback();
 }
 
 // --- collapse toggle + color radiogroup ------------------------------------
@@ -562,6 +663,7 @@ async function onMove(orig, dest) {
   setStatusLine('Bot is thinking…');
   freezeBoard();
   scheduleBotReply();
+  reflectControls(); // hide the takeback button while the bot is thinking (busy)
 }
 
 // --- auto-reply (bot move) -------------------------------------------------
@@ -656,6 +758,7 @@ async function requestBotMove(myToken, fen) {
 
   setStatusLine('Your move.');
   giveUserTurn();
+  reflectControls(); // refresh the takeback button/counter now it's the user's turn
 }
 
 // --- resign / retry --------------------------------------------------------
@@ -749,11 +852,13 @@ export function initBotplay(api) {
   wireToggle();
   wireColorPicker();
   wirePersonaPicker();
+  wireTakebackPolicy();
   wireChessComInput();
 
   byId('botplay-start').addEventListener('click', startGame);
   byId('botplay-resign').addEventListener('click', resign);
   byId('botplay-retry').addEventListener('click', retry);
+  byId('botplay-takeback').addEventListener('click', takeback);
 
   // The hub dispatcher routes bot-play board moves here; exit is botExit.
   api.hub.registerModeHandlers('bot-play', { onMove, exit });

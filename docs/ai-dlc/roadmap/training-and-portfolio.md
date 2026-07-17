@@ -155,8 +155,9 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 > 2026-07-16): all eight slices sum to 15–21 working days (~3–4 weeks).
 > **Phase A (inside the 2-week appetite): B1 → B2 → B3 → B4 → B8 → B6**
 > (research, skeleton, N1 save-loop, persona-ladder, personal-ELO, takebacks —
-> a complete playable core). **Status 2026-07-17: B1–B4 + B8 all shipped; only
-> B6 (takebacks) remains to complete Phase A.** **B4 pulled into Phase A + resequenced ahead of B8
+> a complete playable core). **Status 2026-07-17: PHASE A COMPLETE — B1, B2, B3,
+> B4, B8, B6 all shipped. Phase B (B5 causal-blunder model + B7 clocks) needs an
+> explicit user re-up.** **B4 pulled into Phase A + resequenced ahead of B8
 > 2026-07-16 (user call):** a personal-ELO trend is only meaningful against a
 > rated LADDER of opponents, so the persona ladder ships first; B8 then tracks
 > results across the ladder. **Phase B (B5, B7, ~5–8 days) exceeds the stated
@@ -261,7 +262,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       **hard-gated on B1 · depends on B4** (style-conditioning needs the
       personas) · Phase B · ICE 5·3·2=30 (highest value, most uncertain —
       ICE kept honest)
-- [ ] **B6. Takeback control** — problem: P3 — punishing a mis-click/stupid
+- [x] **B6. Takeback control** — problem: P3 — punishing a mis-click/stupid
       blunder with a lost game kills training value; user wants it policed,
       not free · outcome-link: N3 · scope: per-match setting **never / up to
       3 per game / anytime** (persisted pref, default "up to 3"); bot-mode-
@@ -271,7 +272,16 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       "up to 3"; counter resets on new game; "never" hides/disables the
       control) · appetite: 1 day · no-gos: no server-side enforcement
       (client-owned history is the existing trust model) · depends on B2 ·
-      ICE 4·5·5=100
+      ICE 4·5·5=100 · **Shipped 2026-07-17 (PR pending):** entirely
+      client-side. New bot-mode-local `botTakeback()` hub method (truncate the
+      last pair, botGame↔state lockstep, bump moveToken/analysisToken, full
+      ground.set re-render); Gate-1 added **rated→casual flip on first takeback**
+      (reuses the `rated` flag → excluded from the B8 bot-ELO, no schema change)
+      + idle-only (no mid-think cancellation). Refuter caught a real HIGH in
+      browser verify (button never appeared during live play — missing
+      `reflectControls()` on the bot-reply handback) + a note-accuracy LOW
+      (persisted `ratedFlipped` flag) — both fixed + re-reviewed PASS.
+      **Phase A COMPLETE.**
 - [ ] **B7. Clocks + time controls** — problem: real-game realism —
       confirmed at gate: clock enforced for BOTH sides, flag = loss · outcome-
       link: N3 (and feeds the existing time-trouble insights) · scope:
