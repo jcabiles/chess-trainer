@@ -174,6 +174,30 @@ def test_bot_move_engine_down_503(down_client):
     assert "detail" in resp.json()
 
 
+class EmptyBot:
+    """Fake bot whose ``candidates`` returns [] for a non-terminal position
+    (engine yielded no usable PV at the fixed budget)."""
+
+    async def candidates(self, fen: str, k: int = 1) -> list[dict]:
+        return []
+
+    async def close(self) -> None:  # pragma: no cover - lifespan shutdown
+        pass
+
+
+def test_bot_move_empty_candidates_503():
+    """A non-terminal position with no engine candidate is a recoverable 503,
+    not an unhandled 500 (IndexError on cands[0])."""
+    app.dependency_overrides[get_bot_engine] = lambda: EmptyBot()
+    try:
+        with TestClient(app) as c:
+            resp = c.post("/api/bot/move", json={"fen": START_FEN})
+        assert resp.status_code == 503
+        assert "detail" in resp.json()
+    finally:
+        app.dependency_overrides.clear()
+
+
 # --- /api/bot/status -------------------------------------------------------
 
 

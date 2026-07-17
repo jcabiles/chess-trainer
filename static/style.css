@@ -1219,7 +1219,8 @@ body.trap-practice-mode #fen-error { display: none; }
 /* Global `button { display: inline-flex }` overrides the [hidden] attr's
    UA display:none, so the Retry button needs an explicit guard (it's shown
    only on engine-down). id+attr specificity beats the bare `button` rule. */
-#botplay-retry[hidden] { display: none; }
+#botplay-retry[hidden],
+#botplay-resign[hidden] { display: none; }
 
 /* Win-chances bar hidden: class set on .board-wrap by app.js. Pure CSS hide —
    setEvalBar keeps updating underneath so a re-show is instantly current. */

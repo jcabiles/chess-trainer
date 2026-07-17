@@ -78,6 +78,16 @@ function freezeBoard() {
   hub().setMovable(null, null);
 }
 
+// Human-readable line for a finished game from the user's perspective. Used when
+// a completed game is restored after a refresh (the exact end-reason isn't
+// persisted, only the result string).
+function resultLine(result, userColor) {
+  if (result === '1/2-1/2') return 'Game over — draw.';
+  const userWon = (result === '1-0' && userColor === 'white')
+               || (result === '0-1' && userColor === 'black');
+  return userWon ? 'Game over — you win.' : 'Game over — bot wins.';
+}
+
 // Roll the board back to the current game position after a rejected/failed user
 // move. Restores the FEN, and if it is still the user's live turn re-establishes
 // their legal dests (a rejected drag otherwise leaves the board un-interactive).
@@ -202,9 +212,14 @@ function startGame() {
 
   const userColor = chosenColor();
 
-  // Enter bot-play: capture the prior play session, then set the descriptor and
-  // flip the mode. botEnter() must run BEFORE setMode('bot-play') (T3 contract).
-  hub().botEnter();
+  // Enter bot-play: capture the prior play session ONCE. If we're already in
+  // bot-play (a "New game" / mid-game restart), botEnter() must NOT re-run —
+  // by now the bot line has been mirrored into play-state, so a fresh
+  // snapshotPlay() would overwrite the real prior play session with the bot
+  // position and permanently lose the user's exit target. Only capture on the
+  // genuine play→bot transition. botEnter() must precede setMode (T3 contract).
+  const alreadyInBot = state().mode === 'bot-play' && hub().botGetGame();
+  if (!alreadyInBot) hub().botEnter();
   hub().botSetGame({
     baseFen: INITIAL_FEN,
     movesUci: [],
@@ -316,8 +331,10 @@ function scheduleBotReply() {
   thinkTimer = setTimeout(() => {
     thinkTimer = null;
     // Guard: exit/new-game/color/resign/terminal/restart may have fired while
-    // we waited (traps.js scheduled-callback idiom).
-    if (myToken !== replyToken) { busy = false; return; }
+    // we waited (traps.js scheduled-callback idiom). If our token is superseded,
+    // a NEWER operation owns the busy gate — return WITHOUT clearing busy (the
+    // owner clears it; the invalidating events all reset busy at their call site).
+    if (myToken !== replyToken) return;
     const game = hub().botGetGame();
     if (state().mode !== 'bot-play' || !game || game.result) { busy = false; return; }
     void requestBotMove(myToken, fen);
@@ -330,8 +347,10 @@ async function requestBotMove(myToken, fen) {
     data = await hub().postJSON('/api/bot/move', { fen });
   } catch (err) {
     // Engine down / network failure. The token may already be stale (resign,
-    // exit) — in that case drop silently and DON'T surface an error.
-    if (myToken !== replyToken || state().mode !== 'bot-play') { busy = false; return; }
+    // exit) — in that case a newer op owns the gate, so drop WITHOUT clearing
+    // busy and DON'T surface an error.
+    if (myToken !== replyToken) return;
+    if (state().mode !== 'bot-play') { busy = false; return; }
     const game = hub().botGetGame();
     if (!game || game.result) { busy = false; return; }
     busy = false;
@@ -341,8 +360,10 @@ async function requestBotMove(myToken, fen) {
     return;
   }
 
-  // Re-check the token AFTER the await (app.js mint-before-await pattern).
-  if (myToken !== replyToken || state().mode !== 'bot-play') { busy = false; return; }
+  // Re-check the token AFTER the await (app.js mint-before-await pattern). If
+  // superseded, a newer op owns the gate — return without clearing busy.
+  if (myToken !== replyToken) return;
+  if (state().mode !== 'bot-play') { busy = false; return; }
   const game = hub().botGetGame();
   if (!game || game.result) { busy = false; return; }
 
@@ -430,7 +451,15 @@ function exit() {
 function resumeIfPending() {
   if (state().mode !== 'bot-play') return;
   const game = hub().botGetGame();
-  if (!game || game.result) return;
+  if (!game) return;
+  if (game.result) {
+    // A finished game was restored after a refresh — show its result and offer
+    // "New game" rather than a blank status + "Start".
+    reflectControls();
+    setStatusLine(resultLine(game.result, game.userColor));
+    freezeBoard();
+    return;
+  }
   if (hub().botConsumeResumePending()) {
     setStatusLine('Bot is thinking…');
     freezeBoard();

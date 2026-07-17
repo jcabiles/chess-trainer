@@ -659,6 +659,16 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
             },
         )
 
+    # candidates() drops entries with no PV, so it can return [] even for a
+    # non-terminal position (e.g. the engine yielded no usable line at the fixed
+    # budget). Treat that as a recoverable engine failure (503 → client Retry),
+    # not an unhandled IndexError (500).
+    if not cands:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Bot engine returned no move. Please retry."},
+        )
+
     move = chess.Move.from_uci(cands[0]["uci"])
     move_san = board.san(move)  # render SAN BEFORE pushing
     board.push(move)

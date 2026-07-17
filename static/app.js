@@ -190,6 +190,7 @@ function persist() {
           baseFen: botPriorPlay.baseFen,
           moves: (botPriorPlay.moves || []).slice(),
           cursor: botPriorPlay.cursor | 0,
+          orientation: botPriorPlay.orientation === 'black' ? 'black' : 'white',
         },
       }));
     } catch (_) { /* best-effort */ }
@@ -253,6 +254,14 @@ function restore() {
         if (typeof uci !== 'string') return null;
         pos.play(parseUci(uci));
       }
+      // Validate the embedded priorPlay the SAME way — it is replayed by
+      // botExit()→restorePlay()→syncBoard() later, so a shaped-but-malformed
+      // snapshot (bad FEN / illegal move) must be rejected here, not crash on exit.
+      const ppPos = positionFromFen(pp.baseFen);
+      for (const uci of pp.moves) {
+        if (typeof uci !== 'string') return null;
+        ppPos.play(parseUci(uci));
+      }
       const cursor = Math.min(Math.max(0, bg.cursor | 0), bg.movesUci.length);
       const userColor = bg.userColor === 'black' ? 'black' : 'white';
       state.mode = 'bot-play';
@@ -272,7 +281,12 @@ function restore() {
         personaLabel: bg.personaLabel || '',
         result: bg.result || null,
       };
-      botPriorPlay = { baseFen: pp.baseFen, moves: pp.moves.slice(), cursor: pp.cursor | 0 };
+      botPriorPlay = {
+        baseFen: pp.baseFen,
+        moves: pp.moves.slice(),
+        cursor: pp.cursor | 0,
+        orientation: pp.orientation === 'black' ? 'black' : 'white',
+      };
       // Turn check: if the game isn't already over and it is the BOT's turn, the
       // reply never came back before the refresh — flag it so botplay.js schedules
       // the pending bot move on init. (positionAt() uses state, set above.)
@@ -323,6 +337,7 @@ function snapshotPlay() {
     moveQuality: state.moveQuality.slice(),
     moveRetro: state.moveRetro.slice(),
     cursor: state.cursor,
+    orientation: state.orientation,
   };
 }
 
@@ -336,6 +351,9 @@ function restorePlay(snap) {
   state.moveQuality = (snap.moveQuality || []).slice();
   state.moveRetro = (snap.moveRetro || []).slice();
   state.cursor = snap.cursor | 0;
+  // Round-trip orientation so exiting bot-play restores the prior board side
+  // (bot entry flipped it to the user's color). Tolerate the legacy shape.
+  if (snap.orientation) state.orientation = snap.orientation === 'black' ? 'black' : 'white';
 }
 
 function getPlaySnapshot() { return playSnapshot; }
@@ -384,6 +402,10 @@ function botEnter(prior) {
 // restore() after a refresh. Clears bot carriers, then normal play persist()
 // resumes ownership of the STORAGE_KEY slot.
 function botExit() {
+  // Invalidate any analysis started while in bot-play: restorePlay bumps
+  // moveToken, but an in-flight refreshAnalysis keys off analysisToken and would
+  // otherwise render a bot-position eval onto the restored play board.
+  analysisToken++;
   const snap = botPriorPlay || { baseFen: INITIAL_FEN, moves: [], cursor: 0 };
   restorePlay(snap);
   botGame = null;
@@ -404,7 +426,13 @@ function botSetGame(game) {
     result: game.result || null,
   } : null;
   // Mirror into the canonical play-state so syncBoard/refreshAnalysis operate on it.
+  // This is a wholesale state swap (like restorePlay): bump both guards so a
+  // play-mode move-write or analysis response still in flight from BEFORE the swap
+  // (e.g. a late /api/move when both old and new cursor are 0) is dropped, not
+  // committed onto the bot game.
   if (botGame) {
+    moveToken++;
+    analysisToken++;
     state.baseFen = botGame.baseFen;
     state.moves = botGame.movesUci.slice();
     state.cursor = botGame.cursor;
