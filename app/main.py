@@ -43,6 +43,7 @@ from app import (
     personas,
     pgn,
     profile,
+    rating,
     repertoire,
     review,
     storage,
@@ -88,6 +89,7 @@ from app.models import (
     OpeningsInsightsResponse,
     PlyDetail,
     ProfileResponse,
+    RatingResponse,
     RetagRequest,
     RetagResponse,
     ReviewResponse,
@@ -1506,6 +1508,27 @@ async def get_profile():
         data.setdefault("games_total", 0)
         data.setdefault("games_tagged", 0)
     return ProfileResponse(**data)
+
+
+# ---------------------------------------------------------------------------
+# Rating — running bot-ELO read-model (additive)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/rating", response_model=RatingResponse)
+async def get_rating():
+    """Return the running bot-ELO recomputed from stored rated bot games."""
+    try:
+        return rating.build_rating()
+    except RuntimeError:
+        # Storage not initialised (edge case in tests or first boot before init).
+        return RatingResponse(
+            seedElo=1350,
+            k=32,
+            botElo=None,
+            gamesCounted=0,
+            gamesSkipped=0,
+            history=[],
+        )
 
 
 # ---------------------------------------------------------------------------

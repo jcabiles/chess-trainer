@@ -485,6 +485,31 @@ class ProfileResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Rating — running bot-ELO read-model (additive; app/rating.py::build_rating)
+# ---------------------------------------------------------------------------
+
+
+class RatingPoint(BaseModel):
+    """One counted rated bot game in the running-Elo history."""
+
+    gameId: int
+    opponentElo: int
+    score: float
+    eloAfter: int
+
+
+class RatingResponse(BaseModel):
+    """Response for ``GET /api/rating``."""
+
+    seedElo: int
+    k: int
+    botElo: int | None = None
+    gamesCounted: int
+    gamesSkipped: int
+    history: list[RatingPoint] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # Insights — Openings slice (additive; app/insights.py::build_openings_insights)
 # ---------------------------------------------------------------------------
 
