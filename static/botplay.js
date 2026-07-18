@@ -1312,7 +1312,7 @@ function renderRail() {
 // apply → write-on-change, mirroring app.js's analysisPanelCollapsed pattern.
 // Open = `.bot-rail-open` on <main> + rail [hidden] cleared + pill aria-expanded.
 //
-// At ≤820px the rail is a fixed overlay sheet (CSS, T6). The rail is NOT a
+// At ≤1280px the rail is a fixed overlay sheet (CSS, T6). The rail is NOT a
 // <dialog>, so its dismissal affordances are wired manually here:
 //   • Esc               → closeRail (any width, only while open)
 //   • backdrop pointer   → closeRail (overlay/sheet width only — on desktop the
@@ -1322,14 +1322,20 @@ function renderRail() {
 // the pill on close (WCAG 2.4.3). Boot-restore (applyRailVisible from the pref)
 // wires dismissal but never steals focus on page load.
 
-// True when the rail renders as the fixed overlay sheet (mobile), where a
-// click on the scrim (outside the sheet) should dismiss it.
+// True when the rail renders as the fixed overlay sheet, where a click on the
+// scrim (outside the sheet) should dismiss it. The sheet treatment applies
+// below 1280px (mid-width + mobile) so a click "outside" always closes it;
+// above 1280px the rail is an in-flow grid track with no backdrop.
 function railIsOverlay() {
-  return window.matchMedia('(max-width: 820px)').matches;
+  return window.matchMedia('(max-width: 1280px)').matches;
 }
 
 function onRailKeydown(e) {
   if (e.key === 'Escape') {
+    // The avatar lightbox is a native <dialog> in the top layer, above the rail.
+    // When it's open, Esc belongs to it — let the dialog's own Esc handling run
+    // and leave the rail beneath it untouched.
+    if (byId('avatar-lightbox')?.open) return;
     e.preventDefault();
     closeRail();
   }

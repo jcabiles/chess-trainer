@@ -386,6 +386,9 @@ main.bot-rail-open {
   gap: var(--space-2);
   flex: 0 0 auto;
   align-self: start;
+  /* Left-align the caption + buttons so the capped-width buttons read as a
+     compact tool rail under the BOARD caption, not full-width stretched bars. */
+  align-items: flex-start;
   min-width: 0;
 }
 
@@ -400,10 +403,14 @@ main.bot-rail-open {
   margin-bottom: var(--space-1);
 }
 
-/* Buttons stack full-width, left-aligned icon+label, ≥40px tall targets. */
+/* Buttons stack as a compact tool rail: left-aligned icon+label, ≥40px tall
+   targets, capped width so the column reads as a slim control stack rather than
+   full-width stretched bars. Fill up to the cap (width:100% + max-width) so all
+   buttons share one edge under the BOARD caption. */
 .action-col button {
   justify-content: flex-start;
   width: 100%;
+  max-width: 180px;
   min-height: 40px;
   gap: var(--space-2);
 }
@@ -2185,6 +2192,70 @@ body.rep-mode #fen-error { display: none; }
 .trap-variation[hidden] { display: none; }
 
 /* ============================================================
+   Responsive — mid-width rail overlay (821–1280px)
+   ============================================================ */
+
+/* Below 1280px the push-rail would crush the board: four rigid tracks
+   (tab | board | action | panel) plus a 5th 300px rail track leaves the board
+   the smallest thing on screen (~252px at 1280×800). So below 1280px the rail
+   stops being a grid track and becomes the same fixed overlay sheet used on
+   mobile — main keeps its CLOSED 4-track layout while the rail is open, and the
+   board returns to its closed-rail size. The ≤820px tier below inherits this
+   and further flattens the whole grid to 1fr (it subsumes these rules).
+   botplay.js's railIsOverlay() matches this same 1280px breakpoint so a
+   backdrop click closes the sheet everywhere it overlays. */
+@media (max-width: 1280px) {
+  /* Rail open must NOT add the 5th track here — pin main back to the closed
+     4-track grid so the board keeps its full closed-rail width. */
+  main.bot-rail-open {
+    grid-template-columns: auto minmax(0, 582px) auto minmax(280px, 300px);
+  }
+
+  /* Rail becomes a right-anchored sheet over a full-bleed scrim (identical to
+     the mobile treatment). The <aside> is the sheet panel; its ::before paints
+     the scrim across the whole viewport. Below toasts (z-index 9000) at 8000.
+     Board width is untouched — the sheet overlays, never a grid track. */
+  #bot-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    z-index: 8000;
+    width: min(320px, 90vw);
+    max-width: 90vw;
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    /* overflow visible so the fixed ::before scrim isn't clipped; the card
+       list keeps its own inner scroll. */
+    overflow: visible;
+    /* Slide in from the right. An animation (not a transition) is used because
+       the sheet enters via display:none→flex. The global prefers-reduced-motion
+       rule (line ~158) zeroes this duration — movement collapses to an instant
+       appear with the scrim fade, feedback preserved. */
+    animation: bot-rail-slide-in var(--motion-base) var(--ease-out);
+  }
+
+  /* Full-viewport scrim behind the sheet. A ::before can't catch clicks, so
+     backdrop-to-close is handled in botplay.js (document pointerdown outside
+     the sheet, gated on railIsOverlay()). */
+  #bot-rail::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--scrim);
+    animation: bot-rail-scrim-in var(--motion-base) var(--ease-out);
+  }
+
+  /* Inner card list keeps the sheet's scroll (root is overflow:visible so the
+     pseudo-scrim can escape). */
+  .bot-rail-list {
+    max-height: 100%;
+  }
+}
+
+/* ============================================================
    Responsive — tablet/mobile
    ============================================================ */
 
@@ -2250,54 +2321,10 @@ body.rep-mode #fen-error { display: none; }
     grid-template-columns: 1fr;
   }
 
-  /* Rail becomes a right-anchored sheet over a full-bleed scrim. The <aside>
-     itself is the sheet panel; its ::before paints the scrim across the whole
-     viewport (backdrop). Below toasts (z-index 9000) at 8000. Board width is
-     untouched — the sheet overlays, never a grid track (spec: overlay rail
-     never affects board width). */
-  #bot-rail {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: auto;
-    z-index: 8000;
-    width: min(320px, 90vw);
-    max-width: 90vw;
-    border-left: 1px solid var(--border);
-    box-shadow: var(--shadow-lg);
-    /* Slide in from the right. An animation (not a transition) is used because
-       the sheet enters via display:none→flex, where a transform transition
-       wouldn't fire. The global prefers-reduced-motion rule (line ~158) zeroes
-       this duration, so movement collapses to an instant appear with the scrim
-       fade — feedback is preserved, motion removed. */
-    animation: bot-rail-slide-in var(--motion-base) var(--ease-out);
-  }
-
-  /* Full-viewport scrim behind the sheet. A ::before can't catch clicks, so
-     backdrop-to-close is handled in botplay.js (document pointerdown outside
-     the sheet). overflow is visible on the sheet root so this fixed pseudo
-     isn't clipped; the card list keeps its own scroll. */
-  #bot-rail {
-    overflow: visible;
-  }
-
-  #bot-rail::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    background: var(--scrim);
-    animation: bot-rail-scrim-in var(--motion-base) var(--ease-out);
-  }
-
-  /* The scrolling card list keeps the sheet's inner scroll (root is now
-     overflow:visible so the pseudo-scrim can escape). */
-  .bot-rail-list {
-    /* already flex:1 + overflow-y:auto from the base rule; nothing to add,
-       but ensure it doesn't exceed the sheet height */
-    max-height: 100%;
-  }
+  /* The rail sheet, scrim, and inner-list treatment come from the ≤1280px tier
+     above — it already turns #bot-rail into the fixed overlay sheet and this
+     tier (being narrower) is fully subsumed by it. Only the whole-grid flatten
+     (main → 1fr, action-col fold) and the pill pinning are ≤820px-specific. */
 
   /* ---- Play-vs-Bot pill → fixed bottom-right (T6) ----
      The panel stacks below the board on mobile, so the pill would scroll away.
@@ -2311,6 +2338,9 @@ body.rep-mode #fen-error { display: none; }
     z-index: 7000;
     box-shadow: var(--shadow-md);
     background: var(--accent-dim);
+    /* Primary floating action on touch — meet the 44px comfortable touch
+       target (WCAG 2.2 AA SC 2.5.8 floor is 24px; 44px for a primary action). */
+    min-height: 44px;
   }
 
   /* ---- Touch targets — WCAG 2.2 AA (SC 2.5.8): dense controls get
