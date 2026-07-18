@@ -31,6 +31,7 @@ CI offline via `tests/test_evals_grounding.py`):
 | `unreached_phase` | a chapter narrating a phase the game never reached (the runtime parser doesn't close this) |
 | `bad_move_number` | "at move 60" in a 25-move game |
 | `second_best_named` | a "better was Nf3" claim on a narrow-choice moment — the payload never carries a second-best move, so any named alternative is invented |
+| `motif_mismatch` | a tactical motif named in prose (hanging / fork / pin / skewer / discovered attack / back-rank) that no moment's `facts.category` or `facts.threat_motif` supports — the keyword set is sourced from `app/motifs.py`, and generic words ("attack", "pressure", "threat") never fire |
 
 Only falsifiable checks live in this layer; each red result is a hard fail,
 not an opinion. The planted-violation tests prove every class is actually

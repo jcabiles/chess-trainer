@@ -7,6 +7,7 @@ network: this is the CI-runnable slice of the eval harness.
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -107,6 +108,64 @@ class TestPlantedViolations:
         n = _clean_narrative()
         n["moments"].append({"ply": 99, "text": "A quiet improvement."})
         assert any(v.where == "moment:99" for v in check_narrative(PAYLOAD, n))
+
+    def test_motif_mismatch_is_caught(self):
+        p = copy.deepcopy(PAYLOAD)
+        p["moments"][0]["facts"]["category"] = "hanging"
+        n = _clean_narrative()
+        n["moments"][0]["text"] = "Nxe4 walked into a fork on f7."
+        v = [x for x in check_narrative(p, n) if x.kind == "motif_mismatch"]
+        assert len(v) == 1
+        assert v[0].where == "moment:9"
+        assert "fork" in v[0].detail
+
+    def test_correct_motif_is_not_flagged(self):
+        p = copy.deepcopy(PAYLOAD)
+        p["moments"][0]["facts"]["category"] = "hanging"
+        n = _clean_narrative()
+        n["moments"][0]["text"] = "Nxe4 left the knight hanging; exd4 was safe."
+        assert check_narrative(p, n) == []
+
+    def test_threat_motif_field_supports_prose(self):
+        p = copy.deepcopy(PAYLOAD)
+        p["moments"][0]["facts"]["threat_motif"] = "back_rank"
+        n = _clean_narrative()
+        n["overall"] = "Watch the back-rank weakness around move 5."
+        assert check_narrative(p, n) == []
+
+    def test_generic_words_never_fire(self):
+        # "attack", "pressure", "threat" are not motifs — no facts needed.
+        n = _clean_narrative()
+        n["overall"] = "The attack built pressure; every threat mattered."
+        assert check_narrative(PAYLOAD, n) == []
+
+    def test_metaphorical_motif_words_do_not_fire(self):
+        # A motif word with no adjacent piece/square is ordinary English, not a
+        # falsifiable tactical claim — it must never hard-fail. (PAYLOAD carries
+        # no motif facts, so any fire here would be a false positive.)
+        for prose in [
+            "The position was hanging in the balance after this exchange.",
+            "This move forks well with the earlier plan of central control.",
+            "The evaluation kept hanging near equality for several moves.",
+            "The players had a fork in the road: attack or consolidate.",
+            "Black's pieces are pinned to passive squares by the structure.",
+            "This skewers straight to the heart of the opening theory.",
+            "He was pinning his hopes on a kingside initiative.",
+            "The opponent was hanging around, stalling for time.",
+        ]:
+            n = _clean_narrative()
+            n["overall"] = prose
+            assert check_narrative(PAYLOAD, n) == [], prose
+
+    def test_motif_with_object_still_fires_when_unsupported(self):
+        # The tightening must not go so far it stops catching real claims: a
+        # motif named next to a piece/square, with no supporting facts, fires.
+        p = copy.deepcopy(PAYLOAD)
+        p["moments"][0]["facts"]["category"] = "hanging"  # no 'pin' anywhere
+        n = _clean_narrative()
+        n["moments"][0]["text"] = "The bishop was pinned to the king on e8."
+        v = [x for x in check_narrative(p, n) if x.kind == "motif_mismatch"]
+        assert len(v) == 1 and "pin" in v[0].detail
 
 
 # ---------------------------------------------------------------------------
