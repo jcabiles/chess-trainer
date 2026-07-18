@@ -65,7 +65,7 @@ def test_get_unknown_returns_none():
 
 def test_default_persona_shape():
     p = personas.get("morgan")
-    assert p.name == "Morgan" and p.style == "tactical"
+    assert p.name == "Diana" and p.style == "tactical"
     assert p.temperature == 130
     assert p.elo == 1550
     # description carried
@@ -214,7 +214,7 @@ def test_existing_four_personas_mistake_rate_zero():
 def test_diego_persona_values():
     diego = personas.get("diego")
     assert diego is not None
-    assert diego.name == "Diego"
+    assert diego.name == "Nina"
     assert diego.elo == 1350
     assert diego.style == "attacking"
     assert diego.temperature == 190
@@ -227,7 +227,7 @@ def test_diego_persona_values():
 def test_robin_persona_values():
     robin = personas.get("robin")
     assert robin is not None
-    assert robin.name == "Robin"
+    assert robin.name == "Amanda"
     assert robin.elo == 1350
     assert robin.style == "sloppy"
     assert robin.temperature == 100

@@ -120,8 +120,12 @@ html[data-theme="light"] {
 
   /* ---- Accent — deep green, ≥4.5:1 on base/panel ---- */
   --accent:           oklch(52% 0.14 152);  /* #16843f */
-  --accent-dim:       oklch(93.5% 0.045 152); /* #d7f2e0 — tinted bg under --accent text */
-  --accent-dim-hover: oklch(90.5% 0.055 152); /* #c2ead1 — one step deeper on hover */
+  /* Lightened so --accent text clears 4.5:1 on the tinted fill (was 93.5% →
+     4.3:1, 0.2 short of AA — failed on every accent-dim chip: seg/best-move/
+     review-btn-primary + T5 chip/pill/initials). 96% → 4.61:1; hover stays a
+     touch darker at 95.3% → 4.54:1, still AA. Dark theme untouched (8.5:1). */
+  --accent-dim:       oklch(96% 0.035 152);   /* #e1f9e6 — tinted bg under --accent text */
+  --accent-dim-hover: oklch(95.3% 0.04 152);  /* #ddf8e3 — one step deeper on hover */
   --accent-on:        oklch(98.5% 0.002 286); /* #fafafc — on-accent text */
 
   /* ---- Semantic error — 6.4:1 on base ---- */
@@ -160,6 +164,18 @@ html[data-theme="light"] {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Mobile bot-rail sheet entrance (T6). Slide the panel in from the right and
+   fade the scrim; reduced-motion zeroes both durations via the rule above. */
+@keyframes bot-rail-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes bot-rail-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ============================================================
@@ -260,14 +276,36 @@ header .sub {
    ============================================================ */
 
 main {
-  /* rail | board | panel */
+  /* Closed rail (4 tracks): tab-rail | board-col | action-col | panel.
+     The board-col track is a BOUNDED FLEX track: minmax(0, 582px) — it grows to
+     582px when there's room and shrinks below it when the rail opens and steals
+     width. 582px = 560px board cap + 22px row chrome (14px eval-bar + 8px gap),
+     so the board (which reads --board-size = 100cqw − 22px) can reach its 560px
+     cap. A definite track width (not `auto`) is REQUIRED for .board-col's
+     container query (`100cqw`) to resolve — an `auto`/content-sized track would
+     make the board size from the container while the container sizes from the
+     board (circular) and collapse. The action column is intrinsic (auto); the
+     panel takes the slack but stays 280–300px (Chess.com anchor: board dominant,
+     panel slim). */
   display: grid;
-  grid-template-columns: auto auto minmax(280px, 1fr);
+  grid-template-columns: auto minmax(0, 582px) auto minmax(280px, 300px);
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
   overflow: hidden;
   min-height: 0;
 }
+
+/* Open rail (5 tracks): + bot-rail (~300px) as the last track. The rail
+   element (T5) mounts empty for now; the class is toggled on <main> so the
+   grid gains/loses the track without DOM surgery. */
+main.bot-rail-open {
+  grid-template-columns: auto minmax(0, 582px) auto minmax(280px, 300px) 300px;
+}
+
+/* Bot rail — hidden-by-default mount point (T5 builds the interior). It will
+   carry a flex/grid display, so the [hidden] attribute needs an explicit
+   override or it no-ops (the [hidden]-on-flex gotcha; contract #8). */
+#bot-rail[hidden] { display: none; }
 
 /* ============================================================
    Board column
@@ -280,11 +318,30 @@ main {
   flex: 0 0 auto;
   overflow-y: auto;
   min-height: 0;
-  /* Board sizes to fit the viewport height so it's never clipped/scrolled on
-     short screens. Capped at 480px; shrinks when height is tight. The 240px
-     reserves header + main padding + the controls/FEN/bot rows below the board.
-     Both #board and #eval-bar read this so board-wrap shrinks as one. */
-  --board-size: min(480px, calc(100dvh - 240px));
+  /* Container query context so the board can respond to its OWN column width,
+     not just viewport height. When the bot rail opens the grid steals width from
+     this track; a height-only cap would keep the board at 560px and clip it
+     (h-file + FEN Load button cut off at the right edge). 100cqw = the actual
+     board-col track width. */
+  container-type: inline-size;
+  /* Board sizing — THREE caps, whichever is smallest wins:
+       560px                     — the design cap (Chess.com anchor).
+       calc(100dvh - 160px)      — height guard (short viewports).
+                                    header ~50 + main padding (space-5 ×2 = 40)
+                                    + board→fen gap (space-3 = 12) + fen-row ~46
+                                    + border/slack ~12 = 160px.
+       calc(100cqw - 22px)       — width guard (rail-open / narrow columns).
+                                    22px = 14px eval-bar + 8px gap (space-2),
+                                    the chrome sharing the row beside the board.
+     Both #board and #eval-bar read --board-size so the pair shrinks as one.
+     At 1440 closed → 560px cap; at 1440/1280 rail-open → the 100cqw term wins
+     and the board fits its (narrower) column with zero clipping. */
+  --board-size: min(560px, calc(100dvh - 160px), calc(100cqw - 22px));
+  /* Full board+eval-bar row width — the below-board bars (FEN/setup/trap/rep/
+     trainer) span this so their edges line up with the board+eval-bar row, not
+     the board alone. Derived from the single --board-size source (+ the 22px
+     chrome back on). */
+  --board-row-width: calc(var(--board-size) + 22px);
 }
 
 /* Board wrap: eval-bar | board side by side */
@@ -316,13 +373,46 @@ main {
 }
 
 /* ============================================================
-   Controls row
+   Action column — narrow vertical board-control stack between the
+   board and the panel (3rd grid track). Holds Undo/Redo/Flip/Reset/
+   Set up as labeled icon+text buttons; a quiet "BOARD" caption groups
+   them. At ≤820px it folds back into a horizontal row under the board
+   (see the responsive tier).
    ============================================================ */
 
-.controls {
+.action-col {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  align-self: start;
+  /* Left-align the caption + buttons so the capped-width buttons read as a
+     compact tool rail under the BOARD caption, not full-width stretched bars. */
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* Group caption — reuses the .eval-label idiom (uppercase, tracked, muted). */
+.action-col-caption {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0 var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+/* Buttons stack as a compact tool rail: left-aligned icon+label, ≥40px tall
+   targets, capped width so the column reads as a slim control stack rather than
+   full-width stretched bars. Fill up to the cap (width:100% + max-width) so all
+   buttons share one edge under the BOARD caption. */
+.action-col button {
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 180px;
+  min-height: 40px;
+  gap: var(--space-2);
 }
 
 /* ============================================================
@@ -380,7 +470,9 @@ button svg[data-lucide] {
 .fen-row {
   display: flex;
   gap: var(--space-2);
-  width: 480px;
+  /* Sole below-board chrome — spans the full board+eval-bar row width so its
+     right edge lines up with the board (not 22px short). */
+  width: var(--board-row-width);
 }
 
 #fen-input {
@@ -435,7 +527,7 @@ body.setup-mode #fen-error { display: none; }
 /* Border diet: mode bars group by surface step (panel on base) + shadow;
    the old hairline outline was redundant box-lining. */
 .setup-bar {
-  width: 480px;
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -519,6 +611,266 @@ body.setup-mode #fen-error { display: none; }
   flex-direction: column;
   gap: var(--space-5);
   min-height: 0;
+}
+
+/* ---- Play-vs-Bot pill — bottom-right of the panel column ----
+   A direct child of .panel (a flex column), pushed to the bottom edge via
+   margin-top:auto so it never overlaps the scrolling tab-panel above it (the
+   tab-panel owns the flex:1 scroll region; the pill claims its own reserved
+   strip below). Lives OUTSIDE every [role=tabpanel], so it stays visible on
+   all tabs and in special modes. Green accent pill; toggles #bot-rail (T5). */
+.bot-rail-toggle {
+  /* margin-top:auto pushes it to the panel's bottom edge; align-self:flex-end
+     anchors it to the right. It claims its own reserved strip below the
+     scrolling tab-panel, so it never overlaps content. */
+  margin-top: auto;
+  margin-right: var(--space-5);
+  margin-bottom: var(--space-4);
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.35rem 0.7rem 0.35rem 0.35rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.bot-rail-toggle:hover {
+  background: var(--accent-dim-hover);
+  border-color: var(--accent);
+}
+
+.bot-rail-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Avatar thumbnail — 22px circle. The <img> fills it when the persona file
+   exists; onerror hides the <img> and the circle falls back to an accent-tinted
+   dot (its own background). */
+.pill-avatar {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--accent);
+  display: inline-flex;
+}
+
+.pill-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ============================================================
+   Bot rail (T5) — right-hand roster of opponents. Fills its
+   ~300px grid track (5th track under main.bot-rail-open), owns
+   its own scroll, surface-panel background + left hairline.
+   Single .bot-rail block so T6 (mobile overlay sheet) can
+   override cleanly. Desktop only in this ticket.
+   ============================================================ */
+#bot-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;               /* allow the inner list to scroll, not the grid */
+  overflow: hidden;
+  background: var(--surface-panel);
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* [hidden] override lives at the grid section (#bot-rail[hidden]{display:none})
+   so the flex display doesn't no-op the attribute. */
+
+.bot-rail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  flex-shrink: 0;
+}
+
+.bot-rail-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.bot-rail-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out),
+              color var(--motion-fast) var(--ease-out);
+}
+
+.bot-rail-close:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.bot-rail-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.bot-rail-close i[data-lucide] {
+  width: 16px;
+  height: 16px;
+}
+
+.bot-rail-lock-hint {
+  padding: 0 var(--space-4) var(--space-2);
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* Scrolling card list — the one scroll region in the rail. */
+.bot-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-4);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ---- Persona card ---- */
+.bot-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out),
+              background var(--motion-fast) var(--ease-out);
+}
+
+.bot-card:hover {
+  border-color: var(--border);
+  background: var(--surface-overlay);
+}
+
+.bot-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selected persona — accent frame + tinted fill; the rail's one focal state. */
+.bot-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Mid-game lock — muted + not-allowed; a live game freezes selection. */
+.bot-card.is-locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.bot-card.is-locked:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
+}
+
+.bot-card.is-locked.is-selected:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Avatar — 56px round portrait, clickable (opens lightbox). */
+.bot-card-avatar {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border: none;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--accent-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.bot-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bot-card-avatar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Initials fallback (no photo) — accent-tinted circle, tokens only. */
+.bot-card-avatar.is-initials {
+  cursor: default;
+  background: var(--accent-dim);
+}
+
+.bot-card-initials {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.bot-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;               /* let long blurbs wrap instead of overflow */
+}
+
+.bot-card-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bot-card-rating {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.bot-card-blurb {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bot-card,
+  .bot-rail-close { transition: none; }
 }
 
 /* ---- Tab rail — vertical icon+label nav in the first grid column.
@@ -614,6 +966,33 @@ body[data-mode="blunder-practice"] .tab-panel {
 .mode-indicator:empty { display: none; }
 
 /* ============================================================
+   Analysis panel — instrument card (mock-E)
+   The panel's focal point: a raised card gathering the eval readout,
+   the BEST NOW chip, best line/depth, and the move list into one
+   cohesive instrument. Everything below the card (utility cluster,
+   botplay disclosure) reads quieter by comparison.
+   ============================================================ */
+
+.panel-eval-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Utility cluster — engine seams below the card. De-emphasized: no card
+   frame, tighter rhythm, so the eye lands on the instrument card first. */
+.panel-utility {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ============================================================
    Analysis panel — eval readouts + review commentary side-by-side
    ============================================================ */
 
@@ -699,6 +1078,24 @@ body[data-mode="blunder-practice"] .tab-panel {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: var(--space-2);
+}
+
+/* BEST NOW chip — the current-position best move (#best-move only, NOT the
+   retrospective one) reads as a filled green pill inside the instrument card.
+   accent-dim fill + accent text keeps it AA and on-aesthetic in both themes.
+   :empty / em-dash placeholder still gets the chip; that's fine — it reads as
+   an awaiting-eval slot. */
+#best-move.best-move {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-bottom: 0;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .pv {
@@ -1110,11 +1507,13 @@ body.trap-practice-mode #fen-error { display: none; }
    botplay.js (T5) wires state, app.js/T3 owns mode entry.
    ============================================================ */
 
+/* Relocated into the panel (spec T4): fills the panel width, no longer coupled
+   to --board-size. Disclosure header + collapse behavior are id-driven by
+   botplay.js and unchanged. */
 .botplay-block {
-  width: 480px;
-  margin: var(--space-2) 0;
+  margin: 0;
   border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-2);
+  padding-top: var(--space-3);
 }
 
 .botplay-block.collapsed .botplay-body {
@@ -1429,7 +1828,7 @@ body.trap-practice-mode #fen-error { display: none; }
    ============================================================ */
 
 .trap-bar {
-  width: 480px;
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1628,7 +2027,7 @@ body.rep-mode #fen-error { display: none; }
    ============================================================ */
 
 .rep-bar {
-  width: 480px;
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1707,6 +2106,70 @@ body.rep-mode #fen-error { display: none; }
 
 .promo-choices button { font-size: 1rem; }
 
+/* ---- Avatar lightbox (T5) — native <dialog> top-layer (no z-index needed).
+   Full persona portrait + name/rating caption; ×/backdrop/Esc close. ---- */
+#avatar-lightbox {
+  position: relative;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  max-width: min(80vw, 80vh);
+}
+
+#avatar-lightbox::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+}
+
+.avatar-lightbox-img {
+  display: block;
+  width: 100%;
+  max-width: min(80vw, 80vh);
+  max-height: 80vh;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.avatar-lightbox-caption {
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.avatar-lightbox-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.avatar-lightbox-close:hover { background: var(--surface-panel); }
+
+.avatar-lightbox-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.avatar-lightbox-close i[data-lucide] { width: 18px; height: 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-lightbox-close { transition: none; }
+}
+
 /* ============================================================
    Toasts container — styled in feedback.css (single owner).
    ============================================================ */
@@ -1727,6 +2190,70 @@ body.rep-mode #fen-error { display: none; }
 }
 
 .trap-variation[hidden] { display: none; }
+
+/* ============================================================
+   Responsive — mid-width rail overlay (821–1280px)
+   ============================================================ */
+
+/* Below 1280px the push-rail would crush the board: four rigid tracks
+   (tab | board | action | panel) plus a 5th 300px rail track leaves the board
+   the smallest thing on screen (~252px at 1280×800). So below 1280px the rail
+   stops being a grid track and becomes the same fixed overlay sheet used on
+   mobile — main keeps its CLOSED 4-track layout while the rail is open, and the
+   board returns to its closed-rail size. The ≤820px tier below inherits this
+   and further flattens the whole grid to 1fr (it subsumes these rules).
+   botplay.js's railIsOverlay() matches this same 1280px breakpoint so a
+   backdrop click closes the sheet everywhere it overlays. */
+@media (max-width: 1280px) {
+  /* Rail open must NOT add the 5th track here — pin main back to the closed
+     4-track grid so the board keeps its full closed-rail width. */
+  main.bot-rail-open {
+    grid-template-columns: auto minmax(0, 582px) auto minmax(280px, 300px);
+  }
+
+  /* Rail becomes a right-anchored sheet over a full-bleed scrim (identical to
+     the mobile treatment). The <aside> is the sheet panel; its ::before paints
+     the scrim across the whole viewport. Below toasts (z-index 9000) at 8000.
+     Board width is untouched — the sheet overlays, never a grid track. */
+  #bot-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    z-index: 8000;
+    width: min(320px, 90vw);
+    max-width: 90vw;
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    /* overflow visible so the fixed ::before scrim isn't clipped; the card
+       list keeps its own inner scroll. */
+    overflow: visible;
+    /* Slide in from the right. An animation (not a transition) is used because
+       the sheet enters via display:none→flex. The global prefers-reduced-motion
+       rule (line ~158) zeroes this duration — movement collapses to an instant
+       appear with the scrim fade, feedback preserved. */
+    animation: bot-rail-slide-in var(--motion-base) var(--ease-out);
+  }
+
+  /* Full-viewport scrim behind the sheet. A ::before can't catch clicks, so
+     backdrop-to-close is handled in botplay.js (document pointerdown outside
+     the sheet, gated on railIsOverlay()). */
+  #bot-rail::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--scrim);
+    animation: bot-rail-scrim-in var(--motion-base) var(--ease-out);
+  }
+
+  /* Inner card list keeps the sheet's scroll (root is overflow:visible so the
+     pseudo-scrim can escape). */
+  .bot-rail-list {
+    max-height: 100%;
+  }
+}
 
 /* ============================================================
    Responsive — tablet/mobile
@@ -1756,6 +2283,23 @@ body.rep-mode #fen-error { display: none; }
     overflow-y: visible;
   }
 
+  /* Action column folds back into the old horizontal .controls row under the
+     board (grid collapses to 1fr, so the column would otherwise stack full
+     width). Caption hides — the icon+label buttons are self-explanatory in a
+     row and the "BOARD" grouping header only earns its keep in the tall stack. */
+  .action-col {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .action-col-caption { display: none; }
+
+  .action-col button {
+    width: auto;
+    min-width: 0;
+  }
+
   .panel {
     /* On mobile the panel sits below the board; remove fixed height */
     min-height: 400px;
@@ -1766,6 +2310,37 @@ body.rep-mode #fen-error { display: none; }
     min-height: 0;
     height: auto;
     align-self: stretch;
+  }
+
+  /* ---- Bot rail → fixed overlay sheet (T6) ----
+     The grid flattens to 1fr here, so the rail is NO LONGER a track. When open
+     it must not re-expand main to 5 tracks (the .bot-rail-open class rule has
+     higher specificity than this media block's `main{grid-template-columns:1fr}`
+     — override it explicitly so it stays single-column on mobile). */
+  main.bot-rail-open {
+    grid-template-columns: 1fr;
+  }
+
+  /* The rail sheet, scrim, and inner-list treatment come from the ≤1280px tier
+     above — it already turns #bot-rail into the fixed overlay sheet and this
+     tier (being narrower) is fully subsumed by it. Only the whole-grid flatten
+     (main → 1fr, action-col fold) and the pill pinning are ≤820px-specific. */
+
+  /* ---- Play-vs-Bot pill → fixed bottom-right (T6) ----
+     The panel stacks below the board on mobile, so the pill would scroll away.
+     Pin it to the viewport, above content, below toasts + the open sheet. Its
+     bottom offset respects the iOS home-indicator safe area. */
+  .bot-rail-toggle {
+    position: fixed;
+    right: var(--space-4);
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    z-index: 7000;
+    box-shadow: var(--shadow-md);
+    background: var(--accent-dim);
+    /* Primary floating action on touch — meet the 44px comfortable touch
+       target (WCAG 2.2 AA SC 2.5.8 floor is 24px; 44px for a primary action). */
+    min-height: 44px;
   }
 
   /* ---- Touch targets — WCAG 2.2 AA (SC 2.5.8): dense controls get
@@ -1860,8 +2435,7 @@ cg-board square.selected {
   .fen-row,
   .setup-bar,
   .trap-bar,
-  .rep-bar,
-  .botplay-block { width: auto; }
+  .rep-bar { width: auto; }
 
   /* Long trap/line titles wrap above their action button instead of
      forcing the header row past the viewport. */
@@ -1871,4 +2445,17 @@ cg-board square.selected {
   /* The subtitle wraps into a 4-line column beside the title at phone
      widths — the title alone identifies the app there. */
   header .sub { display: none; }
+
+  /* ---- Avatar lightbox on phones (T6) ----
+     Shrink the portrait so the dialog (photo + caption + × chrome) fits within
+     the viewport and the close button stays on-screen and tappable. */
+  #avatar-lightbox {
+    max-width: min(92vw, 70vh);
+    padding: var(--space-3);
+  }
+
+  .avatar-lightbox-img {
+    max-width: min(92vw, 70vh);
+    max-height: 70vh;
+  }
 }

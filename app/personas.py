@@ -84,12 +84,12 @@ _ELO_MAX = 3000
 # The built-in ladder — hardcoded, set at import with NO file I/O. data/personas.json
 # ships the same four so the committed file and this default agree.
 _DEFAULT_PERSONAS: tuple[Persona, ...] = (
-    Persona("casey", "Casey", 1350, "solid", "Casual club player — steady, but misses tactics.", 80, 0.85, 0.15, 0.0),
-    Persona("diego", "Diego", 1350, "attacking", "Attacking club player — hunts your king, soft on defense.", 190, 0.85, 0.10, 0.0),
-    Persona("robin", "Robin", 1350, "sloppy", "Beginner — drifts and leaks small mistakes.", 100, 0.18, 0.30, 0.50),
-    Persona("morgan", "Morgan", 1550, "tactical", "Improving — punishes loose play and hangs onto material.", 130, 0.65, 0.29, 0.0),
-    Persona("alex", "Alex", 1800, "aggressive", "Strong club player — sharp, presses for the attack.", 200, 0.40, 0.50, 0.0),
-    Persona("vera", "Vera", 2000, "positional", "Expert — grinds small edges in long games.", 100, 0.20, 0.67, 0.0),
+    Persona("casey", "Ming Ling", 1350, "solid", "Kid prodigy — steady, but misses tactics.", 80, 0.85, 0.15, 0.0),
+    Persona("diego", "Nina", 1350, "attacking", "Attacking club player — hunts your king, soft on defense.", 190, 0.85, 0.10, 0.0),
+    Persona("robin", "Amanda", 1350, "sloppy", "Beginner — drifts and leaks small mistakes.", 100, 0.18, 0.30, 0.50),
+    Persona("morgan", "Diana", 1550, "tactical", "Focused student — punishes loose play and hangs onto material.", 130, 0.65, 0.29, 0.0),
+    Persona("alex", "Melvin", 1800, "aggressive", "Casual crusher — sharp, presses for the attack.", 200, 0.40, 0.50, 0.0),
+    Persona("vera", "Mandeep", 2000, "positional", "Calm veteran — grinds small edges in long games.", 100, 0.20, 0.67, 0.0),
 )
 
 # Module-level singleton — initialised to the built-in default so imports never

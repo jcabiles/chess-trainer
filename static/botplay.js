@@ -552,6 +552,9 @@ function reflectPersonaLock() {
   const game = hub().botGetGame();
   const live = state().mode === 'bot-play' && game && !game.result;
   sel.disabled = !!(busy || live);
+  // Keep the bot rail's card selected/locked state in lockstep with the picker
+  // (reflectControls funnels through here on every phase change).
+  reflectRailSelection();
 }
 
 // --- personal ELO readout + chess.com anchor (B8) --------------------------
@@ -1072,6 +1075,342 @@ function resumeIfPending() {
   }
 }
 
+// --- bot rail (T5) ---------------------------------------------------------
+//
+// A right-hand roster of opponents rendered into #bot-rail from the ALREADY
+// fetched `personaCatalog` (no second /api/bot/status call — populatePersona
+// Picker set it during probeStatus). One card per persona: avatar (or initials
+// fallback), name, rating, description blurb. Clicking a card body drives the
+// existing #bot-persona <select> (value + `change`), so every downstream —
+// prefs.botPersona, caption, in-game label, ELO readout — updates through the
+// path already wired in wirePersonaPicker(). Clicking the avatar PHOTO opens a
+// native <dialog> lightbox instead (stopPropagation). During a live bot game
+// selection is locked (same condition as the picker lock) with a header hint.
+
+// First-letter initials for the fallback circle (e.g. "Ming Ling" → "ML"),
+// capped at two letters, uppercased. Empty name → "?".
+function personaInitials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const letters = parts.slice(0, 2).map((w) => w[0]);
+  return letters.join('').toUpperCase();
+}
+
+// Is card selection currently locked? Mirrors reflectPersonaLock's condition
+// (single-flight busy OR a live bot game) so the rail matches the picker.
+function selectionLocked() {
+  const game = hub().botGetGame();
+  const live = state().mode === 'bot-play' && game && !game.result;
+  return !!(busy || live);
+}
+
+// Build one persona card. Avatar is an <img>; onerror swaps in an initials
+// circle (tokens-only via CSS). The avatar wrapper carries data-has-photo so
+// the lightbox handler knows whether a photo exists to show.
+function buildCard(p) {
+  const card = document.createElement('div');
+  card.className = 'bot-card';
+  card.dataset.personaId = p.id;
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.setAttribute('aria-label', `Play ${p.name}, rated ${p.elo}`);
+
+  const avatar = document.createElement('button');
+  avatar.type = 'button';
+  avatar.className = 'bot-card-avatar';
+  avatar.dataset.hasPhoto = 'true';
+  avatar.setAttribute('aria-label', `View ${p.name}'s portrait`);
+
+  const img = document.createElement('img');
+  img.src = `/avatars/${p.id}.png`;
+  img.alt = '';
+  img.addEventListener('error', () => {
+    // Missing photo → initials fallback; no lightbox for this persona.
+    img.hidden = true;
+    avatar.dataset.hasPhoto = 'false';
+    avatar.classList.add('is-initials');
+    const initials = document.createElement('span');
+    initials.className = 'bot-card-initials';
+    initials.textContent = personaInitials(p.name);
+    initials.setAttribute('aria-hidden', 'true');
+    avatar.appendChild(initials);
+  });
+  avatar.appendChild(img);
+
+  const body = document.createElement('div');
+  body.className = 'bot-card-body';
+
+  const name = document.createElement('div');
+  name.className = 'bot-card-name';
+  name.textContent = p.name;
+
+  const rating = document.createElement('div');
+  rating.className = 'bot-card-rating';
+  rating.textContent = `≈${p.elo}`;
+
+  const blurb = document.createElement('div');
+  blurb.className = 'bot-card-blurb';
+  blurb.textContent = p.description || '';
+
+  body.appendChild(name);
+  body.appendChild(rating);
+  body.appendChild(blurb);
+
+  card.appendChild(avatar);
+  card.appendChild(body);
+  return card;
+}
+
+// Select a persona from the rail: drive the existing <select> so the whole
+// downstream chain updates through wirePersonaPicker()'s change handler. If the
+// picker is locked (mid-game/busy) that handler reverts the value — so we no-op
+// here too, keeping the rail's selected-state in sync with the real value.
+function selectPersonaFromRail(id) {
+  if (selectionLocked()) return;
+  const sel = byId('bot-persona');
+  if (!sel || sel.value === id) { reflectRailSelection(); return; }
+  sel.value = id;
+  sel.dispatchEvent(new Event('change'));
+  reflectRailSelection();
+  reflectPillAvatar();
+}
+
+// Open the avatar lightbox for a persona (only when a photo exists). Native
+// <dialog> top-layer, same pattern as #promo-dialog: showModal() + close on ×,
+// backdrop click (target === dialog), and Esc (native cancel).
+function openLightbox(p) {
+  const dlg = byId('avatar-lightbox');
+  const img = byId('avatar-lightbox-img');
+  const cap = byId('avatar-lightbox-caption');
+  if (!dlg || !img || !cap) return;
+  img.src = `/avatars/${p.id}.png`;
+  img.alt = `${p.name}'s portrait`;
+  cap.textContent = `${p.name} · ${p.elo}`;
+  if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
+}
+
+// Wire the lightbox's close paths once (× button + backdrop click). Esc is
+// native. Idempotent: guarded by a dataset flag so re-render never double-binds.
+function wireLightbox() {
+  const dlg = byId('avatar-lightbox');
+  if (!dlg || dlg.dataset.wired === 'true') return;
+  dlg.dataset.wired = 'true';
+  const close = byId('avatar-lightbox-close');
+  if (close) close.addEventListener('click', () => dlg.close());
+  // Backdrop click: the click lands on the <dialog> element itself (its padding
+  // area is the backdrop's hit target in the top layer).
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+}
+
+// Reflect the selected-card accent state + locked/disabled state across all
+// cards. Selected = card whose id matches the live #bot-persona value.
+function reflectRailSelection() {
+  const rail = byId('bot-rail');
+  if (!rail) return;
+  const selected = chosenPersonaId();
+  const locked = selectionLocked();
+  rail.querySelectorAll('.bot-card').forEach((card) => {
+    const isSel = card.dataset.personaId === selected;
+    card.classList.toggle('is-selected', isSel);
+    card.setAttribute('aria-pressed', String(isSel));
+    card.setAttribute('aria-disabled', String(locked));
+    card.classList.toggle('is-locked', locked);
+  });
+  const hint = byId('bot-rail-lock-hint');
+  if (hint) hint.hidden = !locked;
+}
+
+// Update the toggle pill's thumbnail to the currently selected persona's photo.
+// onerror hides the <img> (the circle keeps its accent fill as fallback).
+function reflectPillAvatar() {
+  const img = document.querySelector('#bot-rail-toggle .pill-avatar img');
+  if (!img) return;
+  const id = chosenPersonaId();
+  if (!id) return;
+  img.hidden = false;
+  img.onerror = () => { img.hidden = true; };
+  img.src = `/avatars/${id}.png`;
+}
+
+// Render the rail interior from the already-fetched catalog. Header ("Bots" +
+// close × + lock hint), then one card per persona. Idempotent — safe to call
+// again after catalog load.
+function renderRail() {
+  const rail = byId('bot-rail');
+  if (!rail) return;
+  rail.innerHTML = '';
+  if (personaCatalog.length === 0) return;
+
+  const header = document.createElement('div');
+  header.className = 'bot-rail-header';
+  const title = document.createElement('span');
+  title.className = 'bot-rail-title';
+  title.textContent = 'Bots';
+  const close = document.createElement('button');
+  close.id = 'bot-rail-close';
+  close.type = 'button';
+  close.className = 'bot-rail-close';
+  close.setAttribute('aria-label', 'Close bot rail');
+  close.innerHTML = '<i data-lucide="x" aria-hidden="true"></i>';
+  header.appendChild(title);
+  header.appendChild(close);
+
+  const hint = document.createElement('div');
+  hint.id = 'bot-rail-lock-hint';
+  hint.className = 'bot-rail-lock-hint';
+  hint.textContent = 'Finish or resign to switch';
+  hint.hidden = true;
+
+  const list = document.createElement('div');
+  list.className = 'bot-rail-list';
+  for (const p of personaCatalog) list.appendChild(buildCard(p));
+
+  rail.appendChild(header);
+  rail.appendChild(hint);
+  rail.appendChild(list);
+
+  close.addEventListener('click', closeRail);
+
+  // Delegated interactions on the card list: avatar photo → lightbox
+  // (stopPropagation); card body → select. Keyboard (Enter/Space on a card)
+  // mirrors a body click.
+  list.addEventListener('click', (e) => {
+    const avatarBtn = e.target.closest('.bot-card-avatar');
+    const card = e.target.closest('.bot-card');
+    if (!card) return;
+    const p = personaCatalog.find((x) => x.id === card.dataset.personaId);
+    if (!p) return;
+    if (avatarBtn) {
+      // Avatar photo click → lightbox (never selects). No lightbox when the
+      // photo is missing (initials fallback).
+      e.stopPropagation();
+      if (avatarBtn.dataset.hasPhoto === 'true') openLightbox(p);
+      return;
+    }
+    selectPersonaFromRail(p.id);
+  });
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.bot-card');
+    if (!card || e.target.closest('.bot-card-avatar')) return;
+    e.preventDefault();
+    selectPersonaFromRail(card.dataset.personaId);
+  });
+
+  // Icon-ify the freshly inserted lucide placeholders (× glyphs).
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+
+  reflectRailSelection();
+  reflectPillAvatar();
+}
+
+// --- rail open/close + persistence -----------------------------------------
+//
+// Visibility persisted as ui-pref `botRailVisible` (prefs.js). read-on-init →
+// apply → write-on-change, mirroring app.js's analysisPanelCollapsed pattern.
+// Open = `.bot-rail-open` on <main> + rail [hidden] cleared + pill aria-expanded.
+//
+// At ≤1280px the rail is a fixed overlay sheet (CSS, T6). The rail is NOT a
+// <dialog>, so its dismissal affordances are wired manually here:
+//   • Esc               → closeRail (any width, only while open)
+//   • backdrop pointer   → closeRail (overlay/sheet width only — on desktop the
+//                          rail is an in-flow grid track with no backdrop, so a
+//                          click "outside" it must NOT close it)
+// Focus moves into the sheet (close ×) on a user-initiated open and returns to
+// the pill on close (WCAG 2.4.3). Boot-restore (applyRailVisible from the pref)
+// wires dismissal but never steals focus on page load.
+
+// True when the rail renders as the fixed overlay sheet, where a click on the
+// scrim (outside the sheet) should dismiss it. The sheet treatment applies
+// below 1280px (mid-width + mobile) so a click "outside" always closes it;
+// above 1280px the rail is an in-flow grid track with no backdrop.
+function railIsOverlay() {
+  return window.matchMedia('(max-width: 1280px)').matches;
+}
+
+function onRailKeydown(e) {
+  if (e.key === 'Escape') {
+    // The avatar lightbox is a native <dialog> in the top layer, above the rail.
+    // When it's open, Esc belongs to it — let the dialog's own Esc handling run
+    // and leave the rail beneath it untouched.
+    if (byId('avatar-lightbox')?.open) return;
+    e.preventDefault();
+    closeRail();
+  }
+}
+
+function onRailPointerDown(e) {
+  // Overlay (sheet) only; and only when the press lands outside the sheet
+  // (i.e. on the ::before scrim, which registers as #bot-rail itself, or on
+  // any element that is not inside the rail).
+  if (!railIsOverlay()) return;
+  const rail = byId('bot-rail');
+  if (!rail) return;
+  // The pill toggle owns its own open/close on click — never treat a press on
+  // it as a backdrop dismiss, or the pointerdown-close + click-reopen would
+  // double-toggle and leave the sheet open.
+  if (e.target.closest('#bot-rail-toggle')) return;
+  const sheetContent = e.target.closest(
+    '.bot-rail-header, .bot-rail-list, .bot-rail-lock-hint'
+  );
+  if (!sheetContent) closeRail();
+}
+
+function attachRailDismiss() {
+  document.addEventListener('keydown', onRailKeydown);
+  document.addEventListener('pointerdown', onRailPointerDown);
+}
+
+function detachRailDismiss() {
+  document.removeEventListener('keydown', onRailKeydown);
+  document.removeEventListener('pointerdown', onRailPointerDown);
+}
+
+function applyRailVisible(visible) {
+  const main = document.querySelector('main');
+  const rail = byId('bot-rail');
+  const toggle = byId('bot-rail-toggle');
+  if (main) main.classList.toggle('bot-rail-open', visible);
+  if (rail) rail.hidden = !visible;
+  if (toggle) toggle.setAttribute('aria-expanded', String(visible));
+  // Dismissal listeners live only while the rail is open (idempotent add/remove).
+  detachRailDismiss();
+  if (visible) attachRailDismiss();
+}
+
+function openRail() {
+  applyRailVisible(true);
+  writeUiPref('botRailVisible', true);
+  // Move focus into the sheet so keyboard + SR users land inside it. The close
+  // button is the first stop; guard for the not-yet-rendered rail.
+  const close = byId('bot-rail-close');
+  if (close) close.focus();
+}
+
+function closeRail() {
+  const wasOpen = document.querySelector('main')?.classList.contains('bot-rail-open');
+  applyRailVisible(false);
+  writeUiPref('botRailVisible', false);
+  // Return focus to the pill that owns the rail (WCAG 2.4.3), but only if the
+  // rail was actually open — avoid grabbing focus on a redundant close.
+  if (wasOpen) {
+    const toggle = byId('bot-rail-toggle');
+    if (toggle) toggle.focus();
+  }
+}
+
+function toggleRail() {
+  const open = document.querySelector('main')?.classList.contains('bot-rail-open');
+  if (open) closeRail(); else openRail();
+}
+
+function wireRailToggle() {
+  const toggle = byId('bot-rail-toggle');
+  if (toggle) toggle.addEventListener('click', toggleRail);
+}
+
 // --- init ------------------------------------------------------------------
 
 export function initBotplay(api) {
@@ -1084,6 +1423,8 @@ export function initBotplay(api) {
   wireTimeControl();
   wireChessComInput();
   startClockLoop();
+  wireRailToggle();
+  wireLightbox();
 
   byId('botplay-start').addEventListener('click', startGame);
   byId('botplay-resign').addEventListener('click', resign);
@@ -1096,7 +1437,12 @@ export function initBotplay(api) {
   // Probe engine status (persona label, Maia dot, Start availability), THEN —
   // if a refresh restored a bot game on the bot's turn — resume the reply.
   // Also fetch the running bot-ELO once (best-effort) to populate the readout.
+  // The rail renders AFTER the catalog is populated (probeStatus →
+  // populatePersonaPicker set personaCatalog), then applies the persisted
+  // visibility so it opens on boot only once cards exist.
   probeStatus().finally(() => {
+    renderRail();
+    applyRailVisible(readUiPrefs().botRailVisible === true);
     resumeIfPending();
     void refreshRating();
   });

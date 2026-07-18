@@ -2,10 +2,10 @@
   "personas": [
     {
       "id": "casey",
-      "name": "Casey",
+      "name": "Ming Ling",
       "elo": 1350,
       "style": "solid",
-      "description": "Casual club player — steady, but misses tactics.",
+      "description": "Kid prodigy — steady, but misses tactics.",
       "temperature": 80,
       "blunderRate": 0.85,
       "threatDistance": 0.15,
@@ -13,32 +13,32 @@
     },
     {
       "id": "diego",
-      "name": "Diego",
+      "name": "Nina",
       "elo": 1350,
       "style": "attacking",
       "description": "Attacking club player — hunts your king, soft on defense.",
       "temperature": 190,
       "blunderRate": 0.85,
-      "threatDistance": 0.10,
+      "threatDistance": 0.1,
       "mistakeRate": 0.0
     },
     {
       "id": "robin",
-      "name": "Robin",
+      "name": "Amanda",
       "elo": 1350,
       "style": "sloppy",
       "description": "Beginner — drifts and leaks small mistakes.",
       "temperature": 100,
       "blunderRate": 0.18,
-      "threatDistance": 0.30,
-      "mistakeRate": 0.50
+      "threatDistance": 0.3,
+      "mistakeRate": 0.5
     },
     {
       "id": "morgan",
-      "name": "Morgan",
+      "name": "Diana",
       "elo": 1550,
       "style": "tactical",
-      "description": "Improving — punishes loose play and hangs onto material.",
+      "description": "Focused student — punishes loose play and hangs onto material.",
       "temperature": 130,
       "blunderRate": 0.65,
       "threatDistance": 0.29,
@@ -46,23 +46,23 @@
     },
     {
       "id": "alex",
-      "name": "Alex",
+      "name": "Melvin",
       "elo": 1800,
       "style": "aggressive",
-      "description": "Strong club player — sharp, presses for the attack.",
+      "description": "Casual crusher — sharp, presses for the attack.",
       "temperature": 200,
-      "blunderRate": 0.40,
-      "threatDistance": 0.50,
+      "blunderRate": 0.4,
+      "threatDistance": 0.5,
       "mistakeRate": 0.0
     },
     {
       "id": "vera",
-      "name": "Vera",
+      "name": "Mandeep",
       "elo": 2000,
       "style": "positional",
-      "description": "Expert — grinds small edges in long games.",
+      "description": "Calm veteran — grinds small edges in long games.",
       "temperature": 100,
-      "blunderRate": 0.20,
+      "blunderRate": 0.2,
       "threatDistance": 0.67,
       "mistakeRate": 0.0
     }

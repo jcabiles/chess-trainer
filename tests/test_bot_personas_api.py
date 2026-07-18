@@ -81,7 +81,7 @@ def test_status_lists_six_personas_and_default(client):
     ids = [p["id"] for p in body["personas"]]
     assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
     # personaLabel stays back-compat = the default persona's name.
-    assert body["personaLabel"] == "Casey"
+    assert body["personaLabel"] == "Ming Ling"
     # Each persona dict carries the full shape (B5 added blunderRate +
     # threatDistance + mistakeRate — additive causal-blunder dials).
     for p in body["personas"]:
@@ -294,7 +294,7 @@ def test_save_with_persona_resolves_from_catalog(save_client):
         "personaElo": 1800,  # catalog Elo, NOT the bogus 9999
     }
     # PGN name is the catalog persona name, NOT the client-sent label.
-    assert g["black"] == "Alex"
+    assert g["black"] == "Melvin"
 
 
 def test_save_without_persona_writes_exact_b3_shape(save_client):
@@ -313,3 +313,33 @@ def test_save_unknown_persona_400(save_client):
     assert r.status_code == 400
     # No row written.
     assert save_client.get("/api/games").json() == []
+
+
+# --- /avatars static mount (board-bots-ux T2) --------------------------------
+
+
+def test_avatars_mount_serves_when_dir_present(client):
+    """When data/avatars/ exists (gitignored, user-supplied), /avatars serves it.
+
+    Skips on a fresh clone with no avatars — the mount is conditional at import
+    and the frontend falls back to initials.
+    """
+    from app.main import AVATARS_DIR
+
+    if not AVATARS_DIR.is_dir():
+        pytest.skip("data/avatars/ absent — conditional mount not registered")
+    files = sorted(AVATARS_DIR.glob("*.png"))
+    if not files:
+        pytest.skip("data/avatars/ empty")
+    r = client.get(f"/avatars/{files[0].name}")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    # Unknown avatar → 404 (frontend initials fallback path).
+    assert client.get("/avatars/nope.png").status_code == 404
+
+
+def test_avatars_dir_constant_is_gitignored_location():
+    """AVATARS_DIR lives under data/ (never committed) per the spec."""
+    from app.main import AVATARS_DIR, BASE_DIR
+
+    assert AVATARS_DIR == BASE_DIR / "data" / "avatars"
