@@ -827,6 +827,21 @@ async def bot_status():
     )
 
 
+def _format_clk(centis: int) -> str:
+    """Format centiseconds as ``H:MM:SS.s`` matching ``pgn._CLK_RE`` exactly.
+
+    e.g. 5730 -> "0:00:57.3", 12345 -> "0:02:03.5", 360050 -> "1:00:00.5".
+    Clamps negatives to 0 so a tampered client can't emit a ``-``-signed comment
+    the reader regex would silently drop.
+    """
+    centis = max(0, centis)
+    total_tenths = int((centis + 5) // 10)
+    whole_seconds, tenths = divmod(total_tenths, 10)
+    hours, remainder = divmod(whole_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}.{tenths}"
+
+
 class BotSaveRequest(BaseModel):
     """Body for ``POST /api/bot/save`` — a finished (or abandoned-rated) bot game.
 
@@ -845,6 +860,13 @@ class BotSaveRequest(BaseModel):
     personaId: str | None = Field(
         default=None,
         description="Persona id — server resolves name/Elo from the catalog; None ⇒ B3.",
+    )
+    moveTimes: list[int] = Field(
+        default_factory=list,
+        description=(
+            "Centiseconds remaining for the mover at each ply, aligned index-for-index "
+            "to movesUci (pre-increment values). Empty ⇒ untimed game, no %clk emitted."
+        ),
     )
 
 
@@ -877,16 +899,22 @@ async def bot_save(req: BotSaveRequest, engine: StockfishEngine = Depends(get_en
 
     # Replay the UCI moves onto a fresh board to produce SAN (defensive: an
     # unparseable/illegal sequence is a client bug ⇒ 400, not a 500).
+    # moveTimes (B7): only emit %clk when it's present AND aligned 1:1 with
+    # movesUci — a length mismatch is silently skipped (never crashes) so an
+    # untimed game or a client bug never produces a malformed/partial PGN.
+    emit_clocks = bool(req.moveTimes) and len(req.moveTimes) == len(req.movesUci)
     game = chess.pgn.Game()
     board = chess.Board()
     node = game
     try:
-        for uci in req.movesUci:
+        for i, uci in enumerate(req.movesUci):
             move = chess.Move.from_uci(uci)
             if move not in board.legal_moves:
                 raise ValueError(f"illegal move {uci!r}")
             node = node.add_variation(move)
             board.push(move)
+            if emit_clocks:
+                node.comment = f"[%clk {_format_clk(req.moveTimes[i])}]"
     except (chess.InvalidMoveError, chess.IllegalMoveError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=f"Illegal move sequence: {exc}") from exc
 

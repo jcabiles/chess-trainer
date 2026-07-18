@@ -28,6 +28,8 @@ let thinkTimer = null;     // handle of the pending think-delay timer (if any)
 let retryFen = null;       // FEN we owe a bot move for (engine-down Retry target)
 let personaCatalog = [];   // [{id,name,elo,style,description}] from /api/bot/status
 let defaultPersonaId = ''; // status.defaultPersonaId (picker fallback)
+let clockTimer = null;     // handle of the ~200ms clock tick interval (if any)
+let lastTickAt = 0;        // performance.now() reference for the last clock tick
 
 const byId = (id) => document.getElementById(id);
 const state = () => _api.actions.getState();
@@ -165,6 +167,11 @@ function takeback() {
   if (!canTakeback()) return;
   const res = hub().botTakeback();
   if (!res) return;
+  // botTakeback restored clockWhite/clockBlack + truncated moveTimes by parity.
+  // Re-anchor the tick reference so the undone move's think-time isn't charged,
+  // then re-render the restored clocks.
+  resetTick();
+  renderClocks();
   giveUserTurn();
   hub().refreshAnalysis();
   reflectControls();
@@ -227,6 +234,192 @@ function wireTakebackPolicy() {
   });
 }
 
+// --- clocks + time controls (B7) -------------------------------------------
+//
+// Client-owned dual clocks for bot-play only (centiseconds). The chosen time
+// control is a pre-game setting persisted via prefs.js (`botTimeControl`),
+// locked mid-game like the persona/takeback pickers. A ~200ms tick decrements
+// the side-to-move's live clock by REAL elapsed wall-clock (performance.now()),
+// NOT the cosmetic scheduleBotReply think-delay — the bot's clock legitimately
+// runs while it "thinks". The tick reference is reset on every move commit and
+// on restore so reload/away time is never charged. A clock reaching 0 flags the
+// game as a loss (mirrors resign()). Untimed → no tick, no display, no %clk.
+
+// Time-control presets keyed by pref value. `untimed` → null descriptor.
+const TIME_CONTROLS = {
+  untimed: null,
+  '5+2': { baseSec: 300, incSec: 2 },
+  '10+0': { baseSec: 600, incSec: 0 },
+  '10+5': { baseSec: 600, incSec: 5 },
+};
+const TIME_CONTROL_KEYS = ['untimed', '5+2', '10+0', '10+5'];
+
+// The pref value normalized against the allowlist (stale/unknown → untimed),
+// mirroring takebackPolicy()'s normalize-on-read precedent.
+function timeControlChoice() {
+  const v = readUiPrefs().botTimeControl;
+  return TIME_CONTROL_KEYS.includes(v) ? v : 'untimed';
+}
+
+// Is the current game a live, tickable timed game? True only when: the game is
+// timed (timeControl set), not finished (no result), the cursor is at the tip
+// (not viewing history), and bot-play mode is active.
+function clockLive(game) {
+  return !!(game && game.timeControl && !game.result
+    && state().mode === 'bot-play'
+    && state().cursor === (game.movesUci || []).length);
+}
+
+// Format remaining centiseconds as MM:SS (H:MM:SS when >= 1h).
+function formatClock(centis) {
+  const totalSec = Math.max(0, Math.ceil((centis | 0) / 100));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+// Render both clock readouts from the descriptor. #bot-clock-top = opponent,
+// #bot-clock-bottom = user, mapped by userColor. Hidden for untimed games. The
+// side-to-move's clock is emphasized (data-active); low time (<10s) flagged
+// (data-low) for extra emphasis.
+function renderClocks() {
+  const top = byId('bot-clock-top');
+  const bottom = byId('bot-clock-bottom');
+  if (!top || !bottom) return;
+  const game = hub().botGetGame();
+  const timed = !!(game && game.timeControl && state().mode === 'bot-play');
+  if (!timed) {
+    top.hidden = true;
+    bottom.hidden = true;
+    return;
+  }
+  const userWhite = game.userColor === 'white';
+  const userCentis = userWhite ? game.clockWhite : game.clockBlack;
+  const oppCentis = userWhite ? game.clockBlack : game.clockWhite;
+  const oppColor = userWhite ? 'black' : 'white';
+  const turn = currentPos().turn;
+  const live = clockLive(game);
+
+  const paint = (el, centis, color) => {
+    el.hidden = false;
+    el.textContent = formatClock(centis);
+    el.dataset.active = String(live && turn === color);
+    el.dataset.low = String((centis | 0) <= 1000);
+  };
+  paint(top, oppCentis, oppColor);
+  paint(bottom, userCentis, game.userColor);
+}
+
+// Reset the tick reference to "now" — called on every move commit and on
+// restore so reload/away time is never charged to the active clock.
+function resetTick() {
+  lastTickAt = performance.now();
+}
+
+// The ~200ms clock loop. Charges the side-to-move's live clock the REAL elapsed
+// delta since the last tick, then re-anchors the reference. A live clock that
+// hits 0 clamps and flags the game as a loss.
+function tick() {
+  const game = hub().botGetGame();
+  if (!clockLive(game)) { lastTickAt = performance.now(); return; }
+  const now = performance.now();
+  const deltaCentis = Math.round((now - lastTickAt) / 10);
+  lastTickAt = now;
+  if (deltaCentis <= 0) { renderClocks(); return; }
+  const turn = currentPos().turn;
+  if (turn === 'white') {
+    game.clockWhite = (game.clockWhite | 0) - deltaCentis;
+    if (game.clockWhite <= 0) { game.clockWhite = 0; flagLoss('white'); return; }
+  } else {
+    game.clockBlack = (game.clockBlack | 0) - deltaCentis;
+    if (game.clockBlack <= 0) { game.clockBlack = 0; flagLoss('black'); return; }
+  }
+  renderClocks();
+}
+
+// Start the tick loop (idempotent). Called on init.
+function startClockLoop() {
+  if (clockTimer !== null) return;
+  lastTickAt = performance.now();
+  clockTimer = setInterval(tick, 200);
+}
+
+// Move-commit clock hook — slotted INTO the existing commit block SYNCHRONOUSLY,
+// BEFORE the async refreshAnalysis(). By the time this runs botAppendMove has
+// already flipped the turn, so the MOVER is the side whose turn it is NOT now,
+// i.e. the ply just appended (index = movesUci.length - 1). We (a) record the
+// mover's remaining centis PRE-increment into moveTimes[ply], (b) add the
+// increment to the mover's live clock, (c) the active side is now the opponent,
+// (d) reset the tick reference so a stray tick in the gap never mischarges.
+function onMoveCommitted(game) {
+  if (!game || !game.timeControl) return;
+  const ply = (game.movesUci || []).length - 1;
+  if (ply < 0) return;
+  const moverWhite = (ply % 2 === 0); // even ply = White's move (absolute parity)
+  const inc = (game.timeControl.incSec | 0) * 100;
+  if (!Array.isArray(game.moveTimes)) game.moveTimes = [];
+  if (moverWhite) {
+    game.moveTimes[ply] = game.clockWhite | 0; // pre-increment
+    game.clockWhite = (game.clockWhite | 0) + inc;
+  } else {
+    game.moveTimes[ply] = game.clockBlack | 0;
+    game.clockBlack = (game.clockBlack | 0) + inc;
+  }
+  resetTick();
+}
+
+// Flag-loss — mirrors resign() almost verbatim, triggered by a clock hitting 0
+// instead of a button. The FLAGGING side LOSES: White flags → 0-1, Black → 1-0.
+// Immediate saveGame() (a live explicit result, NOT saveOnLeave), freeze board,
+// status text. Always saves (rated or casual).
+function flagLoss(flaggedColor) {
+  const game = hub().botGetGame();
+  if (state().mode !== 'bot-play' || !game || game.result) return;
+  invalidateReply();
+  busy = false;
+  retryFen = null;
+  showRetry(false);
+  const result = flaggedColor === 'white' ? '0-1' : '1-0';
+  hub().botSetResult(result);
+  hub().persist();
+  saveGame(snapshotGame(hub().botGetGame()));
+  const side = flaggedColor === 'white' ? 'White' : 'Black';
+  setStatusLine(`${side} flagged — ${result}`);
+  freezeBoard();
+  renderClocks();
+  reflectControls();
+}
+
+// Lock/unlock the time-control selector (disabled mid-game/busy, like the
+// persona picker).
+function reflectTimeControlLock() {
+  const sel = byId('bot-time-control');
+  if (!sel) return;
+  const game = hub().botGetGame();
+  const live = state().mode === 'bot-play' && game && !game.result;
+  sel.disabled = !!(busy || live);
+}
+
+// Wire the time-control selector: init from the pref; on change, revert if
+// locked (mid-game/busy) else persist (applies to the NEXT game).
+function wireTimeControl() {
+  const sel = byId('bot-time-control');
+  if (!sel) return;
+  sel.value = timeControlChoice();
+  sel.addEventListener('change', () => {
+    const game = hub().botGetGame();
+    const locked = busy || (game && !game.result && state().mode === 'bot-play');
+    if (locked) {
+      sel.value = timeControlChoice();
+      return;
+    }
+    writeUiPref('botTimeControl', sel.value);
+  });
+}
+
 // Sync the Resign/Retry/Start visibility + status for the current game phase.
 function reflectControls() {
   const game = hub().botGetGame();
@@ -235,7 +428,9 @@ function reflectControls() {
   const startBtn = byId('botplay-start');
   if (startBtn) startBtn.textContent = (game && game.result) ? 'New game' : 'Start';
   reflectPersonaLock();
+  reflectTimeControlLock();
   reflectTakeback();
+  renderClocks();
 }
 
 // --- collapse toggle + color radiogroup ------------------------------------
@@ -481,6 +676,8 @@ function saveGame(snapshot) {
     result: snapshot.result,
     startedAt: snapshot.startedAt,
     rated: snapshot.rated,
+    moveTimes: snapshot.moveTimes,
+    timeControl: snapshot.timeControl,
   }).then((res) => {
     // postJSON only throws on 503; a 400 (empty moves / result '*') resolves
     // with a non-ImportResponse body. Require an ImportResponse that inserted
@@ -511,6 +708,12 @@ function snapshotGame(game, resultOverride) {
     result: resultOverride || game.result,
     startedAt: game.startedAt,
     rated: !!game.rated,
+    // Per-ply remaining centis for %clk emission; untimed → []. timeControl is
+    // structured data the server may use; both round-trip through the descriptor.
+    moveTimes: Array.isArray(game.moveTimes) ? game.moveTimes.slice() : [],
+    timeControl: game.timeControl
+      ? { baseSec: game.timeControl.baseSec | 0, incSec: game.timeControl.incSec | 0 }
+      : null,
   };
 }
 
@@ -554,6 +757,8 @@ function startGame() {
   const startedAt = new Date().toISOString();
   const personaId = chosenPersonaId();
   const seed = Math.floor(Math.random() * 1e9); // per-game seed for opening sampling
+  const tc = TIME_CONTROLS[timeControlChoice()]; // {baseSec,incSec} | null
+  const baseCentis = tc ? tc.baseSec * 100 : null;
 
   // Enter bot-play: capture the prior play session ONCE. If we're already in
   // bot-play (a "New game" / mid-game restart), botEnter() must NOT re-run —
@@ -575,11 +780,17 @@ function startGame() {
     startedAt,
     rated,
     saved: false,
+    timeControl: tc ? { baseSec: tc.baseSec, incSec: tc.incSec } : null,
+    clockWhite: baseCentis,
+    clockBlack: baseCentis,
+    moveTimes: [],
   });
   hub().setMode('bot-play');
   hub().setOrientation(userColor);
   hub().setBoardPosition(INITIAL_FEN);
 
+  resetTick();
+  renderClocks();
   reflectControls();
   hub().persist();
   hub().refreshAnalysis();
@@ -645,8 +856,12 @@ async function onMove(orig, dest) {
   const after = currentPos();
   const outcome = autoOutcome(after);
   if (outcome) hub().botSetResult(outcome.result);
+  // Clock hook: record the mover's pre-increment time + add increment + reset
+  // the tick reference — SYNCHRONOUSLY before the async refreshAnalysis().
+  onMoveCommitted(hub().botGetGame());
   hub().persist();
   hub().refreshAnalysis();
+  renderClocks();
 
   if (outcome) {
     // User's move ended the game — no bot reply. Save it (casual + rated) once;
@@ -750,8 +965,12 @@ async function requestBotMove(myToken, fen) {
   const after = currentPos();
   const outcome = autoOutcome(after);
   if (outcome) hub().botSetResult(outcome.result);
+  // Clock hook: record the mover's pre-increment time + add increment + reset
+  // the tick reference — SYNCHRONOUSLY before the async refreshAnalysis().
+  onMoveCommitted(hub().botGetGame());
   hub().persist();
   hub().refreshAnalysis();
+  renderClocks();
   busy = false;
 
   if (outcome) {
@@ -862,7 +1081,9 @@ export function initBotplay(api) {
   wireColorPicker();
   wirePersonaPicker();
   wireTakebackPolicy();
+  wireTimeControl();
   wireChessComInput();
+  startClockLoop();
 
   byId('botplay-start').addEventListener('click', startGame);
   byId('botplay-resign').addEventListener('click', resign);

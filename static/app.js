@@ -194,6 +194,12 @@ function persist() {
           rated: !!botGame.rated,
           takebacksUsed: botGame.takebacksUsed | 0,
           ratedFlipped: !!botGame.ratedFlipped,
+          timeControl: botGame.timeControl
+            ? { baseSec: botGame.timeControl.baseSec | 0, incSec: botGame.timeControl.incSec | 0 }
+            : null,
+          clockWhite: botGame.clockWhite == null ? null : botGame.clockWhite | 0,
+          clockBlack: botGame.clockBlack == null ? null : botGame.clockBlack | 0,
+          moveTimes: (botGame.moveTimes || []).slice(),
         },
         priorPlay: {
           baseFen: botPriorPlay.baseFen,
@@ -296,6 +302,15 @@ function restore() {
         rated: !!bg.rated,
         takebacksUsed: bg.takebacksUsed | 0,
         ratedFlipped: !!bg.ratedFlipped,
+        // Clocks are defensive: a missing/malformed timeControl coerces to
+        // untimed (null); moveTimes MUST round-trip as an array (never the
+        // scalar `| 0`/`!!` coercions, which would mangle it to 0).
+        timeControl: (bg.timeControl && typeof bg.timeControl === 'object')
+          ? { baseSec: bg.timeControl.baseSec | 0, incSec: bg.timeControl.incSec | 0 }
+          : null,
+        clockWhite: bg.clockWhite == null ? null : bg.clockWhite | 0,
+        clockBlack: bg.clockBlack == null ? null : bg.clockBlack | 0,
+        moveTimes: Array.isArray(bg.moveTimes) ? bg.moveTimes.slice() : [],
       };
       botPriorPlay = {
         baseFen: pp.baseFen,
@@ -389,7 +404,12 @@ function setPlaySnapshot(snap) { playSnapshot = snap; }
 //   botSetGame(game)         — set/replace the current bot-game descriptor
 //                              { baseFen, movesUci, cursor, userColor,
 //                              personaLabel, personaId, seed, result|null,
-//                              startedAt, saved, rated }. Persisted by persist().
+//                              startedAt, saved, rated, takebacksUsed,
+//                              ratedFlipped, timeControl ({baseSec,incSec}|null
+//                              untimed), clockWhite/clockBlack (remaining centis
+//                              int, null when untimed), moveTimes (int[] per-ply
+//                              remaining centis pre-increment, defaults []) }.
+//                              Persisted by persist().
 //   botGetGame()             — read the current bot-game descriptor (or null).
 //   botAppendMove(uci)       — truncate history at cursor (redo suffix), push
 //                              `uci`, advance cursor; mirrors state into botGame.
@@ -451,6 +471,12 @@ function botSetGame(game) {
     rated: !!game.rated,
     takebacksUsed: game.takebacksUsed | 0,
     ratedFlipped: !!game.ratedFlipped,
+    timeControl: (game.timeControl && typeof game.timeControl === 'object')
+      ? { baseSec: game.timeControl.baseSec | 0, incSec: game.timeControl.incSec | 0 }
+      : null,
+    clockWhite: game.clockWhite == null ? null : game.clockWhite | 0,
+    clockBlack: game.clockBlack == null ? null : game.clockBlack | 0,
+    moveTimes: Array.isArray(game.moveTimes) ? game.moveTimes.slice() : [],
   } : null;
   // Mirror into the canonical play-state so syncBoard/refreshAnalysis operate on it.
   // This is a wholesale state swap (like restorePlay): bump both guards so a
@@ -499,13 +525,34 @@ function botTakeback() {
   botGame.takebacksUsed = (botGame.takebacksUsed | 0) + 1;
   let flippedToCasual = false;
   if (botGame.rated) { botGame.rated = false; flippedToCasual = true; botGame.ratedFlipped = true; }
+  // Clock restore (timed games only): keep moveTimes aligned with the truncated
+  // movesUci, then reset each side's live clock to its remaining centis after its
+  // last SURVIVING move. Parity is by ABSOLUTE ply index from game start (even =
+  // White, odd = Black), independent of userColor. A side with no surviving move
+  // resets to its full base time.
+  if (botGame.timeControl) {
+    const len = botGame.movesUci.length;
+    botGame.moveTimes = (botGame.moveTimes || []).slice(0, len);
+    const base = (botGame.timeControl.baseSec | 0) * 100;
+    // last even index < len, and last odd index < len.
+    const lastEven = len > 0 ? (len - 1) - ((len - 1) % 2) : -1;
+    const lastOdd = len > 1 ? (len - 1) - (1 - ((len - 1) % 2)) : -1;
+    botGame.clockWhite = lastEven >= 0 ? (botGame.moveTimes[lastEven] | 0) : base;
+    botGame.clockBlack = lastOdd >= 0 ? (botGame.moveTimes[lastOdd] | 0) : base;
+  }
   // Wholesale truncation: drop any move-write / analysis response still in flight
   // from before the rewind (as botSetGame does on a state swap).
   moveToken++;
   analysisToken++;
   syncBoard(); // full ground.set from state.cursor: fen + turnColor + lastMove.
   persist();
-  return { takebacksUsed: botGame.takebacksUsed, rated: botGame.rated, flippedToCasual };
+  return {
+    takebacksUsed: botGame.takebacksUsed,
+    rated: botGame.rated,
+    flippedToCasual,
+    clockWhite: botGame.clockWhite,
+    clockBlack: botGame.clockBlack,
+  };
 }
 
 function botSetResult(result) {

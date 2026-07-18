@@ -1239,6 +1239,54 @@ body.trap-practice-mode #fen-error { display: none; }
   gap: var(--space-3);
 }
 
+/* Time-control selector — reuses the persona-picker-row layout + persona-select
+   control look (same select idiom, disabled mid-game by botplay.js/T3). */
+.botplay-time-control-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Clocks-pause-on-reload hint — reuses botplay-hint's subdued caption look. */
+.botplay-clock-hint {
+  margin-top: calc(-1 * var(--space-2));
+}
+
+/* Dual clock readouts (opponent top / user bottom) — shown only for a timed
+   game (botplay.js toggles [hidden]). Tabular figures so digits don't jitter as
+   the clock ticks; the side-to-move's clock is emphasized, low time (<10s)
+   flagged in the danger tone. */
+.botplay-clocks {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.botplay-clock {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  min-width: 4.5rem;
+  text-align: center;
+}
+
+.botplay-clock[hidden] { display: none; }
+
+.botplay-clock[data-active="true"] {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.botplay-clock[data-low="true"] {
+  color: var(--q-blunder);
+  border-color: var(--q-blunder-border);
+}
+
 .botplay-status {
   font-size: 0.85rem;
   color: var(--text-secondary);

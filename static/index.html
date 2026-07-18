@@ -159,6 +159,22 @@
             </select>
           </div>
 
+          <div class="botplay-time-control-row">
+            <label class="eval-label" for="bot-time-control">Time control</label>
+            <select id="bot-time-control" class="botplay-persona-select" aria-label="Time control">
+              <option value="untimed" selected>Untimed</option>
+              <option value="5+2">5+2</option>
+              <option value="10+0">10+0</option>
+              <option value="10+5">10+5</option>
+            </select>
+          </div>
+          <div class="botplay-hint botplay-clock-hint">Clocks pause on reload — time spent away isn't charged.</div>
+
+          <div class="botplay-clocks">
+            <span id="bot-clock-top" class="botplay-clock" aria-label="Opponent clock" hidden>00:00</span>
+            <span id="bot-clock-bottom" class="botplay-clock" aria-label="Your clock" hidden>00:00</span>
+          </div>
+
           <div class="botplay-rating-row">
             <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
             <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>

@@ -319,17 +319,30 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       closed). Real-engine verify: Robin plays genuine in-band mistakes; B3/B4
       parity + no analysis-engine leak preserved. Spec/contracts/tickets:
       `../specs/bot-difficulty-roster.md`. · depends on B4 + B5.
-- [ ] **B7. Clocks + time controls** — problem: real-game realism —
+- [x] **B7. Clocks + time controls** — problem: real-game realism —
       confirmed at gate: clock enforced for BOTH sides, flag = loss · outcome-
       link: N3 (and feeds the existing time-trouble insights) · scope:
-      time-control menu (untimed default · e.g. 5+0 · 10+0 · 15+10), live
+      time-control menu (untimed default · 5+2 · 10+0 · 10+5), live
       dual clocks in bot mode, flag ends the game with the correct result;
       saved PGNs embed `%clk` so `clock_centis` analytics light up ·
-      pass/fail: in the browser, run the human's clock out → game ends as a
-      loss and saves with that result; SQL: bot-game plies have
-      `clock_centis IS NOT NULL` · appetite: 2 days · no-gos: no clock in
-      ordinary analysis play mode; no bot think-time realism yet (Next) ·
       depends on B2 (and B3 for the saved-PGN check) · Phase B · ICE 4·4·3=48
+      · **Shipped 2026-07-18 (PR pending):** entirely client-side (server stays
+      stateless). KEY FINDING: the time-trouble analytics consumer was ALREADY
+      built + shipped (`insights._time_trouble`, `game_plies.clock_centis`
+      column, the insights UI card) — starved of data because no bot PGN emitted
+      `%clk`. So B7 = (a) client clocks + (b) EMIT `%clk`; NO schema change, NO
+      new consumer. Presets Gate-1: **5+2/10+0/10+5**; reload PAUSES clocks
+      (away-time not charged, accepted-by-design); takeback RESTORES clocks by
+      ply-parity (even=White). Server writes `%clk` (H:MM:SS.s, matches the
+      `pgn.py` reader regex) from a client-sent pre-increment `moveTimes[]` in
+      the existing replay loop; flag-loss = plain `0-1`/`1-0` (no Termination
+      header, no 4th result, no `rating.py` change). Refuter: spec PASS (5 folds:
+      tick-reset atomicity, reload-refund accepted, takeback parity, pre-
+      increment %clk, casual clock correctness); diff PASS + 1 LOW folded
+      (`_format_clk` negative clamp). Codex infra-DOWN → refuter-only fail-open.
+      962 tests + live browser verify (5+2 clock ticks the side-to-move live
+      05:00→04:59, correct data-active). Spec: `../specs/bot-clocks.md`.
+      **⟹ chess-bots epic (Chapter 3) COMPLETE — all of B1–B9 shipped.**
 - [x] **B8. Personal ELO estimate** — problem: P4 — no strength trend across
       sparring games · outcome-link: N3 · scope: running rating updated per
       bot-game result vs the persona's rating (standard Elo K-factor update;
