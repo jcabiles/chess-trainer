@@ -2,9 +2,12 @@
 
 Pure, deterministic, no engine binary needed. Validates the coherence
 invariant across the REAL persona ladder (``app.personas.all()``, the
-research-calibrated dials — not stubs): a HIGHER-rated persona misses a
-fixed off-plan threat LESS often than a lower-rated one (stronger bot
-blunders less). See ``docs/ai-dlc/specs/causal-blunder.md`` Verify-by #2.
+research-calibrated dials — not stubs, 6 personas: Casey/Diego/Robin @1350,
+Morgan @1550, Alex @1800, Vera @2000): a HIGHER-rated elo GROUP misses a
+fixed off-plan threat LESS often, worst-case, than a lower-rated elo group
+(stronger bots blunder no more). With three personas tied at elo=1350 the
+invariant only holds at elo-group granularity, not pairwise across the
+elo-sorted ladder. See ``docs/ai-dlc/specs/causal-blunder.md`` Verify-by #2.
 """
 
 from __future__ import annotations
@@ -35,7 +38,9 @@ _PHASE = "middlegame"
 # Fixed, deterministic seed range for the empirical miss-rate estimate.
 _SEEDS = range(200)
 
-# The real ladder, ordered lowest→highest Elo (Casey -> Morgan -> Alex -> Vera).
+# The real ladder, ordered lowest→highest Elo (Casey/Diego/Robin @1350 ->
+# Morgan -> Alex -> Vera). A stable sort keeps insertion order within the
+# 1350 elo group, so ties resolve to catalog order (casey, diego, robin).
 _LADDER = sorted(personas.all(), key=lambda p: p.elo)
 
 
@@ -48,50 +53,90 @@ def _miss_rate(persona) -> float:
     return hits / len(_SEEDS)
 
 
-def test_ladder_is_the_expected_four_personas_by_elo():
-    # Sanity: the real ladder is Casey(1350) < Morgan(1550) < Alex(1800) < Vera(2000).
+def test_ladder_is_the_expected_six_personas_by_elo():
+    # Sanity: the real ladder is Casey/Diego/Robin(1350) < Morgan(1550) <
+    # Alex(1800) < Vera(2000), ties broken by catalog (insertion) order.
     ids = [p.id for p in _LADDER]
-    assert ids == ["casey", "morgan", "alex", "vera"]
+    assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
 
 
 def test_miss_rate_monotone_non_increasing_across_ladder():
-    """Higher elo => lower (or equal) empirical miss-rate on a fixed off-plan threat."""
-    rates = [_miss_rate(p) for p in _LADDER]
+    """Higher elo GROUP => lower (or equal) worst-case empirical miss-rate.
 
-    for i in range(len(rates) - 1):
-        lower, higher = _LADDER[i], _LADDER[i + 1]
-        assert rates[i] >= rates[i + 1], (
-            f"expected miss-rate({lower.id}, elo={lower.elo})={rates[i]:.3f} >= "
-            f"miss-rate({higher.id}, elo={higher.elo})={rates[i + 1]:.3f} "
-            "(coherence invariant: stronger personas should blunder no more often)"
+    With three personas tied at elo=1350 (casey/diego/robin), the invariant no
+    longer holds pairwise across the elo-sorted ladder (robin, a deliberately
+    sloppy/low-blunderRate persona, sits before morgan but misses far less).
+    It only holds at the granularity of ELO GROUPS: group personas by elo,
+    take the MAX empirical miss-rate within each group, and that per-group max
+    must be non-increasing as elo strictly increases (a higher-rated group
+    should never have a WORSE worst-case miss-rate than a lower-rated group).
+    """
+    groups: dict[int, list[float]] = {}
+    for p in _LADDER:
+        groups.setdefault(p.elo, []).append(_miss_rate(p))
+    elos = sorted(groups)
+    group_max = [max(groups[elo]) for elo in elos]
+
+    for i in range(len(group_max) - 1):
+        lower_elo, higher_elo = elos[i], elos[i + 1]
+        assert group_max[i] >= group_max[i + 1], (
+            f"expected max miss-rate(elo={lower_elo})={group_max[i]:.3f} >= "
+            f"max miss-rate(elo={higher_elo})={group_max[i + 1]:.3f} "
+            "(coherence invariant: stronger elo groups should blunder no more, "
+            "worst-case, than weaker elo groups)"
         )
 
-    # Not degenerate: the ladder should actually spread (Casey misses noticeably
-    # more than Vera) — guards against an all-zero or all-equal false pass.
-    assert rates[0] > rates[-1]
+    # Not degenerate: the 1350 group's worst-case miss-rate should actually
+    # spread above Vera's (2000) — guards against an all-zero/all-equal false pass.
+    assert group_max[0] > group_max[-1]
+
+
+def test_within_1350_group_diego_misses_more_than_robin():
+    """Close the group-max blind spot: pin the two new 1350 personas directly.
+
+    The elo-group-max test above is dominated by casey/diego and so would NOT
+    notice a logic (or dial) regression that only affects robin or diego. Assert
+    the intended intra-group ordering explicitly: diego (aggressive, very
+    threat-blind: high blunderRate + low threatDistance) misses a fixed off-plan
+    defensive threat MUCH more often than robin (deliberately low blunderRate),
+    and robin actually stays low. A bug zeroing robin's rate or un-gating diego
+    is caught here even though the group max would not move.
+    """
+    diego = personas.get("diego")
+    robin = personas.get("robin")
+    diego_rate = _miss_rate(diego)
+    robin_rate = _miss_rate(robin)
+    assert diego_rate > robin_rate + 0.30, (
+        f"diego miss-rate {diego_rate:.3f} should dominate robin {robin_rate:.3f}"
+    )
+    assert robin_rate < 0.35, f"robin (low blunderRate) miss-rate {robin_rate:.3f} too high"
 
 
 def test_off_plan_threshold_monotone_across_ladder():
-    """A threat at a fixed off_plan_score gates OUT high personas, allows low ones.
+    """A threat at a fixed off_plan_score gates OUT the strongest persona, allows
+    the weakest one.
 
-    threatDistance is monotone increasing across the real ladder (Casey lowest ->
-    Vera highest), so a score strictly below Vera's threshold but at/above the
-    others' is allowed for Casey/Morgan/Alex and gated out for Vera.
+    threatDistance is NOT globally monotone across the elo-sorted ladder anymore
+    (diego's 0.10 < casey's 0.15; robin's 0.30 > morgan's 0.29), so this no longer
+    asserts a ladder-wide ordering. Instead it verifies the SAME gating mechanism
+    directly: pick the persona with the lowest threatDistance (the easiest to gate
+    through) and the one with the highest (the hardest to gate through — most
+    resistant to missing threats), and confirm a fixed off-plan score strictly
+    between the two thresholds is allowed for the weakest and gated out for the
+    strongest.
     """
-    thresholds = [p.threatDistance for p in _LADDER]
-    assert thresholds == sorted(thresholds), "threatDistance must be monotone across the ladder"
+    weakest = min(_LADDER, key=lambda p: p.threatDistance)  # diego, 0.10
+    strongest = max(_LADDER, key=lambda p: p.threatDistance)  # vera, 0.67
 
-    # Squares 3/5 off-plan: exceeds casey/morgan/alex's threatDistance but not vera's.
+    # Squares 3/5 off-plan: exceeds diego's threshold but not vera's.
     threat_squares = {1, 2, 3, 4, 5}
     on_plan = {1, 2}  # 2 of 5 on-plan -> off_plan_score = 0.6
     score = bb.off_plan_score(threat_squares, on_plan)
     assert score == 0.6
+    assert weakest.threatDistance < score <= strongest.threatDistance
 
-    casey, morgan, alex, vera = _LADDER
-    assert score > casey.threatDistance
-    assert score > morgan.threatDistance
-    assert score > alex.threatDistance
-    assert score <= vera.threatDistance  # gated OUT for the strongest persona
+    assert score > weakest.threatDistance  # allowed through for the weakest persona
+    assert score <= strongest.threatDistance  # gated OUT for the strongest persona
 
 
 def test_ladder_harness_is_deterministic():

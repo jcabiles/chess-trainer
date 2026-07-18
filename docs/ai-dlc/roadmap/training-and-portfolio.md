@@ -296,6 +296,29 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       `reflectControls()` on the bot-reply handback) + a note-accuracy LOW
       (persisted `ratedFlipped` flag) — both fixed + re-reviewed PASS.
       **Phase A COMPLETE.**
+- [x] **B9. Difficulty roster (aggressive-1350 + sloppy sub-ELO)** — problem:
+      the ladder had one 1350 (Casey) and no way below Stockfish's UCI_Elo 1320
+      floor; wanted a sharper attacker and a believable ~1100–1250 beginner ·
+      outcome-link: N3 (a fuller, more human sparring roster) · scope: two new
+      1350-band personas — **Diego** (aggressive attacker, weak on defense —
+      PURE DATA reusing the B5 causal-blunder gate: high temperature + low
+      `threatDistance` 0.10 + high `blunderRate` 0.85) and **Robin** (sloppy,
+      via a NEW post-opening "mistake tier": with prob `mistakeRate=0.5` play a
+      candidate 50–250cp worse than best — `analysis` inaccuracy/mistake bands —
+      keeping `blunderRate` low so it drifts but rarely hangs; effective
+      ~1100–1250) · **Shipped 2026-07-18 (PR pending):** new pure engine-free
+      `bot_blunder.should_mistake/pick_mistake` (int-salted `hash((seed,ply,1))`
+      determinism, mover-POV, `MATE_GUARD` on the bot_engine scoreCp axis,
+      bounded so the tier NEVER plays a >250cp blunder-magnitude move); new
+      `mistakeRate` persona dial; wired into the `/api/bot/move` persona
+      post-opening branch AFTER the blunder gate, single `candidates()` call
+      (`assert MISTAKE_K==CAND_K==SAMPLE_K`). Zero frontend change (picker is
+      data-driven). Refuter (pre-build) folded 6 findings incl. an unbounded-
+      fallback HIGH + a str-hash determinism MED + a monotonicity-test landmine;
+      diff refuter (SHIP) folded 2 LOWs (dead fallback removed, ladder blind-spot
+      closed). Real-engine verify: Robin plays genuine in-band mistakes; B3/B4
+      parity + no analysis-engine leak preserved. Spec/contracts/tickets:
+      `../specs/bot-difficulty-roster.md`. · depends on B4 + B5.
 - [ ] **B7. Clocks + time controls** — problem: real-game realism —
       confirmed at gate: clock enforced for BOTH sides, flag = loss · outcome-
       link: N3 (and feeds the existing time-trouble insights) · scope:

@@ -55,6 +55,7 @@ class Persona:
     temperature: float
     blunderRate: float
     threatDistance: float
+    mistakeRate: float = 0.0
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -83,10 +84,12 @@ _ELO_MAX = 3000
 # The built-in ladder — hardcoded, set at import with NO file I/O. data/personas.json
 # ships the same four so the committed file and this default agree.
 _DEFAULT_PERSONAS: tuple[Persona, ...] = (
-    Persona("casey", "Casey", 1350, "solid", "Casual club player — steady, but misses tactics.", 80, 0.85, 0.15),
-    Persona("morgan", "Morgan", 1550, "tactical", "Improving — punishes loose play and hangs onto material.", 130, 0.65, 0.29),
-    Persona("alex", "Alex", 1800, "aggressive", "Strong club player — sharp, presses for the attack.", 200, 0.40, 0.50),
-    Persona("vera", "Vera", 2000, "positional", "Expert — grinds small edges in long games.", 100, 0.20, 0.67),
+    Persona("casey", "Casey", 1350, "solid", "Casual club player — steady, but misses tactics.", 80, 0.85, 0.15, 0.0),
+    Persona("diego", "Diego", 1350, "attacking", "Attacking club player — hunts your king, soft on defense.", 190, 0.85, 0.10, 0.0),
+    Persona("robin", "Robin", 1350, "sloppy", "Beginner — drifts and leaks small mistakes.", 100, 0.18, 0.30, 0.50),
+    Persona("morgan", "Morgan", 1550, "tactical", "Improving — punishes loose play and hangs onto material.", 130, 0.65, 0.29, 0.0),
+    Persona("alex", "Alex", 1800, "aggressive", "Strong club player — sharp, presses for the attack.", 200, 0.40, 0.50, 0.0),
+    Persona("vera", "Vera", 2000, "positional", "Expert — grinds small edges in long games.", 100, 0.20, 0.67, 0.0),
 )
 
 # Module-level singleton — initialised to the built-in default so imports never
@@ -120,6 +123,9 @@ def _parse_persona(entry: dict) -> Persona:
     threat_distance = entry.get("threatDistance")
     if threat_distance is None:
         threat_distance = _default_threat_distance(elo)
+    mistake_rate = entry.get("mistakeRate")
+    if mistake_rate is None:
+        mistake_rate = 0.0
     return Persona(
         id=str(entry["id"]),
         name=str(entry["name"]),
@@ -129,6 +135,7 @@ def _parse_persona(entry: dict) -> Persona:
         temperature=float(temp),
         blunderRate=float(blunder_rate),
         threatDistance=float(threat_distance),
+        mistakeRate=float(mistake_rate),
     )
 
 
@@ -150,6 +157,8 @@ def _validate(personas: list[Persona]) -> Optional[str]:
             return f"blunderRate {p.blunderRate} for '{p.id}' out of range [0, 1]"
         if not (0.0 <= p.threatDistance <= 1.0):
             return f"threatDistance {p.threatDistance} for '{p.id}' out of range [0, 1]"
+        if not (0.0 <= p.mistakeRate <= 1.0):
+            return f"mistakeRate {p.mistakeRate} for '{p.id}' out of range [0, 1]"
     return None
 
 

@@ -593,6 +593,13 @@ SAMPLE_K = 5
 #: set so ``bot_blunder.pick_survivor`` has plan moves to fall back to after the
 #: threat-neutralizing candidates are dropped.
 CAND_K = 5
+#: Candidate count requested when the mistake tier fires (sloppy personas) — a
+#: set to trade DOWN from best into the 50–250cp inaccuracy band. Pinned equal to
+#: CAND_K/SAMPLE_K so the ``cands = cands or …`` reuse of a gate-fetched list
+#: stays width-consistent (widening CAND_K alone would silently reuse a different
+#: width with no test catching it).
+MISTAKE_K = 5
+assert MISTAKE_K == CAND_K == SAMPLE_K
 
 
 class BotMoveRequest(BaseModel):
@@ -753,6 +760,19 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
                     idx = personas.weighted_choice(
                         mover_scores, persona.temperature, hash((req.seed or 0, req.ply))
                     )
+            elif persona.mistakeRate and bot_blunder.should_mistake(
+                persona, phase, req.ply, req.seed or 0
+            ):
+                # Mistake tier (sloppy personas): with prob mistakeRate, trade
+                # DOWN from best into the 50–250cp inaccuracy band. The blunder
+                # gate already ran FIRST and short-circuited above (a persona move
+                # blunders OR mistakes, never both). Reuse the gate's CAND_K set
+                # if it fetched one; else one MISTAKE_K (==CAND_K) call — single
+                # candidates() call per move, no TT cold-start.
+                cands = cands or await bot.candidates(
+                    req.fen, k=MISTAKE_K, elo=persona.elo
+                )
+                idx = bot_blunder.pick_mistake(cands, board, req.seed or 0, req.ply)
             else:
                 # Post-opening: play the best move (candidate 0), still at strength.
                 # Reuse the gate's CAND_K set if present (cands[0] is best-first).

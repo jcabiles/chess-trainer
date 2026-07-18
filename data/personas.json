@@ -8,7 +8,30 @@
       "description": "Casual club player — steady, but misses tactics.",
       "temperature": 80,
       "blunderRate": 0.85,
-      "threatDistance": 0.15
+      "threatDistance": 0.15,
+      "mistakeRate": 0.0
+    },
+    {
+      "id": "diego",
+      "name": "Diego",
+      "elo": 1350,
+      "style": "attacking",
+      "description": "Attacking club player — hunts your king, soft on defense.",
+      "temperature": 190,
+      "blunderRate": 0.85,
+      "threatDistance": 0.10,
+      "mistakeRate": 0.0
+    },
+    {
+      "id": "robin",
+      "name": "Robin",
+      "elo": 1350,
+      "style": "sloppy",
+      "description": "Beginner — drifts and leaks small mistakes.",
+      "temperature": 100,
+      "blunderRate": 0.18,
+      "threatDistance": 0.30,
+      "mistakeRate": 0.50
     },
     {
       "id": "morgan",
@@ -18,7 +41,8 @@
       "description": "Improving — punishes loose play and hangs onto material.",
       "temperature": 130,
       "blunderRate": 0.65,
-      "threatDistance": 0.29
+      "threatDistance": 0.29,
+      "mistakeRate": 0.0
     },
     {
       "id": "alex",
@@ -28,7 +52,8 @@
       "description": "Strong club player — sharp, presses for the attack.",
       "temperature": 200,
       "blunderRate": 0.40,
-      "threatDistance": 0.50
+      "threatDistance": 0.50,
+      "mistakeRate": 0.0
     },
     {
       "id": "vera",
@@ -38,7 +63,8 @@
       "description": "Expert — grinds small edges in long games.",
       "temperature": 100,
       "blunderRate": 0.20,
-      "threatDistance": 0.67
+      "threatDistance": 0.67,
+      "mistakeRate": 0.0
     }
   ]
 }

@@ -406,3 +406,109 @@ def pick_survivor(candidates: list[dict], board: chess.Board, threat: Threat | N
             best_idx = idx
 
     return best_idx
+
+
+# ---------------------------------------------------------------------------
+# 5. Mistake tier (mild inaccuracy injection — B6/sloppy personas)
+# ---------------------------------------------------------------------------
+
+#: Lower/upper centipawn bounds of a "mistake" (inaccuracy) vs the best move.
+MISTAKE_LO = 50
+MISTAKE_HI = 250
+
+#: INT salt (never a str — str/bytes hashing is per-process randomized (PEP 456),
+#: which would break cross-restart determinism). Decorrelates the mistake draw
+#: from the blunder draw ``hash((seed, ply))`` by widening the tuple.
+MISTAKE_SALT = 1
+
+#: Forced-mate guard on the ``bot_engine`` scoreCp mate axis (candidates use the
+#: ±100000 sentinel) — well above any real finite eval, below the sentinel. NOT
+#: analysis.MATE_CP (10000) and NOT MATE_SEVERITY (the severity axis).
+MATE_GUARD = 50_000
+
+
+def should_mistake(persona, phase: str, ply: int, seed: int) -> bool:
+    """Return True iff the bot should play a mild inaccuracy this move.
+
+    Fires iff ``persona.mistakeRate > 0`` AND a seeded draw hits::
+
+        Random(hash((seed, ply, MISTAKE_SALT))).random()
+            < persona.mistakeRate * phase_gate(phase)
+
+    ``phase_gate`` is 0 in the opening (never fires there) and 1.0 otherwise, so
+    the tier only drifts once the opening is over.
+
+    Args:
+        persona: Frozen persona with a ``.mistakeRate`` dial in ``[0, 1]``.
+        phase: ``'opening'`` / ``'middlegame'`` / ``'endgame'``.
+        ply: The current ply number (0-based full-game ply).
+        seed: The per-game seed.
+
+    Returns:
+        ``True`` if a mild mistake should be injected this move.
+    """
+    if persona.mistakeRate <= 0:
+        return False
+
+    fire_prob = persona.mistakeRate * phase_gate(phase)
+    if fire_prob <= 0.0:
+        return False
+
+    rng = random.Random(hash((seed, ply, MISTAKE_SALT)))
+    return rng.random() < fire_prob
+
+
+def pick_mistake(cands: list[dict], board: chess.Board, seed: int, ply: int) -> int:
+    """Return the index of a deliberately-sub-optimal (50–250cp) candidate.
+
+    ``cands`` is :meth:`bot_engine.candidates` output — ``[{uci, san, scoreCp}]``
+    ordered BEST-FOR-THE-MOVER (``cands[0]`` is the mover's best), each ``scoreCp``
+    stored White-POV. We convert to mover-POV (flip by ``board.turn``) before
+    comparing, so ``cands[0]`` has the max mover-POV score.
+
+    Selection:
+
+    * ``len(cands) < 2`` → ``0`` (nothing to trade down to).
+    * ``cands[0]`` is a forced mate (``abs(scoreCp) >= MATE_GUARD``) → ``0``
+      (don't mix the ±100000 mate sentinel into finite cp buckets).
+    * ``loss_i = mover_cp[0] - mover_cp[i]`` for each ``i``. In-band candidates
+      are ``i >= 1`` with ``MISTAKE_LO <= loss_i <= MISTAKE_HI``; if any exist,
+      pick one seeded via ``Random(hash((seed, ply, MISTAKE_SALT)))``.
+    * No in-band candidate → ``0`` (best). This covers both empty-band cases:
+      every alternative is near-best (loss < MISTAKE_LO, no real mistake to make)
+      OR every alternative is a blunder (loss > MISTAKE_HI, already losing — don't
+      pile on). So the tier NEVER returns a candidate whose loss ``> MISTAKE_HI``.
+
+    Deterministic, pure, engine-free.
+
+    Args:
+        cands: ``[{uci, san, scoreCp}]``, White-POV, best-first.
+        board: The position the candidates are played from (bot to move).
+        seed: The per-game seed.
+        ply: The current ply number.
+
+    Returns:
+        The chosen index into *cands* (``0`` = best).
+    """
+    if len(cands) < 2:
+        return 0
+    if abs(cands[0].get("scoreCp", 0)) >= MATE_GUARD:
+        return 0
+
+    white_to_move = board.turn == chess.WHITE
+
+    def mover_cp(cand: dict) -> int:
+        score = cand.get("scoreCp", 0)
+        return score if white_to_move else -score
+
+    best_mover_cp = mover_cp(cands[0])
+    losses = [best_mover_cp - mover_cp(c) for c in cands]
+
+    in_band = [i for i in range(1, len(cands)) if MISTAKE_LO <= losses[i] <= MISTAKE_HI]
+    if in_band:
+        rng = random.Random(hash((seed, ply, MISTAKE_SALT)))
+        return rng.choice(sorted(in_band))
+
+    # No candidate loses within [MISTAKE_LO, MISTAKE_HI] — play best. Guarantees
+    # the tier never plays a blunder-magnitude (> MISTAKE_HI) move.
+    return 0

@@ -49,7 +49,7 @@ def test_default_ladder_present_without_init():
     # all() works before any explicit init in this test — proves the default is
     # set at import with no file I/O.
     ids = [p.id for p in personas.all()]
-    assert ids == ["casey", "morgan", "alex", "vera"]
+    assert ids == ["casey", "diego", "robin", "morgan", "alex", "vera"]
 
 
 def test_default_id_and_casey_elo():
@@ -78,18 +78,28 @@ def test_default_persona_shape():
 
 
 def test_default_ladder_blunder_dials_present_and_monotone():
-    ladder = [personas.get(pid) for pid in ("casey", "morgan", "alex", "vera")]
+    # Three personas now share elo=1350 (casey, diego, robin), so a strictly-
+    # decreasing / globally-unique blunderRate assertion no longer holds
+    # (diego == casey == 0.85; robin == 0.18 undercuts morgan's 0.65 at 1550,
+    # so a MIN-per-group check would be non-monotone). Instead: group by elo
+    # and assert the MAX blunderRate per elo group is strictly decreasing
+    # across strictly-increasing elo groups. Equal-elo personas (e.g. diego's
+    # 0.85 == casey's 0.85) may repeat a blunderRate WITHIN a group — that is
+    # not asserted unique here, only the max-per-group step-down is.
+    ladder = personas.all()
     for p in ladder:
         assert 0.0 <= p.blunderRate <= 1.0
         assert 0.0 <= p.threatDistance <= 1.0
-    blunder_rates = [p.blunderRate for p in ladder]
-    threat_distances = [p.threatDistance for p in ladder]
-    # Higher elo -> lower blunderRate, higher threatDistance (Casey -> Vera).
-    assert blunder_rates == sorted(blunder_rates, reverse=True)
-    assert threat_distances == sorted(threat_distances)
-    # Strictly monotone (no ties across the ladder).
-    assert len(set(blunder_rates)) == len(blunder_rates)
-    assert len(set(threat_distances)) == len(threat_distances)
+
+    by_elo: dict[int, list] = {}
+    for p in ladder:
+        by_elo.setdefault(p.elo, []).append(p)
+
+    elos = sorted(by_elo)
+    assert elos == sorted(set(elos))  # strictly increasing group keys (elo values unique)
+    max_blunder_per_group = [max(p.blunderRate for p in by_elo[elo]) for elo in elos]
+    assert max_blunder_per_group == sorted(max_blunder_per_group, reverse=True)
+    assert len(set(max_blunder_per_group)) == len(max_blunder_per_group)  # strict step-down
 
 
 def test_blunder_dials_derived_from_elo_when_absent(tmp_path):
@@ -132,7 +142,7 @@ def test_blunder_rate_out_of_range_keeps_defaults(tmp_path):
     ]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 4  # defaults kept
+    assert len(personas.all()) == 6  # defaults kept
 
 
 def test_threat_distance_out_of_range_keeps_defaults(tmp_path):
@@ -142,7 +152,105 @@ def test_threat_distance_out_of_range_keeps_defaults(tmp_path):
     ]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 4  # defaults kept
+    assert len(personas.all()) == 6  # defaults kept
+
+
+# --------------------------------------------------------------------------- #
+# mistakeRate dial (T2)
+# --------------------------------------------------------------------------- #
+
+
+def test_mistake_rate_default_zero_when_absent(tmp_path):
+    # Old-style dict without mistakeRate still parses, defaulting to 0.0 — the
+    # 4 pre-existing personas stay B4-byte-identical.
+    ladder = [
+        {"id": "casey", "name": "Casey", "elo": 1350, "style": "solid",
+         "description": "d", "temperature": 80, "blunderRate": 0.85, "threatDistance": 0.15},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    casey = personas.get("casey")
+    assert casey.mistakeRate == 0.0
+
+
+def test_mistake_rate_read_explicitly_when_present(tmp_path):
+    ladder = [
+        {"id": "casey", "name": "Casey", "elo": 1350, "style": "solid",
+         "description": "d", "temperature": 80, "blunderRate": 0.85, "threatDistance": 0.15,
+         "mistakeRate": 0.5},
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    casey = personas.get("casey")
+    assert casey.mistakeRate == 0.5
+
+
+def test_mistake_rate_out_of_range_keeps_defaults(tmp_path):
+    ladder = [
+        dict(VALID_LADDER[0], mistakeRate=1.5),
+        dict(VALID_LADDER[1]),
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    assert len(personas.all()) == 6  # defaults kept
+
+
+def test_mistake_rate_negative_keeps_defaults(tmp_path):
+    ladder = [
+        dict(VALID_LADDER[0], mistakeRate=-0.1),
+        dict(VALID_LADDER[1]),
+    ]
+    path = _write(tmp_path, {"personas": ladder})
+    personas.init(path)
+    assert len(personas.all()) == 6  # defaults kept
+
+
+def test_existing_four_personas_mistake_rate_zero():
+    # The 4 pre-existing personas keep mistakeRate=0.0 (B4-identical behavior).
+    for pid in ("casey", "morgan", "alex", "vera"):
+        assert personas.get(pid).mistakeRate == 0.0
+
+
+def test_diego_persona_values():
+    diego = personas.get("diego")
+    assert diego is not None
+    assert diego.name == "Diego"
+    assert diego.elo == 1350
+    assert diego.style == "attacking"
+    assert diego.temperature == 190
+    assert diego.blunderRate == pytest.approx(0.85)
+    assert diego.threatDistance == pytest.approx(0.10)
+    assert diego.mistakeRate == pytest.approx(0.0)
+    assert diego.description == "Attacking club player — hunts your king, soft on defense."
+
+
+def test_robin_persona_values():
+    robin = personas.get("robin")
+    assert robin is not None
+    assert robin.name == "Robin"
+    assert robin.elo == 1350
+    assert robin.style == "sloppy"
+    assert robin.temperature == 100
+    assert robin.blunderRate == pytest.approx(0.18)
+    assert robin.threatDistance == pytest.approx(0.30)
+    assert robin.mistakeRate == pytest.approx(0.50)
+    assert robin.description == "Beginner — drifts and leaks small mistakes."
+
+
+def test_explicit_temperature_wins_for_new_styles():
+    # "attacking" / "sloppy" are not in _STYLE_TEMP; the explicit temperature
+    # on diego/robin must win regardless (never falls back to the style map).
+    diego = personas.get("diego")
+    robin = personas.get("robin")
+    assert diego.temperature == 190
+    assert robin.temperature == 100
+
+
+def test_personas_json_matches_default_personas():
+    # data/personas.json MUST agree exactly with _DEFAULT_PERSONAS (ids + values).
+    personas.init("data/personas.json")
+    from_file = personas.all()
+    assert [p.as_dict() for p in from_file] == [p.as_dict() for p in personas._DEFAULT_PERSONAS]
 
 
 # --------------------------------------------------------------------------- #
@@ -177,7 +285,7 @@ def test_temperature_derived_from_style_when_absent(tmp_path):
 
 def test_missing_file_keeps_defaults():
     personas.init(MISSING)
-    assert [p.id for p in personas.all()] == ["casey", "morgan", "alex", "vera"]
+    assert [p.id for p in personas.all()] == ["casey", "diego", "robin", "morgan", "alex", "vera"]
 
 
 def test_env_override(tmp_path, monkeypatch):
@@ -194,14 +302,14 @@ def test_malformed_json_keeps_defaults(tmp_path, obj):
     p = tmp_path / "personas.json"
     p.write_text(obj, encoding="utf-8")
     personas.init(str(p))
-    assert [x.id for x in personas.all()] == ["casey", "morgan", "alex", "vera"]
+    assert [x.id for x in personas.all()] == ["casey", "diego", "robin", "morgan", "alex", "vera"]
 
 
 def test_duplicate_ids_keep_defaults(tmp_path):
     dup = VALID_LADDER + [dict(VALID_LADDER[0])]
     path = _write(tmp_path, {"personas": dup})
     personas.init(path)
-    assert len(personas.all()) == 4  # defaults
+    assert len(personas.all()) == 6  # defaults
 
 
 def test_missing_casey_keeps_defaults(tmp_path):
@@ -209,27 +317,27 @@ def test_missing_casey_keeps_defaults(tmp_path):
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
     assert personas.default_id() == "casey"
-    assert [p.id for p in personas.all()] == ["casey", "morgan", "alex", "vera"]
+    assert [p.id for p in personas.all()] == ["casey", "diego", "robin", "morgan", "alex", "vera"]
 
 
 def test_elo_out_of_range_keeps_defaults(tmp_path):
     ladder = [dict(VALID_LADDER[0], elo=1000), dict(VALID_LADDER[1])]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 4
+    assert len(personas.all()) == 6
 
 
 def test_temp_non_positive_keeps_defaults(tmp_path):
     ladder = [dict(VALID_LADDER[0], temperature=0), dict(VALID_LADDER[1])]
     path = _write(tmp_path, {"personas": ladder})
     personas.init(path)
-    assert len(personas.all()) == 4
+    assert len(personas.all()) == 6
 
 
 def test_empty_ladder_keeps_defaults(tmp_path):
     path = _write(tmp_path, {"personas": []})
     personas.init(path)
-    assert len(personas.all()) == 4
+    assert len(personas.all()) == 6
 
 
 # --------------------------------------------------------------------------- #
