@@ -102,94 +102,6 @@
       </div>
       <div id="fen-error" class="error" hidden></div>
 
-      <!-- Play vs Bot — collapsible disclosure in the play area (analysis-mode
-           panel is the look/feel template: movelist-toggle/chevron header,
-           collapsed by default). Static markup only — botplay.js (T5) wires
-           behavior; app.js/T3 owns mode entry via the Start button. -->
-      <div id="botplay-block" class="botplay-block collapsed">
-        <button id="botplay-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="botplay-body">
-          <span>Play vs Bot</span>
-          <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
-        </button>
-        <div id="botplay-body" class="botplay-body">
-          <div class="botplay-persona-row">
-            <span id="botplay-persona" class="botplay-persona">Casual sparring bot</span>
-            <span id="botplay-maia-indicator" class="botplay-maia-indicator" title="Maia (human-style) weights readiness — informational only, not yet used to pick moves">
-              <span class="botplay-maia-dot" aria-hidden="true"></span>
-              <span id="botplay-maia-label">Maia: checking…</span>
-            </span>
-          </div>
-
-          <div class="botplay-color-row">
-            <span class="eval-label" id="botplay-color-label">Play as</span>
-            <div id="botplay-color-seg" class="botplay-color-seg analysis-mode-seg" role="radiogroup" aria-labelledby="botplay-color-label">
-              <button type="button" id="botplay-color-white" data-color="white" role="radio" aria-checked="true">White</button>
-              <button type="button" id="botplay-color-black" data-color="black" role="radio" aria-checked="false">Black</button>
-            </div>
-          </div>
-
-          <div class="botplay-persona-picker-row">
-            <label class="eval-label" for="bot-persona">Opponent</label>
-            <select id="bot-persona" class="botplay-persona-select" aria-label="Choose a bot opponent">
-              <option value="">Loading…</option>
-            </select>
-          </div>
-          <div id="botplay-persona-caption" class="botplay-hint botplay-persona-caption"></div>
-
-          <label class="botplay-rated-row eval-bar-toggle-row">
-            <span class="eval-label">Rated</span>
-            <input type="checkbox" id="bot-rated">
-          </label>
-          <div class="botplay-hint botplay-rated-hint">Rated games count toward your ELO; quitting a rated game is a loss.</div>
-
-          <div class="botplay-takeback-policy-row">
-            <label class="eval-label" for="bot-takeback-policy">Takebacks</label>
-            <select id="bot-takeback-policy" class="botplay-persona-select" aria-label="Takeback policy">
-              <option value="never">Never</option>
-              <option value="three" selected>Up to 3</option>
-              <option value="anytime">Anytime</option>
-            </select>
-          </div>
-
-          <div class="botplay-time-control-row">
-            <label class="eval-label" for="bot-time-control">Time control</label>
-            <select id="bot-time-control" class="botplay-persona-select" aria-label="Time control">
-              <option value="untimed" selected>Untimed</option>
-              <option value="5+2">5+2</option>
-              <option value="10+0">10+0</option>
-              <option value="10+5">10+5</option>
-            </select>
-          </div>
-          <div class="botplay-hint botplay-clock-hint">Clocks pause on reload — time spent away isn't charged.</div>
-
-          <div class="botplay-clocks">
-            <span id="bot-clock-top" class="botplay-clock" aria-label="Opponent clock" hidden>00:00</span>
-            <span id="bot-clock-bottom" class="botplay-clock" aria-label="Your clock" hidden>00:00</span>
-          </div>
-
-          <div class="botplay-rating-row">
-            <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
-            <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
-          </div>
-          <div class="botplay-chesscom-input-row">
-            <label class="eval-label" for="chesscom-rating">Your chess.com rating</label>
-            <input type="number" id="chesscom-rating" class="botplay-chesscom-input" min="0" step="1" placeholder="e.g. 1500">
-          </div>
-
-          <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
-
-          <div class="botplay-controls">
-            <button id="botplay-start" class="botplay-start" type="button">Start</button>
-            <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
-            <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
-            <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
-            <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
-          </div>
-          <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
-          <div id="botplay-hint" class="botplay-hint" hidden></div>
-        </div>
-      </div>
-
       <!-- Setup (pregame) editor — shown only in setup mode -->
       <div id="setup-bar" class="setup-bar" hidden>
         <div class="setup-hint">Drag pieces to rearrange · drag off-board to delete · pick a piece below to stamp it onto squares</div>
@@ -325,104 +237,63 @@
 
       <!-- Analysis tab -->
       <div id="tab-analysis" class="tab-panel is-active" role="tabpanel" aria-labelledby="tab-btn-analysis">
-        <div id="analysis-status" class="analysis-status"></div>
-        <button id="engine-restart-btn" class="engine-restart-btn" type="button" title="Restart the Stockfish engine (keeps your game)">Restart engine</button>
-
-        <div class="analyze-color-row">
-          <label class="eval-label" for="analyze-color">Evaluate</label>
-          <select id="analyze-color" class="analyze-color-select">
-            <option value="both">Both colors</option>
-            <option value="white">White only</option>
-            <option value="black">Black only</option>
-          </select>
-        </div>
-
-        <label class="engine-speed-row">
-          <span class="eval-label">Speed</span>
-          <select id="engine-speed" class="engine-speed-select" title="Engine speed preset: Fast is quickest, Deep searches longest">
-            <option value="fast">Fast</option>
-            <option value="balanced">Balanced</option>
-            <option value="deep">Deep</option>
-          </select>
-        </label>
-
-        <!-- Analysis-mode settings: collapsible disclosure (movelist-toggle pattern).
-             Ships collapsed; app.js expands it if the saved pref says so. The header
-             hint surfaces a non-Full mode while collapsed (a persisted frozen panel
-             must have a visible cause). -->
-        <div class="analysis-settings-block collapsed">
-          <button id="analysis-settings-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="analysis-settings-body">
-            <span>Analysis mode <span id="analysis-mode-hint" class="analysis-mode-hint"></span></span>
-            <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
-          </button>
-          <div id="analysis-settings-body" class="analysis-settings-body">
-            <div class="analysis-mode-row">
-              <span class="eval-label" id="analysis-mode-label">Mode</span>
-              <div id="analysis-mode-seg" class="analysis-mode-seg" role="group" aria-labelledby="analysis-mode-label">
-                <button type="button" data-mode="full" aria-pressed="true"
-                        title="Evaluate every move and show all quality labels">Full</button>
-                <button type="button" data-mode="blunders" aria-pressed="false"
-                        title="Evaluate every move but only flag blunders">Blunders only</button>
-                <button type="button" data-mode="off" aria-pressed="false"
-                        title="Pause Stockfish evaluation; the panel freezes its last eval">Off</button>
+        <!-- Instrument card (mock-E): the panel's focal point. A raised card
+             gathering the big eval readout, the green BEST NOW chip, best
+             line/depth and the numbered move list into one cohesive readout.
+             Every id JS reads (#eval, #best-move, #pv, #move-list, …) is kept
+             verbatim — this is a regroup + restyle, not a rename. -->
+        <div class="panel-eval-card">
+          <div class="analysis-eval-row">
+            <div class="analysis-eval-col">
+              <div class="eval-block">
+                <div class="eval-label">Evaluation</div>
+                <div id="eval" class="eval">—</div>
               </div>
-            </div>
-            <label class="eval-bar-toggle-row">
-              <span class="eval-label">Win-chances bar</span>
-              <input type="checkbox" id="eval-bar-visible" checked>
-            </label>
-          </div>
-        </div>
 
-        <div class="analysis-eval-row">
-          <div class="analysis-eval-col">
-            <div class="eval-block">
-              <div class="eval-label">Evaluation</div>
-              <div id="eval" class="eval">—</div>
-            </div>
+              <div class="quality-block">
+                <div class="eval-label">Last move</div>
+                <div id="quality" class="quality">—</div>
+              </div>
 
-            <div class="quality-block">
-              <div class="eval-label">Last move</div>
-              <div id="quality" class="quality">—</div>
-            </div>
-
-            <div class="best-block">
-              <!-- Retrospective: the best move the last mover should have played
-                   (from the position BEFORE the move). Hidden until a prior move
-                   exists; on an opponent's skipped ply it carries over the last
-                   own-move's retrospective. -->
-              <div id="retro-block" class="retro-block" hidden>
-                <div class="eval-label" id="retro-label">Your move — best</div>
-                <div class="best-move-row">
-                  <span id="retro-best" class="best-move">—</span>
-                  <span id="retro-second" class="best-second"></span>
+              <div class="best-block">
+                <!-- Retrospective: the best move the last mover should have played
+                     (from the position BEFORE the move). Hidden until a prior move
+                     exists; on an opponent's skipped ply it carries over the last
+                     own-move's retrospective. -->
+                <div id="retro-block" class="retro-block" hidden>
+                  <div class="eval-label" id="retro-label">Your move — best</div>
+                  <div class="best-move-row">
+                    <span id="retro-best" class="best-move">—</span>
+                    <span id="retro-second" class="best-second"></span>
+                  </div>
+                  <div id="retro-pv" class="pv">—</div>
                 </div>
-                <div id="retro-pv" class="pv">—</div>
+                <!-- Current position best — #best-move restyled into a green
+                     "BEST NOW" chip via the card-scoped .best-move rule. -->
+                <div class="eval-label">Best now</div>
+                <div class="best-move-row">
+                  <span id="best-move" class="best-move">—</span>
+                  <span id="best-second" class="best-second"></span>
+                </div>
+                <div class="eval-label">Best line</div>
+                <div id="pv" class="pv">—</div>
               </div>
-              <!-- Current position best -->
-              <div class="eval-label">Best now</div>
-              <div class="best-move-row">
-                <span id="best-move" class="best-move">—</span>
-                <span id="best-second" class="best-second"></span>
-              </div>
-              <div class="eval-label">Best line</div>
-              <div id="pv" class="pv">—</div>
+            </div>
+
+            <!-- Review-mode coaching column: AI game commentary + pre-blunder
+                 foresight/moment cards. Sits right of the eval readouts; the whole
+                 column is toggled with review mode by showReviewUI() so it collapses
+                 (and the eval column fills the row) in play mode. -->
+            <div id="analysis-review-col" class="analysis-review-col" hidden>
+              <div id="review-narrative" class="review-narrative" hidden></div>
+              <div id="review-foresight" class="review-foresight"></div>
             </div>
           </div>
 
-          <!-- Review-mode coaching column: AI game commentary + pre-blunder
-               foresight/moment cards. Sits right of the eval readouts; the whole
-               column is toggled with review mode by showReviewUI() so it collapses
-               (and the eval column fills the row) in play mode. -->
-          <div id="analysis-review-col" class="analysis-review-col" hidden>
-            <div id="review-narrative" class="review-narrative" hidden></div>
-            <div id="review-foresight" class="review-foresight"></div>
+          <div class="movelist-block">
+            <button id="movelist-toggle" class="movelist-toggle eval-label" aria-expanded="true" aria-controls="move-list">Moves <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
+            <div id="move-list" class="move-list"></div>
           </div>
-        </div>
-
-        <div class="movelist-block">
-          <button id="movelist-toggle" class="movelist-toggle eval-label" aria-expanded="true" aria-controls="move-list">Moves <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span></button>
-          <div id="move-list" class="move-list"></div>
         </div>
 
         <div id="status" class="status"></div>
@@ -432,6 +303,149 @@
           <span id="trap-chip-text" class="trap-chip-text"></span>
           <button id="trap-chip-drill" class="trap-chip-drill">Drill it</button>
           <button id="trap-chip-dismiss" class="trap-chip-dismiss" title="Dismiss" aria-label="Dismiss"><i data-lucide="x"></i></button>
+        </div>
+
+        <!-- Play vs Bot — relocated from the board column into the panel below
+             the instrument card (spec item 6). Collapsible disclosure; every id
+             is preserved so botplay.js wiring is untouched. -->
+        <div id="botplay-block" class="botplay-block collapsed">
+          <button id="botplay-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="botplay-body">
+            <span>Play vs Bot</span>
+            <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+          </button>
+          <div id="botplay-body" class="botplay-body">
+            <div class="botplay-persona-row">
+              <span id="botplay-persona" class="botplay-persona">Casual sparring bot</span>
+              <span id="botplay-maia-indicator" class="botplay-maia-indicator" title="Maia (human-style) weights readiness — informational only, not yet used to pick moves">
+                <span class="botplay-maia-dot" aria-hidden="true"></span>
+                <span id="botplay-maia-label">Maia: checking…</span>
+              </span>
+            </div>
+
+            <div class="botplay-color-row">
+              <span class="eval-label" id="botplay-color-label">Play as</span>
+              <div id="botplay-color-seg" class="botplay-color-seg analysis-mode-seg" role="radiogroup" aria-labelledby="botplay-color-label">
+                <button type="button" id="botplay-color-white" data-color="white" role="radio" aria-checked="true">White</button>
+                <button type="button" id="botplay-color-black" data-color="black" role="radio" aria-checked="false">Black</button>
+              </div>
+            </div>
+
+            <div class="botplay-persona-picker-row">
+              <label class="eval-label" for="bot-persona">Opponent</label>
+              <select id="bot-persona" class="botplay-persona-select" aria-label="Choose a bot opponent">
+                <option value="">Loading…</option>
+              </select>
+            </div>
+            <div id="botplay-persona-caption" class="botplay-hint botplay-persona-caption"></div>
+
+            <label class="botplay-rated-row eval-bar-toggle-row">
+              <span class="eval-label">Rated</span>
+              <input type="checkbox" id="bot-rated">
+            </label>
+            <div class="botplay-hint botplay-rated-hint">Rated games count toward your ELO; quitting a rated game is a loss.</div>
+
+            <div class="botplay-takeback-policy-row">
+              <label class="eval-label" for="bot-takeback-policy">Takebacks</label>
+              <select id="bot-takeback-policy" class="botplay-persona-select" aria-label="Takeback policy">
+                <option value="never">Never</option>
+                <option value="three" selected>Up to 3</option>
+                <option value="anytime">Anytime</option>
+              </select>
+            </div>
+
+            <div class="botplay-time-control-row">
+              <label class="eval-label" for="bot-time-control">Time control</label>
+              <select id="bot-time-control" class="botplay-persona-select" aria-label="Time control">
+                <option value="untimed" selected>Untimed</option>
+                <option value="5+2">5+2</option>
+                <option value="10+0">10+0</option>
+                <option value="10+5">10+5</option>
+              </select>
+            </div>
+            <div class="botplay-hint botplay-clock-hint">Clocks pause on reload — time spent away isn't charged.</div>
+
+            <div class="botplay-clocks">
+              <span id="bot-clock-top" class="botplay-clock" aria-label="Opponent clock" hidden>00:00</span>
+              <span id="bot-clock-bottom" class="botplay-clock" aria-label="Your clock" hidden>00:00</span>
+            </div>
+
+            <div class="botplay-rating-row">
+              <div id="botplay-elo" class="botplay-elo">Bot rating: — (0 games)</div>
+              <span id="botplay-chesscom" class="botplay-chesscom" hidden></span>
+            </div>
+            <div class="botplay-chesscom-input-row">
+              <label class="eval-label" for="chesscom-rating">Your chess.com rating</label>
+              <input type="number" id="chesscom-rating" class="botplay-chesscom-input" min="0" step="1" placeholder="e.g. 1500">
+            </div>
+
+            <div id="botplay-status" class="botplay-status" aria-live="polite"></div>
+
+            <div class="botplay-controls">
+              <button id="botplay-start" class="botplay-start" type="button">Start</button>
+              <button id="botplay-resign" class="botplay-resign" type="button" hidden>Resign</button>
+              <button id="botplay-retry" class="botplay-retry" type="button" hidden>Retry</button>
+              <button id="botplay-takeback" class="botplay-takeback" type="button" hidden>Take back</button>
+              <span id="botplay-takeback-count" class="botplay-takeback-count"></span>
+            </div>
+            <div id="botplay-takeback-note" class="botplay-hint botplay-takeback-note" hidden>Takeback used — this game no longer counts toward your rating.</div>
+            <div id="botplay-hint" class="botplay-hint" hidden></div>
+          </div>
+        </div>
+
+        <!-- Utility cluster: engine status/restart, evaluate-color, speed, and
+             the analysis-mode disclosure — the panel seams. Kept working but
+             visually quiet, below the instrument card (spec item 2). ids and
+             hooks (#analysis-status, #engine-restart-btn, #analysis-mode-seg,
+             #eval-bar-visible …) survive verbatim. -->
+        <div class="panel-utility">
+          <div id="analysis-status" class="analysis-status"></div>
+          <button id="engine-restart-btn" class="engine-restart-btn" type="button" title="Restart the Stockfish engine (keeps your game)">Restart engine</button>
+
+          <div class="analyze-color-row">
+            <label class="eval-label" for="analyze-color">Evaluate</label>
+            <select id="analyze-color" class="analyze-color-select">
+              <option value="both">Both colors</option>
+              <option value="white">White only</option>
+              <option value="black">Black only</option>
+            </select>
+          </div>
+
+          <label class="engine-speed-row">
+            <span class="eval-label">Speed</span>
+            <select id="engine-speed" class="engine-speed-select" title="Engine speed preset: Fast is quickest, Deep searches longest">
+              <option value="fast">Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="deep">Deep</option>
+            </select>
+          </label>
+
+          <!-- Analysis-mode settings: collapsible disclosure (movelist-toggle pattern).
+               Ships collapsed; app.js expands it if the saved pref says so. The header
+               hint surfaces a non-Full mode while collapsed (a persisted frozen panel
+               must have a visible cause). -->
+          <div class="analysis-settings-block collapsed">
+            <button id="analysis-settings-toggle" class="movelist-toggle eval-label" aria-expanded="false" aria-controls="analysis-settings-body">
+              <span>Analysis mode <span id="analysis-mode-hint" class="analysis-mode-hint"></span></span>
+              <span class="movelist-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+            </button>
+            <div id="analysis-settings-body" class="analysis-settings-body">
+              <div class="analysis-mode-row">
+                <span class="eval-label" id="analysis-mode-label">Mode</span>
+                <div id="analysis-mode-seg" class="analysis-mode-seg" role="group" aria-labelledby="analysis-mode-label">
+                  <button type="button" data-mode="full" aria-pressed="true"
+                          title="Evaluate every move and show all quality labels">Full</button>
+                  <button type="button" data-mode="blunders" aria-pressed="false"
+                          title="Evaluate every move but only flag blunders">Blunders only</button>
+                  <button type="button" data-mode="off" aria-pressed="false"
+                          title="Pause Stockfish evaluation; the panel freezes its last eval">Off</button>
+                </div>
+              </div>
+              <label class="eval-bar-toggle-row">
+                <span class="eval-label">Win-chances bar</span>
+                <input type="checkbox" id="eval-bar-visible" checked>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -485,6 +499,19 @@
         <!-- Rendered by insights.js -->
         <div id="insights-root" class="insights-root"></div>
       </div>
+
+      <!-- Play-vs-Bot pill — anchored bottom-right of the panel column via
+           margin-top:auto in the panel's flex flow. A DIRECT child of .panel
+           (not a tab-panel), so it survives both [role=tabpanel]:not(.is-active)
+           hiding AND the special-mode .tab-panel hide — visible on every tab and
+           in every mode. Toggles the bot rail (#bot-rail); JS wiring lands in T5. -->
+      <button id="bot-rail-toggle" class="bot-rail-toggle" type="button"
+              aria-expanded="false" aria-controls="bot-rail">
+        <span class="pill-avatar" aria-hidden="true">
+          <img src="/avatars/casey.png" alt="" onerror="this.hidden=true">
+        </span>
+        <span class="bot-rail-toggle-label">Play vs Bot</span>
+      </button>
     </aside>
 
     <!-- Bot rail — hidden-by-default mount point; becomes the 5th grid track
