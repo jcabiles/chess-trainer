@@ -97,7 +97,9 @@
    ============================================================ */
 
 .trainer-bar {
-  width: var(--board-size);
+  /* Spans the full board+eval-bar row width (board-size + 22px chrome), set on
+     .board-col, so its edges line up with the board row. */
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

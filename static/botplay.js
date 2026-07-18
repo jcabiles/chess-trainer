@@ -1311,6 +1311,56 @@ function renderRail() {
 // Visibility persisted as ui-pref `botRailVisible` (prefs.js). read-on-init →
 // apply → write-on-change, mirroring app.js's analysisPanelCollapsed pattern.
 // Open = `.bot-rail-open` on <main> + rail [hidden] cleared + pill aria-expanded.
+//
+// At ≤820px the rail is a fixed overlay sheet (CSS, T6). The rail is NOT a
+// <dialog>, so its dismissal affordances are wired manually here:
+//   • Esc               → closeRail (any width, only while open)
+//   • backdrop pointer   → closeRail (overlay/sheet width only — on desktop the
+//                          rail is an in-flow grid track with no backdrop, so a
+//                          click "outside" it must NOT close it)
+// Focus moves into the sheet (close ×) on a user-initiated open and returns to
+// the pill on close (WCAG 2.4.3). Boot-restore (applyRailVisible from the pref)
+// wires dismissal but never steals focus on page load.
+
+// True when the rail renders as the fixed overlay sheet (mobile), where a
+// click on the scrim (outside the sheet) should dismiss it.
+function railIsOverlay() {
+  return window.matchMedia('(max-width: 820px)').matches;
+}
+
+function onRailKeydown(e) {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeRail();
+  }
+}
+
+function onRailPointerDown(e) {
+  // Overlay (sheet) only; and only when the press lands outside the sheet
+  // (i.e. on the ::before scrim, which registers as #bot-rail itself, or on
+  // any element that is not inside the rail).
+  if (!railIsOverlay()) return;
+  const rail = byId('bot-rail');
+  if (!rail) return;
+  // The pill toggle owns its own open/close on click — never treat a press on
+  // it as a backdrop dismiss, or the pointerdown-close + click-reopen would
+  // double-toggle and leave the sheet open.
+  if (e.target.closest('#bot-rail-toggle')) return;
+  const sheetContent = e.target.closest(
+    '.bot-rail-header, .bot-rail-list, .bot-rail-lock-hint'
+  );
+  if (!sheetContent) closeRail();
+}
+
+function attachRailDismiss() {
+  document.addEventListener('keydown', onRailKeydown);
+  document.addEventListener('pointerdown', onRailPointerDown);
+}
+
+function detachRailDismiss() {
+  document.removeEventListener('keydown', onRailKeydown);
+  document.removeEventListener('pointerdown', onRailPointerDown);
+}
 
 function applyRailVisible(visible) {
   const main = document.querySelector('main');
@@ -1319,16 +1369,30 @@ function applyRailVisible(visible) {
   if (main) main.classList.toggle('bot-rail-open', visible);
   if (rail) rail.hidden = !visible;
   if (toggle) toggle.setAttribute('aria-expanded', String(visible));
+  // Dismissal listeners live only while the rail is open (idempotent add/remove).
+  detachRailDismiss();
+  if (visible) attachRailDismiss();
 }
 
 function openRail() {
   applyRailVisible(true);
   writeUiPref('botRailVisible', true);
+  // Move focus into the sheet so keyboard + SR users land inside it. The close
+  // button is the first stop; guard for the not-yet-rendered rail.
+  const close = byId('bot-rail-close');
+  if (close) close.focus();
 }
 
 function closeRail() {
+  const wasOpen = document.querySelector('main')?.classList.contains('bot-rail-open');
   applyRailVisible(false);
   writeUiPref('botRailVisible', false);
+  // Return focus to the pill that owns the rail (WCAG 2.4.3), but only if the
+  // rail was actually open — avoid grabbing focus on a redundant close.
+  if (wasOpen) {
+    const toggle = byId('bot-rail-toggle');
+    if (toggle) toggle.focus();
+  }
 }
 
 function toggleRail() {

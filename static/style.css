@@ -162,6 +162,18 @@ html[data-theme="light"] {
   }
 }
 
+/* Mobile bot-rail sheet entrance (T6). Slide the panel in from the right and
+   fade the scrim; reduced-motion zeroes both durations via the rule above. */
+@keyframes bot-rail-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes bot-rail-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ============================================================
    Base reset + typography
    ============================================================ */
@@ -261,11 +273,18 @@ header .sub {
 
 main {
   /* Closed rail (4 tracks): tab-rail | board-col | action-col | panel.
-     The board and action columns are intrinsic (auto); the panel takes the
-     slack but never drops below 280px nor grows past ~300px (Chess.com anchor:
-     board dominant, panel slim). */
+     The board-col track is a BOUNDED FLEX track: minmax(0, 582px) — it grows to
+     582px when there's room and shrinks below it when the rail opens and steals
+     width. 582px = 560px board cap + 22px row chrome (14px eval-bar + 8px gap),
+     so the board (which reads --board-size = 100cqw − 22px) can reach its 560px
+     cap. A definite track width (not `auto`) is REQUIRED for .board-col's
+     container query (`100cqw`) to resolve — an `auto`/content-sized track would
+     make the board size from the container while the container sizes from the
+     board (circular) and collapse. The action column is intrinsic (auto); the
+     panel takes the slack but stays 280–300px (Chess.com anchor: board dominant,
+     panel slim). */
   display: grid;
-  grid-template-columns: auto auto auto minmax(280px, 300px);
+  grid-template-columns: auto minmax(0, 582px) auto minmax(280px, 300px);
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
   overflow: hidden;
@@ -276,7 +295,7 @@ main {
    element (T5) mounts empty for now; the class is toggled on <main> so the
    grid gains/loses the track without DOM surgery. */
 main.bot-rail-open {
-  grid-template-columns: auto auto auto minmax(280px, 300px) 300px;
+  grid-template-columns: auto minmax(0, 582px) auto minmax(280px, 300px) 300px;
 }
 
 /* Bot rail — hidden-by-default mount point (T5 builds the interior). It will
@@ -295,15 +314,30 @@ main.bot-rail-open {
   flex: 0 0 auto;
   overflow-y: auto;
   min-height: 0;
-  /* Board sizes to fit the viewport height so it's never clipped/scrolled on
-     short screens. Capped at 560px; shrinks when height is tight. The controls
-     now live in the action column BESIDE the board, so the only below-board
-     chrome is the FEN row — the reservation drops from 240px to 160px:
-       header ~50 + main padding (space-5 ×2 = 40) + board→fen gap (space-3 = 12)
-       + fen-row ~46 + border/slack ~12  =  160px.
-     At 700px height → board = 540px (no scroll, 12px slack); at ≥900px → 560px
-     cap. Both #board and #eval-bar read this so board-wrap shrinks as one. */
-  --board-size: min(560px, calc(100dvh - 160px));
+  /* Container query context so the board can respond to its OWN column width,
+     not just viewport height. When the bot rail opens the grid steals width from
+     this track; a height-only cap would keep the board at 560px and clip it
+     (h-file + FEN Load button cut off at the right edge). 100cqw = the actual
+     board-col track width. */
+  container-type: inline-size;
+  /* Board sizing — THREE caps, whichever is smallest wins:
+       560px                     — the design cap (Chess.com anchor).
+       calc(100dvh - 160px)      — height guard (short viewports).
+                                    header ~50 + main padding (space-5 ×2 = 40)
+                                    + board→fen gap (space-3 = 12) + fen-row ~46
+                                    + border/slack ~12 = 160px.
+       calc(100cqw - 22px)       — width guard (rail-open / narrow columns).
+                                    22px = 14px eval-bar + 8px gap (space-2),
+                                    the chrome sharing the row beside the board.
+     Both #board and #eval-bar read --board-size so the pair shrinks as one.
+     At 1440 closed → 560px cap; at 1440/1280 rail-open → the 100cqw term wins
+     and the board fits its (narrower) column with zero clipping. */
+  --board-size: min(560px, calc(100dvh - 160px), calc(100cqw - 22px));
+  /* Full board+eval-bar row width — the below-board bars (FEN/setup/trap/rep/
+     trainer) span this so their edges line up with the board+eval-bar row, not
+     the board alone. Derived from the single --board-size source (+ the 22px
+     chrome back on). */
+  --board-row-width: calc(var(--board-size) + 22px);
 }
 
 /* Board wrap: eval-bar | board side by side */
@@ -425,8 +459,9 @@ button svg[data-lucide] {
 .fen-row {
   display: flex;
   gap: var(--space-2);
-  /* Sole below-board chrome — tracks the board width via the single size var. */
-  width: var(--board-size);
+  /* Sole below-board chrome — spans the full board+eval-bar row width so its
+     right edge lines up with the board (not 22px short). */
+  width: var(--board-row-width);
 }
 
 #fen-input {
@@ -481,7 +516,7 @@ body.setup-mode #fen-error { display: none; }
 /* Border diet: mode bars group by surface step (panel on base) + shadow;
    the old hairline outline was redundant box-lining. */
 .setup-bar {
-  width: var(--board-size);
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1782,7 +1817,7 @@ body.trap-practice-mode #fen-error { display: none; }
    ============================================================ */
 
 .trap-bar {
-  width: var(--board-size);
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1981,7 +2016,7 @@ body.rep-mode #fen-error { display: none; }
    ============================================================ */
 
 .rep-bar {
-  width: var(--board-size);
+  width: var(--board-row-width);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -2202,6 +2237,78 @@ body.rep-mode #fen-error { display: none; }
     align-self: stretch;
   }
 
+  /* ---- Bot rail → fixed overlay sheet (T6) ----
+     The grid flattens to 1fr here, so the rail is NO LONGER a track. When open
+     it must not re-expand main to 5 tracks (the .bot-rail-open class rule has
+     higher specificity than this media block's `main{grid-template-columns:1fr}`
+     — override it explicitly so it stays single-column on mobile). */
+  main.bot-rail-open {
+    grid-template-columns: 1fr;
+  }
+
+  /* Rail becomes a right-anchored sheet over a full-bleed scrim. The <aside>
+     itself is the sheet panel; its ::before paints the scrim across the whole
+     viewport (backdrop). Below toasts (z-index 9000) at 8000. Board width is
+     untouched — the sheet overlays, never a grid track (spec: overlay rail
+     never affects board width). */
+  #bot-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    z-index: 8000;
+    width: min(320px, 90vw);
+    max-width: 90vw;
+    border-left: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    /* Slide in from the right. An animation (not a transition) is used because
+       the sheet enters via display:none→flex, where a transform transition
+       wouldn't fire. The global prefers-reduced-motion rule (line ~158) zeroes
+       this duration, so movement collapses to an instant appear with the scrim
+       fade — feedback is preserved, motion removed. */
+    animation: bot-rail-slide-in var(--motion-base) var(--ease-out);
+  }
+
+  /* Full-viewport scrim behind the sheet. A ::before can't catch clicks, so
+     backdrop-to-close is handled in botplay.js (document pointerdown outside
+     the sheet). overflow is visible on the sheet root so this fixed pseudo
+     isn't clipped; the card list keeps its own scroll. */
+  #bot-rail {
+    overflow: visible;
+  }
+
+  #bot-rail::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--scrim);
+    animation: bot-rail-scrim-in var(--motion-base) var(--ease-out);
+  }
+
+  /* The scrolling card list keeps the sheet's inner scroll (root is now
+     overflow:visible so the pseudo-scrim can escape). */
+  .bot-rail-list {
+    /* already flex:1 + overflow-y:auto from the base rule; nothing to add,
+       but ensure it doesn't exceed the sheet height */
+    max-height: 100%;
+  }
+
+  /* ---- Play-vs-Bot pill → fixed bottom-right (T6) ----
+     The panel stacks below the board on mobile, so the pill would scroll away.
+     Pin it to the viewport, above content, below toasts + the open sheet. Its
+     bottom offset respects the iOS home-indicator safe area. */
+  .bot-rail-toggle {
+    position: fixed;
+    right: var(--space-4);
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    z-index: 7000;
+    box-shadow: var(--shadow-md);
+    background: var(--accent-dim);
+  }
+
   /* ---- Touch targets — WCAG 2.2 AA (SC 2.5.8): dense controls get
      ≥24×24px hit-boxes at touch widths; desktop density unchanged. ---- */
   .trap-chip-dismiss {
@@ -2304,4 +2411,17 @@ cg-board square.selected {
   /* The subtitle wraps into a 4-line column beside the title at phone
      widths — the title alone identifies the app there. */
   header .sub { display: none; }
+
+  /* ---- Avatar lightbox on phones (T6) ----
+     Shrink the portrait so the dialog (photo + caption + × chrome) fits within
+     the viewport and the close button stays on-screen and tappable. */
+  #avatar-lightbox {
+    max-width: min(92vw, 70vh);
+    padding: var(--space-3);
+  }
+
+  .avatar-lightbox-img {
+    max-width: min(92vw, 70vh);
+    max-height: 70vh;
+  }
 }
