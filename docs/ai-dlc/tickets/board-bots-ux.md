@@ -54,7 +54,9 @@ bottom-right of panel.
 Rail markup + styles (N cards from `/api/bot/status`, 56px avatar + initials
 fallback, name, rating, description blurb); card click syncs `#bot-persona`
 select + change event; selection disabled during live bot game with hint;
-`[hidden]` override; `botRailVisible` pref; z-index < 9000.
+`[hidden]` override; `botRailVisible` pref; z-index < 9000. Avatar click →
+native `<dialog>` lightbox (full photo + name/rating caption; ×/backdrop/Esc
+close; avatar files ≤1024px, one file for thumb + lightbox).
 - Files: `static/botplay.js` (rail render + wiring), `static/index.html`
   (rail mount), `static/style.css` (rail styles).
 - Accept: 6 cards render; click → persona picked → game starts vs it; mid-game

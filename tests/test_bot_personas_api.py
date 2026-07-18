@@ -313,3 +313,33 @@ def test_save_unknown_persona_400(save_client):
     assert r.status_code == 400
     # No row written.
     assert save_client.get("/api/games").json() == []
+
+
+# --- /avatars static mount (board-bots-ux T2) --------------------------------
+
+
+def test_avatars_mount_serves_when_dir_present(client):
+    """When data/avatars/ exists (gitignored, user-supplied), /avatars serves it.
+
+    Skips on a fresh clone with no avatars — the mount is conditional at import
+    and the frontend falls back to initials.
+    """
+    from app.main import AVATARS_DIR
+
+    if not AVATARS_DIR.is_dir():
+        pytest.skip("data/avatars/ absent — conditional mount not registered")
+    files = sorted(AVATARS_DIR.glob("*.png"))
+    if not files:
+        pytest.skip("data/avatars/ empty")
+    r = client.get(f"/avatars/{files[0].name}")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    # Unknown avatar → 404 (frontend initials fallback path).
+    assert client.get("/avatars/nope.png").status_code == 404
+
+
+def test_avatars_dir_constant_is_gitignored_location():
+    """AVATARS_DIR lives under data/ (never committed) per the spec."""
+    from app.main import AVATARS_DIR, BASE_DIR
+
+    assert AVATARS_DIR == BASE_DIR / "data" / "avatars"

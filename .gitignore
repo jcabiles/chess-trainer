@@ -35,3 +35,6 @@ data/games/*
 
 # Local machine-specific helper script (hardcoded ~/Downloads paths)
 scripts/bulk_import.py
+
+# Bot avatars: user-supplied portraits (never commit; app falls back to initials)
+data/avatars/

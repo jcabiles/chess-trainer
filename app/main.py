@@ -116,6 +116,7 @@ TRAPS_FILE = BASE_DIR / "data" / "traps.json"
 BOOK_FILE = BASE_DIR / "data" / "book.json"
 REPERTOIRE_FILE = BASE_DIR / "data" / "repertoire.json"
 GAMES_DIR = BASE_DIR / "data" / "games"
+AVATARS_DIR = BASE_DIR / "data" / "avatars"
 
 
 # ---------------------------------------------------------------------------
@@ -1938,5 +1939,11 @@ async def index():
         content={"detail": "Frontend not built yet (static/index.html missing)."},
     )
 
+
+# Bot avatars: user-supplied portraits, gitignored (like data/games). Mounted
+# only when the folder exists so a fresh clone (no avatars) still imports and
+# boots — the frontend falls back to initials on 404.
+if AVATARS_DIR.is_dir():
+    app.mount("/avatars", StaticFiles(directory=AVATARS_DIR), name="avatars")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -71,6 +71,11 @@ surgery; `grid-template-columns` gains the 5th track under that class
    below toasts' 9000; rail is in-flow (grid track) so no collision (§6).
    Visibility persisted as ui-pref `botRailVisible`
    (read-on-init → class toggle → write-on-change, app.js:1475-1484 pattern).
+   **Avatar lightbox:** clicking a card's avatar photo (not the card body)
+   opens a native `<dialog>` (same top-layer pattern as `#promo-dialog`/cmdk)
+   showing the full photo + name/rating caption; closes via ×, backdrop click,
+   or Esc. Avatar files ship at ≤1024px — one file serves both the 56px thumb
+   (CSS-sized) and the lightbox.
 
 ## Mobile (≤820px and ≤560px) — explicit treatment (refuter M3; Codex #4, #9)
 
