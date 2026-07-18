@@ -96,14 +96,6 @@
         <div id="board"></div>
       </div>
 
-      <div class="controls">
-        <button id="undo" title="Step back"><i data-lucide="undo-2"></i> Undo</button>
-        <button id="redo" title="Step forward"><i data-lucide="redo-2"></i> Redo</button>
-        <button id="flip" title="Flip board"><i data-lucide="flip-horizontal-2"></i> Flip</button>
-        <button id="reset" title="Back to start"><i data-lucide="rotate-ccw"></i> Reset</button>
-        <button id="setup-toggle" title="Set up a position freely"><i data-lucide="settings-2"></i> Set up position</button>
-      </div>
-
       <div class="fen-row">
         <input id="fen-input" type="text" aria-label="FEN position" placeholder="Paste a FEN to jump to a position…" />
         <button id="load-fen">Load</button>
@@ -312,6 +304,18 @@
       </div>
     </section>
 
+    <!-- Action column — 3rd grid track between board and panel. Holds the
+         board controls (IDs preserved so ID-based mode-gating + JS wiring are
+         unchanged). Folds into a horizontal row under the board at ≤820px. -->
+    <div class="action-col">
+      <span class="action-col-caption">Board</span>
+      <button id="undo" title="Step back"><i data-lucide="undo-2"></i> Undo</button>
+      <button id="redo" title="Step forward"><i data-lucide="redo-2"></i> Redo</button>
+      <button id="flip" title="Flip board"><i data-lucide="flip-horizontal-2"></i> Flip</button>
+      <button id="reset" title="Back to start"><i data-lucide="rotate-ccw"></i> Reset</button>
+      <button id="setup-toggle" title="Set up a position freely"><i data-lucide="settings-2"></i> Set up position</button>
+    </div>
+
     <aside class="panel">
       <!-- Special-mode indicator: shown at the top of the panel while a mode is
            active and tells the user a tab click leaves it. NOT a tab-role child
@@ -482,6 +486,10 @@
         <div id="insights-root" class="insights-root"></div>
       </div>
     </aside>
+
+    <!-- Bot rail — hidden-by-default mount point; becomes the 5th grid track
+         when <main> gains .bot-rail-open. T5 builds the card list + wiring. -->
+    <aside id="bot-rail" hidden></aside>
   </main>
 
   <!-- Toasts container (fixed, top-right) -->

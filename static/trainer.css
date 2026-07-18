@@ -97,7 +97,7 @@
    ============================================================ */
 
 .trainer-bar {
-  width: 480px;
+  width: var(--board-size);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

@@ -260,14 +260,29 @@ header .sub {
    ============================================================ */
 
 main {
-  /* rail | board | panel */
+  /* Closed rail (4 tracks): tab-rail | board-col | action-col | panel.
+     The board and action columns are intrinsic (auto); the panel takes the
+     slack but never drops below 280px nor grows past ~300px (Chess.com anchor:
+     board dominant, panel slim). */
   display: grid;
-  grid-template-columns: auto auto minmax(280px, 1fr);
+  grid-template-columns: auto auto auto minmax(280px, 300px);
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
   overflow: hidden;
   min-height: 0;
 }
+
+/* Open rail (5 tracks): + bot-rail (~300px) as the last track. The rail
+   element (T5) mounts empty for now; the class is toggled on <main> so the
+   grid gains/loses the track without DOM surgery. */
+main.bot-rail-open {
+  grid-template-columns: auto auto auto minmax(280px, 300px) 300px;
+}
+
+/* Bot rail — hidden-by-default mount point (T5 builds the interior). It will
+   carry a flex/grid display, so the [hidden] attribute needs an explicit
+   override or it no-ops (the [hidden]-on-flex gotcha; contract #8). */
+#bot-rail[hidden] { display: none; }
 
 /* ============================================================
    Board column
@@ -281,10 +296,14 @@ main {
   overflow-y: auto;
   min-height: 0;
   /* Board sizes to fit the viewport height so it's never clipped/scrolled on
-     short screens. Capped at 480px; shrinks when height is tight. The 240px
-     reserves header + main padding + the controls/FEN/bot rows below the board.
-     Both #board and #eval-bar read this so board-wrap shrinks as one. */
-  --board-size: min(480px, calc(100dvh - 240px));
+     short screens. Capped at 560px; shrinks when height is tight. The controls
+     now live in the action column BESIDE the board, so the only below-board
+     chrome is the FEN row — the reservation drops from 240px to 160px:
+       header ~50 + main padding (space-5 ×2 = 40) + board→fen gap (space-3 = 12)
+       + fen-row ~46 + border/slack ~12  =  160px.
+     At 700px height → board = 540px (no scroll, 12px slack); at ≥900px → 560px
+     cap. Both #board and #eval-bar read this so board-wrap shrinks as one. */
+  --board-size: min(560px, calc(100dvh - 160px));
 }
 
 /* Board wrap: eval-bar | board side by side */
@@ -316,13 +335,39 @@ main {
 }
 
 /* ============================================================
-   Controls row
+   Action column — narrow vertical board-control stack between the
+   board and the panel (3rd grid track). Holds Undo/Redo/Flip/Reset/
+   Set up as labeled icon+text buttons; a quiet "BOARD" caption groups
+   them. At ≤820px it folds back into a horizontal row under the board
+   (see the responsive tier).
    ============================================================ */
 
-.controls {
+.action-col {
   display: flex;
+  flex-direction: column;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  align-self: start;
+  min-width: 0;
+}
+
+/* Group caption — reuses the .eval-label idiom (uppercase, tracked, muted). */
+.action-col-caption {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0 var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+/* Buttons stack full-width, left-aligned icon+label, ≥40px tall targets. */
+.action-col button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 40px;
+  gap: var(--space-2);
 }
 
 /* ============================================================
@@ -380,7 +425,8 @@ button svg[data-lucide] {
 .fen-row {
   display: flex;
   gap: var(--space-2);
-  width: 480px;
+  /* Sole below-board chrome — tracks the board width via the single size var. */
+  width: var(--board-size);
 }
 
 #fen-input {
@@ -435,7 +481,7 @@ body.setup-mode #fen-error { display: none; }
 /* Border diet: mode bars group by surface step (panel on base) + shadow;
    the old hairline outline was redundant box-lining. */
 .setup-bar {
-  width: 480px;
+  width: var(--board-size);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1111,7 +1157,7 @@ body.trap-practice-mode #fen-error { display: none; }
    ============================================================ */
 
 .botplay-block {
-  width: 480px;
+  width: var(--board-size);
   margin: var(--space-2) 0;
   border-top: 1px solid var(--border-subtle);
   padding-top: var(--space-2);
@@ -1429,7 +1475,7 @@ body.trap-practice-mode #fen-error { display: none; }
    ============================================================ */
 
 .trap-bar {
-  width: 480px;
+  width: var(--board-size);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1628,7 +1674,7 @@ body.rep-mode #fen-error { display: none; }
    ============================================================ */
 
 .rep-bar {
-  width: 480px;
+  width: var(--board-size);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1754,6 +1800,23 @@ body.rep-mode #fen-error { display: none; }
 
   .board-col {
     overflow-y: visible;
+  }
+
+  /* Action column folds back into the old horizontal .controls row under the
+     board (grid collapses to 1fr, so the column would otherwise stack full
+     width). Caption hides — the icon+label buttons are self-explanatory in a
+     row and the "BOARD" grouping header only earns its keep in the tall stack. */
+  .action-col {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .action-col-caption { display: none; }
+
+  .action-col button {
+    width: auto;
+    min-width: 0;
   }
 
   .panel {
