@@ -1,4 +1,4 @@
-# State of my chess — 2026-07-12
+# State of my chess — 2026-07-18
 
 An analytical read of my own game database: what the data says, what it
 doesn't, and what to train next. Metric definitions live in the
@@ -59,7 +59,17 @@ failure is not ignoring a developing threat — it's *creating* the loss in one
 move. That points at move-time blunder-checking habits ("is anything hanging
 after this move?") over deep threat-detection drills.
 
-**6. The trend is promising but statistically thin.**
+**6. Winning endgames get converted; endgame study is the wrong priority.**
+Only 41 of 150 games reach a stable endgame at all (109 end in the
+middlegame — consistent with Finding 2: someone blunders first). Under the
+KPI tree's conversion rule — "winning" = my win-prob ≥ 0.8 **sustained for
+≥ 4 consecutive plies** in the stable endgame suffix, not a one-ply eval
+spike — I converted **25 of 30 winning endgames (83%)** (Q8). The endgame
+is also the quietest leak phase: 38 of 328 leaks (Q3). Both signatures with
+sample (R+minor: 15/19; Q+piece: 10/11) convert fine. Endgame study is
+explicitly deprioritized below.
+
+**7. The trend is promising but statistically thin.**
 June: ~0.97 my-blunders/game over 135 games. July so far: 0.40 over 15 games
 (Q12). Encouraging — the blunder trainer went live in this window — but 15
 games is below any reasonable inference bar; logged here as a hypothesis for
@@ -93,7 +103,7 @@ the parked training-effectiveness analysis, not a claim.
   everywhere, per the KPI tree's gating rule).
 - No accuracy/Elo aggregation across games (anti-vanity rule; single-game
   estimates don't average meaningfully).
-- No causal claim about the blunder trainer (Finding 6 is a hypothesis; the
+- No causal claim about the blunder trainer (Finding 7 is a hypothesis; the
   interrupted-time-series analysis is parked in the roadmap's Later column).
 - Depth-10 evals: a deeper pass would re-label some borderline mistakes;
   directionally stable, individually fuzzy.
@@ -142,6 +152,43 @@ GROUP BY g.opening ORDER BY my_blunders DESC LIMIT 8;
 -- Q7 leak categories
 SELECT l.category, COUNT(*) FROM leaks l JOIN games g ON l.game_id=g.id
 WHERE l.color=g.my_color GROUP BY l.category ORDER BY COUNT(*) DESC;
+
+-- Q8 endgame conversion — not pure SQL: the stable-suffix index and the
+-- sustained-0.8 rule live in app/endgame.py / app/insights.py. Reproduce with
+-- the snippet below (read-only URI; mirrors insights._endgame_types exactly:
+-- _CAP_WIN_PROB=0.8, _CAP_SUSTAIN_PLIES=4; win_prob is stored mover-POV and
+-- flipped to my POV via the fen_before side-to-move).
+--   .venv/bin/python - <<'PY'
+--   import sqlite3, chess, sys; sys.path.insert(0, '.')
+--   from app import endgame
+--   con = sqlite3.connect("file:data/games.db?mode=ro", uri=True)
+--   con.row_factory = sqlite3.Row
+--   games = con.execute("SELECT id, my_color, result FROM games "
+--       "WHERE analysis_status='done' AND my_color IS NOT NULL").fetchall()
+--   winning = converted = no_eg = 0
+--   for g in games:
+--       plies = [dict(r) for r in con.execute("SELECT ply, fen_before, win_prob "
+--           "FROM game_plies WHERE game_id=? ORDER BY ply", (g["id"],))]
+--       k = endgame.endgame_start_index(plies)
+--       if k is None: no_eg += 1; continue
+--       my = g["my_color"]
+--       score = {"1-0": 1.0 if my=="white" else 0.0,
+--                "0-1": 1.0 if my=="black" else 0.0,
+--                "1/2-1/2": 0.5}.get(g["result"])
+--       if score is None: continue
+--       run = 0; sustained = False
+--       for row in plies[k:]:
+--           wp, fen = row["win_prob"], row["fen_before"]
+--           if wp is None or not fen: run = 0; continue
+--           if chess.Board(fen).turn != (my=="white"): wp = 1.0 - wp
+--           if wp >= 0.8:
+--               run += 1
+--               if run >= 4: sustained = True; break
+--           else: run = 0
+--       if sustained:
+--           winning += 1; converted += score == 1.0
+--   print(len(games)-no_eg, winning, converted)   # → 41 30 25
+--   PY
 
 -- Q9 win rate: blunder-free vs blundered games
 WITH blundered AS (

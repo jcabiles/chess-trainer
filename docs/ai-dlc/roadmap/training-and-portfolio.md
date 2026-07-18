@@ -45,7 +45,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       included — so the stale reset-refresh render is token-dropped
       (app.js:410/419/432 guards). Backlog #14 predates that fix; verified via
       `git log -L` on the block + reading the guards. No code change needed.
-- [ ] **2. Eval graph** — problem: no game-level shape of a reviewed game; can't
+- [x] **2. Eval graph** — problem: no game-level shape of a reviewed game; can't
       spot the collapse point at a glance (backlog #3) · outcome-link: N1 ·
       pass/fail: open a reviewed game → line chart of per-ply eval renders from
       stored `game_plies` evals (no new engine work); click a point → board jumps
@@ -53,8 +53,9 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       no-gos: no live-play eval history capture (saved games only); no new
       endpoints if existing review payload suffices · contracts:
       `contracts/game-review-coaching.md` · ICE 4·4·3=48 ·
-      **STATUS: implemented (PR #49)** — pytest green; remaining pass/fail
-      step: user opens a reviewed game in the browser and click-jumps once
+      **CLOSED 2026-07-18 — browser-verified:** `#review-eval-graph` renders an
+      18-point eval line from stored per-ply evals; a trusted click on a graph
+      point jumps the board to that ply (landed on Qg5). PR #49.
 - [ ] **3. Auto-fetch games** — problem: manual PGN import is friction; 0 of 7,551
       stored plies have clock data because pasted PGNs lack `%clk` — blocks
       time-trouble analytics (verified 2026-07-12) · outcome-link: N1 (more games,
@@ -77,8 +78,14 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       clock data · appetite: days · no-gos: no per-move clock UI in replay (card
       only, this slice) · contracts: `contracts/insights-endgames.md` (insights
       seams) · **hard-gated: cannot start before slice 3 lands (sort floor = after
-      slice 3), regardless of ICE tie** · ICE 3·4·4=48
-- [ ] **5. Command palette** — problem: power-user navigation (load FEN, switch
+      slice 3), regardless of ICE tie** · ICE 3·4·4=48 · **STATUS 2026-07-18:**
+      the `_time_trouble` card + `clock_centis` pipeline are BUILT (confirmed via
+      the B7 clocks contract scan); currently 0 of 7,551 stored plies have clock
+      data (all `source='import'`), so the card correctly shows its honest empty
+      state. The POPULATED path unlocks once clocked games arrive — your live fetch
+      (slice 3) or saved bot games (B7 now emits `%clk`). Empty-state = done;
+      populated = data-gated on you.
+- [x] **5. Command palette** — problem: power-user navigation (load FEN, switch
       tab/mode, jump to trap/line) takes many clicks (backlog #2) · outcome-link:
       N1 (weak — friction) + N2 (perceived polish); flagged: weakest N1 link in
       Chapter 1, kept by explicit user pick · pass/fail: Cmd/Ctrl-K opens
@@ -87,8 +94,10 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       AA contrast hold · appetite: days · no-gos: no new backend endpoints;
       registry built from existing `api.actions` · contracts:
       `contracts/appjs-split.md` · ICE 3·4·3=36 ·
-      **STATUS: implemented (PR #52)** — remaining pass/fail step: user
-      presses Cmd-K once and runs a command in the browser
+      **CLOSED 2026-07-18 — browser-verified:** Cmd/Ctrl-K opens `#cmdk`
+      (12 commands: tab nav, flip, undo/redo, load FEN, traps, repertoire);
+      typing "trap" fuzzy-filters to the trap catalog; Enter runs + closes;
+      keyboard-operable. PR #52.
 - [x] **6. Light theme** — problem: dark-only; OS-light users get mismatch
       (backlog #1) · outcome-link: N1 (weak) + N2 (visual range) · **CLOSED
       2026-07-12 as already-shipped**: `static/theme.js` + `#theme-toggle`
@@ -101,7 +110,7 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 
 ### Chapter 2 — portfolio (serves N2; starts after Chapter 1 is fully checked)
 
-- [ ] **7. KPI tree + metric dictionary** — problem: repo shows no
+- [x] **7. KPI tree + metric dictionary** — problem: repo shows no
       business-analysis framing; HMs for analytics roles screen for goal→metric
       decomposition (2026 hiring research) · outcome-link: N2 · pass/fail:
       `docs/analytics/kpi-tree.md` exists: "improve my chess" decomposed into
@@ -111,9 +120,11 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       reviewed by fresh-context reviewer for BA rigor · appetite: days (writing)
       · no-gos: no new app code; no invented metrics the app doesn't compute ·
       contracts: none (doc-only) ·
-      **STATUS: delivered (PR #53)** — fresh-context verifier code-checked
-      every definition; two wording errors found and fixed. Check the box on
-      merge
+      **CLOSED 2026-07-18 (PR #53 + refresh):** re-audited every metric's
+      computation source against real code (AST-scanned all cited symbols +
+      schema columns exist); corrected 7 drifted citations (endgame-conversion
+      rule = win-prob ≥0.8 sustained ≥4 plies, accuracy `-3.17` sign, exact
+      `file::function` + `table.column` refs). README links it in 1 click.
 - [ ] **8. "State of my chess" analysis report** — problem: no artifact proves
       data→insight→recommendation skill — the core analytics screen · outcome-link:
       N2 · pass/fail: `docs/analytics/state-of-my-chess.md`: written analysis over
