@@ -66,6 +66,7 @@ from app.maia_engine import (
     MaiaUnavailable,
     get_maia_engine,
     maia_ready_for,
+    pick_from_priors,
 )
 from app.models import (
     Analysis,
@@ -729,8 +730,8 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
                     status_code=400, detail=f"Unknown personaId {req.personaId!r}."
                 )
 
-            # Maia-first (skeleton): a Maia-wired persona plays the human-
-            # trained net's top move — the SF persona pipeline below (gate /
+            # Maia-first: a Maia-wired persona plays a seeded sample from the
+            # human-trained net's policy — the SF persona pipeline below (gate /
             # sampling / mistake) does NOT run for it (Maia already encodes
             # human error; layering synthetic weakness on top double-applies —
             # spec landmine 6). ANY Maia failure falls through to the ENTIRE
@@ -740,7 +741,24 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
                     maia_result = await get_maia_engine().top_move(
                         req.fen, persona.id
                     )
-                    maia_move = chess.Move.from_uci(maia_result["uci"])
+                    # M2 variety: seeded sample from the policy priors (same
+                    # hash((seed, ply)) idiom as SF opening sampling). Resolve
+                    # chosen_uci FIRST, then build move/SAN/push from it alone
+                    # (review fold: the SAN/UCI/FEN triple must never mix the
+                    # sampled and argmax moves). Any sampling-path problem —
+                    # None, unparseable, or illegal — yields the engine-
+                    # guaranteed-legal argmax, still engine="maia".
+                    chosen_uci = maia_result["uci"]
+                    sampled = pick_from_priors(
+                        maia_result["priors"], hash((req.seed or 0, req.ply))
+                    )
+                    if sampled is not None:
+                        try:
+                            if chess.Move.from_uci(sampled) in board.legal_moves:
+                                chosen_uci = sampled
+                        except ValueError:
+                            pass  # malformed uci from a fake/parser edge
+                    maia_move = chess.Move.from_uci(chosen_uci)
                     maia_san = board.san(maia_move)  # SAN BEFORE pushing
                     board.push(maia_move)
                     return BotMoveResponse(
