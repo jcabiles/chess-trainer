@@ -26,6 +26,26 @@ def _skip_engine_autostart():
 
 
 @pytest.fixture(autouse=True)
+def _maia_off(request, tmp_path_factory, monkeypatch):
+    """Force Maia-unready for every test by default (Maia skeleton T4).
+
+    Machines WITH lc0 + nets installed would otherwise route persona 'casey'
+    through Maia and silently bypass the SF fakes that the bot-route suites
+    assert against — tests must be deterministic on any machine. Points
+    MAIA_WEIGHTS_DIR at an empty dir so ``maia_ready_for()`` is False.
+    ``tests/test_maia_engine.py`` (and any test that opts back in by setting
+    its own MAIA_WEIGHTS_DIR / patching ``main.get_maia_engine``) is exempt.
+    """
+    if request.module.__name__.endswith("test_maia_engine"):
+        yield
+        return
+    monkeypatch.setenv(
+        "MAIA_WEIGHTS_DIR", str(tmp_path_factory.mktemp("no-maia-weights"))
+    )
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _clear_narrative_in_flight():
     """Never leak the narrative in-flight guard across tests (same discipline
     as the manual review._tasks cleanup in tests/test_review.py)."""

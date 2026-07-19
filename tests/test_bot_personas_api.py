@@ -109,7 +109,7 @@ def test_bare_fen_move_is_b3_identical(client):
     resp = client.post("/api/bot/move", json={"fen": START_FEN})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"moveUci", "moveSan", "fen"}
+    assert set(body) == {"moveUci", "moveSan", "fen", "engine"}
 
     # Exactly one engine call: k=1, elo=None (no strength change ⇒ stays 1350).
     assert client.fake_bot.calls == [{"fen": START_FEN, "k": 1, "elo": None}]

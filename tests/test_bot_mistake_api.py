@@ -162,7 +162,7 @@ def test_bare_fen_move_is_b3_identical():
     resp = client.post("/api/bot/move", json={"fen": MID_FEN_W})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"moveUci", "moveSan", "fen"}
+    assert set(body) == {"moveUci", "moveSan", "fen", "engine"}
 
     # Legacy branch: exactly one call, k=1, elo=None (no strength change).
     assert client.fake_bot.calls == [{"fen": MID_FEN_W, "k": 1, "elo": None}]

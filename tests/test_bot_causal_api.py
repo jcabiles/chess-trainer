@@ -219,7 +219,7 @@ def test_bare_fen_is_b3_identical(client):
     resp = client.post("/api/bot/move", json={"fen": START_FEN})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"moveUci", "moveSan", "fen"}
+    assert set(body) == {"moveUci", "moveSan", "fen", "engine"}
     assert client.fake_bot.calls == [{"fen": START_FEN, "k": 1, "elo": None}]
 
     board = chess.Board(START_FEN)

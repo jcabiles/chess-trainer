@@ -541,6 +541,8 @@ function wirePersonaPicker() {
     writeUiPref('botPersona', sel.value);
     setPersonaCaption(sel.value);
     setPersonaName(sel.value);
+    lastBotEngine = null; // new opponent — engine line back to readiness
+    updateMaiaLine();
   });
 }
 
@@ -626,6 +628,37 @@ function wireChessComInput() {
 
 // --- status probe (persona label + Maia dot + Start availability) ----------
 
+// Per-persona Maia wiring from /api/bot/status (personaId -> ready) + the
+// engine that served the LAST bot move ('maia' | 'stockfish' | null before
+// any reply). Ephemeral by design (not persisted — skeleton contract): the
+// indicator reflects the live session only.
+let maiaPersonas = {};
+let lastBotEngine = null;
+
+// Subtle engine indicator (Maia skeleton): for a Maia-wired persona the line
+// reads ready → active → engine fallback as the game progresses; for everyone
+// else it keeps the original global readiness text.
+function updateMaiaLine() {
+  const indicator = byId('botplay-maia-indicator');
+  const maiaLabel = byId('botplay-maia-label');
+  const sel = byId('bot-persona');
+  const pid = sel ? sel.value : '';
+  const wired = !!maiaPersonas[pid];
+  let text;
+  let ready;
+  if (wired) {
+    ready = true;
+    if (lastBotEngine === 'maia') text = 'Maia: active';
+    else if (lastBotEngine === 'stockfish') text = 'Maia: engine fallback';
+    else text = 'Maia: ready';
+  } else {
+    ready = Object.values(maiaPersonas).some(Boolean);
+    text = ready ? 'Maia: ready' : 'Maia: not installed';
+  }
+  if (indicator) indicator.dataset.ready = String(ready);
+  if (maiaLabel) maiaLabel.textContent = text;
+}
+
 async function probeStatus() {
   let data;
   try {
@@ -641,11 +674,8 @@ async function probeStatus() {
   // Populate the persona picker from the catalog + select persisted/default.
   populatePersonaPicker(data.personas, data.defaultPersonaId);
 
-  const indicator = byId('botplay-maia-indicator');
-  const maiaLabel = byId('botplay-maia-label');
-  const ready = !!(data.maia && data.maia.lc0 && data.maia.weights && data.maia.weights.length);
-  if (indicator) indicator.dataset.ready = String(ready);
-  if (maiaLabel) maiaLabel.textContent = ready ? 'Maia: ready' : 'Maia: not installed';
+  maiaPersonas = (data.maia && data.maia.personas) || {};
+  updateMaiaLine();
 
   const startBtn = byId('botplay-start');
   const hint = byId('botplay-hint');
@@ -961,6 +991,10 @@ async function requestBotMove(myToken, fen) {
 
   showRetry(false);
   retryFen = null;
+
+  // Which engine served this move (Maia skeleton — subtle indicator only).
+  lastBotEngine = data.engine || 'stockfish';
+  updateMaiaLine();
 
   // Apply the bot move. ORDERING CONTRACT (T3): botAppendMove →
   // botSetResult(if terminal) → persist → refreshAnalysis → hand turn back.

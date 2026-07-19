@@ -32,7 +32,11 @@ class FakeBot:
     def __init__(self) -> None:
         self.calls: list[tuple[str, int]] = []
 
-    async def candidates(self, fen: str, k: int = 1) -> list[dict]:
+    async def candidates(
+        self, fen: str, k: int = 1, elo: int | None = None
+    ) -> list[dict]:
+        # Real-signature fake: the persona branch passes elo= (a FakeBot
+        # without it TypeErrors into a 500 — pre-existing gap closed at T4).
         self.calls.append((fen, k))
         board = chess.Board(fen)
         move = next(iter(board.legal_moves))
@@ -77,7 +81,8 @@ def test_bot_move_legal_reply(client):
     resp = client.post("/api/bot/move", json={"fen": START_FEN})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"moveUci", "moveSan", "fen"}
+    assert set(body) == {"moveUci", "moveSan", "fen", "engine"}
+    assert body["engine"] == "stockfish"
     # The move is legal in the starting position.
     board = chess.Board(START_FEN)
     assert chess.Move.from_uci(body["moveUci"]) in board.legal_moves
@@ -210,7 +215,11 @@ def test_bot_status_available_true(monkeypatch):
     body = resp.json()
     assert body["available"] is True
     assert body["personaLabel"] == BOT_PERSONA_LABEL
-    assert body["maia"] == {"lc0": False, "weights": []}
+    assert body["maia"] == {
+        "lc0": False,
+        "weights": [],
+        "personas": {"casey": False},
+    }
 
 
 def test_bot_status_available_false(monkeypatch):
@@ -235,6 +244,110 @@ def test_bot_status_maia_shape(monkeypatch):
     with TestClient(app) as c:
         resp = c.get("/api/bot/status")
     maia = resp.json()["maia"]
-    assert set(maia) == {"lc0", "weights"}
+    assert set(maia) == {"lc0", "weights", "personas"}
     assert isinstance(maia["lc0"], bool)
     assert isinstance(maia["weights"], list)
+    # Per-persona readiness (Maia skeleton): conftest's _maia_off fixture
+    # points MAIA_WEIGHTS_DIR at an empty dir, so casey reads not-ready here.
+    assert maia["personas"] == {"casey": False}
+
+
+# --- Maia-first branch (Maia skeleton) --------------------------------------
+# The route serves a Maia-wired persona (casey) from the lc0/Maia engine when
+# ready, bypassing the SF persona pipeline; ANY MaiaUnavailable falls through
+# to the SF path in the SAME request. Seam: monkeypatch main.maia_ready_for +
+# main.get_maia_engine (bare-name imports — the spec-pinned patch target).
+
+from app.maia_engine import MaiaUnavailable  # noqa: E402
+
+
+class FakeMaia:
+    """Real-signature Maia fake: top_move(fen, persona_id)."""
+
+    def __init__(self, fail: Exception | None = None) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self._fail = fail
+
+    async def top_move(self, fen: str, persona_id: str) -> dict:
+        self.calls.append((fen, persona_id))
+        if self._fail is not None:
+            raise self._fail
+        board = chess.Board(fen)
+        move = chess.Move.from_uci("e2e4")
+        return {"uci": move.uci(), "san": board.san(move), "priors": []}
+
+    async def close(self) -> None:  # pragma: no cover - lifespan shutdown
+        pass
+
+
+def _maia_client(monkeypatch, maia: FakeMaia):
+    monkeypatch.setattr(main, "maia_ready_for", lambda pid: pid == "casey")
+    monkeypatch.setattr(main, "get_maia_engine", lambda: maia)
+    fake = FakeBot()
+    app.dependency_overrides[get_bot_engine] = lambda: fake
+    return fake
+
+
+def test_casey_served_by_maia_when_ready(monkeypatch):
+    maia = FakeMaia()
+    fake = _maia_client(monkeypatch, maia)
+    with TestClient(app) as c:
+        resp = c.post(
+            "/api/bot/move",
+            json={"fen": START_FEN, "personaId": "casey", "ply": 0, "seed": 1},
+        )
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["engine"] == "maia"
+    assert body["moveUci"] == "e2e4"
+    assert maia.calls == [(START_FEN, "casey")]
+    assert fake.calls == []  # SF pipeline fully bypassed
+
+
+def test_maia_unavailable_falls_back_same_request(monkeypatch):
+    maia = FakeMaia(fail=MaiaUnavailable("lc0 died"))
+    fake = _maia_client(monkeypatch, maia)
+    with TestClient(app) as c:
+        resp = c.post(
+            "/api/bot/move",
+            json={"fen": START_FEN, "personaId": "casey", "ply": 20, "seed": 1},
+        )
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["engine"] == "stockfish"  # same-request SF fallback, not 503
+    assert len(maia.calls) == 1
+    assert len(fake.calls) == 1  # SF pipeline served the move
+
+
+def test_non_maia_persona_never_touches_maia(monkeypatch):
+    maia = FakeMaia()
+    fake = _maia_client(monkeypatch, maia)
+    with TestClient(app) as c:
+        resp = c.post(
+            "/api/bot/move",
+            json={"fen": START_FEN, "personaId": "morgan", "ply": 20, "seed": 1},
+        )
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    assert resp.json()["engine"] == "stockfish"
+    assert maia.calls == []
+    assert len(fake.calls) == 1
+
+
+def test_maia_not_ready_uses_sf_directly(monkeypatch):
+    # Readiness false (the suite-wide default) → Maia engine never consulted.
+    maia = FakeMaia()
+    monkeypatch.setattr(main, "get_maia_engine", lambda: maia)
+    fake = FakeBot()
+    app.dependency_overrides[get_bot_engine] = lambda: fake
+    with TestClient(app) as c:
+        resp = c.post(
+            "/api/bot/move",
+            json={"fen": START_FEN, "personaId": "casey", "ply": 20, "seed": 1},
+        )
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    assert resp.json()["engine"] == "stockfish"
+    assert maia.calls == []

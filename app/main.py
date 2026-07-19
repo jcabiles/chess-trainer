@@ -61,6 +61,12 @@ from app.bot_engine import (
 )
 from app.bot_engine import EngineUnavailable as BotEngineUnavailable
 from app.engine import DEFAULT_DEPTH, AnalysisResult, EngineUnavailable, StockfishEngine
+from app.maia_engine import (
+    MAIA_NETS,
+    MaiaUnavailable,
+    get_maia_engine,
+    maia_ready_for,
+)
 from app.models import (
     Analysis,
     AnalyzeAllResponse,
@@ -192,6 +198,13 @@ async def lifespan(app: FastAPI):
             await get_bot_engine().close()
         except Exception as exc:  # pragma: no cover - defensive shutdown
             logger.warning("bot engine shutdown failed: %s", exc)
+        # Maia/lc0 engine (Maia skeleton): a THIRD isolated process, also lazy.
+        # Closed here explicitly — it lives outside BotEngine, so the close
+        # above cannot reach it (spec landmine 5).
+        try:
+            await get_maia_engine().close()
+        except Exception as exc:  # pragma: no cover - defensive shutdown
+            logger.warning("maia engine shutdown failed: %s", exc)
 
 
 def _import_games_folder() -> None:
@@ -629,6 +642,11 @@ class BotMoveResponse(BaseModel):
     moveUci: str = Field(description="The bot's chosen move in UCI.")
     moveSan: str = Field(description="The bot's chosen move in SAN.")
     fen: str = Field(description="Position AFTER the bot's move, in FEN.")
+    engine: Literal["maia", "stockfish"] = Field(
+        default="stockfish",
+        description="Which engine produced this move: 'maia' (human-trained "
+        "lc0 net) or 'stockfish' (weakened SF, incl. same-request fallback).",
+    )
 
 
 class BotStatusResponse(BaseModel):
@@ -644,7 +662,9 @@ class BotStatusResponse(BaseModel):
     )
     defaultPersonaId: str = Field(description="Id of the default persona (a bare request's bot).")
     maia: dict = Field(
-        description="Maia/lc0 readiness signal: {lc0: bool, weights: [paths]}."
+        description="Maia/lc0 readiness: {lc0: bool, weights: [paths], "
+        "personas: {personaId: ready}} — per-persona ready means lc0 AND that "
+        "persona's REQUIRED net file are present (pure detection)."
     )
 
 
@@ -708,6 +728,29 @@ async def bot_move(req: BotMoveRequest, bot: BotEngine = Depends(get_bot_engine)
                 raise HTTPException(
                     status_code=400, detail=f"Unknown personaId {req.personaId!r}."
                 )
+
+            # Maia-first (skeleton): a Maia-wired persona plays the human-
+            # trained net's top move — the SF persona pipeline below (gate /
+            # sampling / mistake) does NOT run for it (Maia already encodes
+            # human error; layering synthetic weakness on top double-applies —
+            # spec landmine 6). ANY Maia failure falls through to the ENTIRE
+            # existing Stockfish block in the same request.
+            if maia_ready_for(persona.id):
+                try:
+                    maia_result = await get_maia_engine().top_move(
+                        req.fen, persona.id
+                    )
+                    maia_move = chess.Move.from_uci(maia_result["uci"])
+                    maia_san = board.san(maia_move)  # SAN BEFORE pushing
+                    board.push(maia_move)
+                    return BotMoveResponse(
+                        moveUci=maia_move.uci(),
+                        moveSan=maia_san,
+                        fen=board.fen(),
+                        engine="maia",
+                    )
+                except MaiaUnavailable:
+                    pass  # same-request fallback: weakened-SF path below
 
             # B5 causal-blunder gate, computed FIRST (pure, cheap) so the wider
             # candidate budget + the k increase are confined to induced-blunder
@@ -824,7 +867,10 @@ async def bot_status():
         personaLabel=default.name,
         personas=[p.as_dict() for p in personas.all()],
         defaultPersonaId=personas.default_id(),
-        maia=detect_maia(),
+        maia={
+            **detect_maia(),
+            "personas": {pid: maia_ready_for(pid) for pid in MAIA_NETS},
+        },
     )
 
 

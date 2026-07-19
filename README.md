@@ -87,6 +87,16 @@ per-move coaching notes.
    ```
    Verify: `stockfish` should launch a UCI prompt (Ctrl-D to exit).
 
+   **(Optional) Maia — human-like bot moves.** With [lc0](https://lczero.org/)
+   and the [Maia](https://www.maiachess.com/) nets installed, the Ming Ling bot
+   plays moves from a neural net trained on real human games (it falls back to
+   Stockfish automatically when absent — nothing else changes):
+   ```sh
+   brew install lc0
+   mkdir -p ~/maia_weights && cd ~/maia_weights
+   curl -fsSLO "https://raw.githubusercontent.com/CSSLab/maia-chess/master/maia_weights/maia-1400.pb.gz"
+   ```
+
 2. **Python env** (3.12+):
    ```sh
    python3 -m venv .venv
