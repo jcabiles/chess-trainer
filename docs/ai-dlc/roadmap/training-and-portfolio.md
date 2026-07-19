@@ -1,4 +1,4 @@
-# Training + Portfolio Roadmap — updated 2026-07-16
+# Training + Portfolio Roadmap — updated 2026-07-18
 
 > **Progress 2026-07-12 (autonomous run):** every slice was implemented or
 > closed in one pass, delivered as stacked PRs **#48→#54** (merge in order;
@@ -24,6 +24,16 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
   appearing analyzed in the Game Library + profiler; a personal ELO estimate
   exists and updates per result (baseline: none). Added 2026-07-16 from the
   bots discovery interview (Chapter 3).
+- **N4 · App-as-product analytics** — Outcome: honest product-metrics story
+  (single-subject engagement time series + pre/post causal feature studies)
+  served by a best-practice local-first data platform (events → contracts →
+  DuckDB/dbt marts → Dagster) with zero practitioner red flags | Baseline:
+  no telemetry, no warehouse (2026-07-18) → Target: ≥12 KPI-traced events
+  flowing through contract-validated ELT into tested dbt marts on a green
+  scheduled DAG; ≥1 pre-registered experiment reaching its stopping rule +
+  ≥1 quasi-experimental study, both reproducible one-command from the
+  warehouse; every mart segmentable by user_type. Added 2026-07-18;
+  deliberately reverses the 2026-07-12 no-dbt no-go.
 - **N2 · Portfolio credibility (analytics-first)** — Outcome (proxy, qualitative):
   a hiring manager for an **analytics/AE role** (top priority) or AI-native DS role
   can, within a 5–10 minute skim, find and read each Chapter-2 artifact ≤2 clicks
@@ -377,6 +387,336 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       a rated loss vs Alex(1800) moved 1350→1348 live, persisted across reload,
       casual games ignored, chess.com anchor persists.
 
+### Chapter 4 — realistic bots on Maia (serves N3 → N1; added 2026-07-18)
+
+> Discovery interview 2026-07-18 (confirmed at gate): **outcome** — bots feel
+> indistinguishable-from-human sparring partners at honest ratings 800–2000,
+> measured two ways per slice: (a) user playtest sign-off, (b) an automated
+> **trace audit** (bot move-match % against its Maia band; no engine-signature
+> moves like instant mate-spotting or 0-loss grinding). **Problems:** P5 —
+> weakened-SF bots still show engine texture at every level (B5/B9 mitigate but
+> don't remove it; B1 evidence: Maia beats weakened SF at human-move prediction
+> by 10–19 pts); P6 — no beginner opponents: roster floors at 1350 (UCI_Elo
+> floor ~1320), user wants 800–1400 with 2–3 style-varied bots per rung.
+> **Confirmed shape:** lc0/Maia = move source for every persona ≤1900
+> (band-matched net; Mandeep 2000 stays SF); the shipped causal-blunder +
+> mistake layers stay ON TOP of Maia; variety via Python-side seeded sampling
+> of Maia's policy priors (installed lc0 0.32.1 has NO temperature option —
+> verified 2026-07-18; MultiPV + VerboseMoveStats expose P values → reuse the
+> `personas.weighted_choice` idiom); sub-1100 = maia-1100 + the existing
+> error-injection tiers, ratings labeled as calibrated estimates; roster = full
+> grid, 2–3 styles per rung at 800/1000/1200/1400 (~10–12 new personas).
+> **Appetite: ~2 weeks (full chapter).** Honest math (refuter-corrected
+> 2026-07-18): six slices sum to 11–17 working days — exceeds the appetite at
+> the high end; M5/M6 drop to a re-up if calibration eats the budget.
+> **Install prerequisite DONE 2026-07-18:** lc0 0.32.1 (brew, Metal backend) +
+> all nine maia-1100…1900 nets in `~/maia_weights/`; `detect_maia()` reports
+> ready. Research base: `../../design/research/engine-adaptation/maia-lc0.md` +
+> `../research/chess-bots.md`. Contracts: `../contracts/bot-play.md` (+ the
+> B2–B9 wiring notes in specs). Dependency-gated order M1→M6; **user owns
+> final order + promotions**.
+
+- [ ] **M1. Maia engine walking skeleton** — problem: P5 — no lc0 move path
+      exists (`detect_maia()` is detection-only) · outcome-link: N3 ·
+      scope: new `app/maia_engine.py` mirroring the `bot_engine.py` idiom
+      (own subprocess, own asyncio.Lock, lazy start, watchdog restart,
+      import-safe when lc0/weights absent); loads one net, `go nodes 1`,
+      returns candidates + policy priors (VerboseMoveStats/MultiPV parse);
+      band selection = weights-swap restart or per-band process (spec
+      decides, cite second-engine-process-patterns research); wire ONE
+      existing persona (Ming Ling 1350 → maia-1400) through `/api/bot/move`
+      behind a fallback: lc0 missing/dead → current weakened-SF path
+      unchanged; spec must state the single-process assumptions explicitly
+      (asyncio.Lock guards ONE uvicorn worker — document the single-worker
+      deployment constraint; blocking lc0 I/O + restarts run in the executor
+      so the event loop never stalls, mirroring bot_engine) · pass/fail:
+      full browser game vs Maia-backed Ming Ling;
+      pytest green with no lc0 binary (fake seam, mirrors `get_engine`);
+      kill lc0 mid-game → next move still arrives via SF fallback ·
+      appetite: 2–3 days · no-gos: no change to user-analysis engine.py;
+      other personas untouched; no schema change
+- [ ] **M2. Human variety via policy sampling** — problem: Maia is
+      deterministic at argmax — same position, same move, every game (B1
+      evidence; official lichess Maia bots bolt on books for this) ·
+      outcome-link: N3 · scope: seeded sampling over Maia's policy prior
+      (reuse `weighted_choice` softmax; per-persona temperature reinterpreted
+      as policy-sampling sharpness; floor/cap so sampling never picks a
+      <~2%-prior howler move by accident) · pass/fail: same position,
+      different seeds → ≥2 distinct sensible moves across 10 seeds;
+      same seed → identical move (determinism per seed preserved for
+      replay); unit tests engine-free · appetite: 1–2 days · no-gos: no
+      opening-book files (sampling-only, per B4 decision)
+- [ ] **M3. Realism trace-audit harness** — problem: "realistic" needs a
+      repeatable number BEFORE the big switch, or regressions are invisible
+      (the outcome's instrument) · outcome-link: N3 measurement · scope:
+      offline runnable script (`docs/ai-dlc/verify/` idiom) that replays a
+      persona over a test-position set + saved bot games and reports:
+      move-match % vs its Maia band net, blunder/mistake frequency vs the
+      persona's dials, engine-signature flags (instant mates found, 0-cp-loss
+      streaks); baseline run against the CURRENT weakened-SF personas
+      committed as the before-picture · **anti-contamination design (Codex
+      2026-07-18): the harness ships TWO position sets — an open dev set
+      (tuning allowed) and a SEALED eval set (never used for tuning; used
+      only for slice acceptance and, later, as Chapter-5's frozen experiment
+      instrument) — and the instrument is versioned so any later change is
+      visible** · pass/fail: harness runs offline in one command; produces
+      per-persona report; baseline numbers committed; dev/eval split
+      documented + eval set hash-pinned · appetite: 1–2 days · no-gos: no
+      live-server dependency; engine calls only through the existing
+      bot/maia engine modules; eval-set positions never enter any tuning
+      loop
+- [ ] **M4. Switch the ladder to band-matched Maia** — problem: P5 across
+      the whole existing roster · outcome-link: N3 · scope: personas ≤1900
+      get `maiaBand` (Ming Ling/Nina/Amanda 1350-band → 1300/1400 nets,
+      Diana 1550 → 1500/1600, Melvin 1800 → 1800; Mandeep stays SF —
+      explicit non-goal); causal-blunder gate + mistake tier re-wired to run
+      over Maia candidates (gate-first wiring preserved: only widen k when
+      the gate fires); dial recalibration per persona (Maia already carries
+      human error — blunderRate/mistakeRate likely DROP; tune via M3
+      harness + playtest) · **acceptance metric fixed (Codex 2026-07-18):
+      once Maia IS the move source, "move-match vs the Maia net" is circular
+      — acceptance instead uses the SEALED eval set scored against HELD-OUT
+      REAL HUMAN games of the band (a lichess rating-band sample the bots
+      never trained or tuned on): human-move-match ≥ weakened-SF baseline
+      +8 pts, blunder frequency within the band's human profile, zero
+      engine-signature flags; tuning happens only on the dev set** ·
+      pass/fail: sealed-eval report per switched persona as above; user
+      playtests ≥1 game per switched persona and signs off each; full pytest
+      green engine-free · appetite: 3–4 days · no-gos: persona ids stable
+      (localStorage/PGN/ELO keys); rating.py untouched; legacy bare-{fen}
+      branch stays SF; no tuning against the sealed set
+- [ ] **M5. Sub-1100 calibration (the 800/1000 rungs)** — problem: P6 —
+      Maia floors at 1100 and plays above its label; honest 800/1000 needs
+      dragging DOWN · outcome-link: N3 · scope: error-injection tiers
+      (mistakeRate/blunderRate on top of maia-1100) tuned per rung via an
+      auto-calibration match harness (candidate persona vs SF UCI_Elo ladder
+      anchors, score → effective-Elo estimate; cite
+      rating-calibration/honest-bot-rating-assignment.md); displayed ratings
+      labeled "est." in the rail; two probe personas (one 800, one 1000)
+      prove the method · pass/fail: each probe persona's measured effective
+      Elo within ±150 of its label over ≥30 harness games; playtest: a
+      beginner-level game feels sloppy-human, not random · appetite: 2–3
+      days · limitation named in the report (Codex 2026-07-18): SF-anchor
+      matches measure strength vs engine texture, not humanness — pair the
+      Elo estimate (with its confidence interval) with a maia-1100
+      blunder-profile comparison, and label both as estimates · no-gos: no
+      maia2/PyTorch in-process dependency (explicit interview decision); no
+      new engine binaries
+- [ ] **M6. Full beginner-to-club roster (the grid)** — problem: P6 roster
+      breadth — 2–3 style-varied bots per rung at 800/1000/1200/1400 ·
+      outcome-link: N3 · scope: ~10–12 new personas as PURE DATA
+      (data/personas.json: band + dials + name + description; picker/rail
+      are data-driven — B9 proved zero-frontend-change), reusing M5's
+      calibration for sub-1100 rungs; distinct styles within a rung =
+      temperature + threatDistance/mistakeRate contrasts (B9's Diego-vs-Robin
+      pattern); avatars: user generates images (standing task), id-keyed
+      files into gitignored `data/avatars/`; rail UX check — ~18 cards needs
+      grouping-by-rung or scroll affordance (small CSS-only tweak allowed) ·
+      pass/fail: every new persona appears in rail + picker with correct
+      rating; M3 audit per persona in-band; ladder-monotonicity tests updated
+      (group-max invariant, B9 lesson) and green; user picks + plays ≥3 new
+      bots and signs off the roster feels varied · appetite: 3–4 days
+      (Codex: this is a roster release + calibration campaign, not pure
+      data — may ship in two waves: 1200/1400 rungs first, sub-1100 wave
+      second) · no-gos: no schema change; persona ids never reuse existing
+      six
+
+### Chapter 5 — analytics-engineering platform (serves N4 + N2; added 2026-07-18)
+
+> Discovery + dual ideation 2026-07-18 (user interview → 5 seed directions →
+> refuter round 1 + extension round + two cited research dossiers:
+> `../research/analytics-portfolio/telemetry-contracts-pipeline.md`,
+> `../research/analytics-portfolio/simulation-experiments-validity.md`).
+> **DELIBERATELY REVERSES the 2026-07-12 "no dbt/warehouse toolchain" no-go**
+> (role requirements changed: SQL depth, dbt, DAG orchestration, and
+> data→insight→business-value analysis are now the target signals).
+> **New north-star N4 · App-as-product analytics** — Outcome: the app has an
+> honest product-metrics story (engagement as single-subject time series,
+> feature effectiveness as pre/post causal studies) served by a best-practice
+> local-first data platform a practitioner AE reviewer finds zero red flags
+> in | Baseline: no product telemetry, no warehouse, analytics = hand-rolled
+> Python in app/insights.py → Target: every slice's pass/fail below.
+> **Standing requirements:** (1) every data model carries a `user_type`
+> segmentation dimension ∈ {real, bot, synthetic} so all downstream marts can
+> aggregate or split honestly (user-mandated); (2) after every research
+> session agents write dossiers under `../research/analytics-portfolio/`
+> (feeds the eventual Obsidian "Analytics Engineer Playbook" wiki — see
+> Standing user tasks); (3) n=1 limitations always named in the artifact, not
+> hidden. **Budget: ≤$50/mo; current design needs ~$5/mo (Cloudflare R2 for
+> the lichess calibration slice) — everything else local DuckDB.**
+> **Queue: starts after Chapter 4 (Maia bots) — user decision. Appetite:
+> eight slices sum to 17–22 working days (post-review split of the two fat
+> slices); the effectiveness study additionally needs ~2–3 months of
+> calendar time for post-intervention data to accumulate, so it runs gated
+> in the background of the queue, not as a blocking step.** Key
+> anti-red-flag decisions (research-backed): batch cursor ELT NOT CDC (SQLite
+> has no change log; events immutable); Dagster software-defined assets NOT
+> Airflow (both reviewers independently: Airflow = resume-driven overkill at
+> one-user scale — the written justification is itself the signal); no
+> SELECT-* staging, declared grain, tested PKs, dbt contracts `enforced` on
+> marts, breaking changes via model versions.
+
+- [ ] **P1. Product KPI tree + event tracking plan** (the foundation — defines
+      what the app emits) — problem: the app has no product-level metrics; the
+      shipped Chapter-2 KPI tree measures the USER's chess, not the app as a
+      product · outcome-link: N4 · scope: extend `docs/analytics/kpi-tree.md`
+      (build on, never duplicate) with the app-as-product layer: north-star =
+      engagement time series (sessions/wk, plies analyzed/wk, features
+      touched/session) + feature-effectiveness pre/post metrics; then a
+      **tracking plan**: ~12–20 events max, Object-Action past-tense names
+      (`Game Started`, `Move Played`, `Drill Completed`), envelope spec
+      (event_id UUID, occurred_at + received_at, session_id, schema_version,
+      app_version), every event traced to a KPI it serves (orphan events
+      rejected); **activity counters are not KPIs by themselves (Codex
+      2026-07-18) — each engagement counter must state the outcome it proxies
+      and how it links to the N1 improvement metrics (e.g. plies-analyzed/wk
+      → blunder-rate trend), with known failure modes noted (features
+      touched/session rises when navigation confuses)** · pass/fail: doc
+      review — each event maps to a metric, each metric to the north-star
+      WITH its counter→outcome link stated; explicit "n=1, single-subject"
+      framing section; no SaaS-costume metrics (DAU/retention cohorts
+      banned) · appetite: 1–2 days · no-gos: no code yet; no new repo
+- [ ] **P2a. Event spine + data contracts** (app emits validated events) —
+      problem: no instrumentation exists · outcome-link: N4 · scope: app
+      emits P1's events to an append-only local log (JSONL or SQLite events
+      table), validated at emit time against per-event **JSON Schemas
+      versioned in-repo** (SchemaVer, a mini registry = the data contract);
+      CI contract tests; `user_type` stamped at the source · pass/fail:
+      events flow during a real session; emit-time validation rejects a
+      malformed event in a pytest; contract CI fails on an incompatible
+      schema edit · appetite: 2 days · no-gos: no cloud services; app
+      behavior never blocks on telemetry (fire-and-forget, app works with
+      logging off)
+- [ ] **P2b. dbt warehouse + SQL-parity port** (tested marts over the events
+      + games) — problem: analytics logic lives as 951 lines of hand-rolled
+      Python (app/insights.py) with no SQL story · outcome-link: N4 · scope:
+      new `warehouse/` dbt project (DuckDB): cursor-based incremental ELT
+      from the event log + a read-only games.db extract → staging (1:1
+      sources, explicit columns, no joins) → intermediate → marts with
+      declared grain (`fct_games`, `fct_moves`, `fct_drill_attempts`) and
+      **`user_type` dimension on every mart**; dbt contracts `enforced` on
+      marts; the SQL-depth proof: port 3–4 insights.py aggregations (win
+      rates, time-trouble, endgame conversion) into marts with a
+      **golden-file test asserting dbt output == Python output pinned to a
+      tagged snapshot of the game set** (parity = correctness evidence, not
+      a live coupling — the dbt layer is labeled a point-in-time portfolio
+      artifact, NOT a second source of truth, so the two implementations
+      never have to co-evolve) · pass/fail: `dbt build` green from zero
+      twice (idempotent); pinned golden-file parity test passes · appetite:
+      2–3 days · no-gos: no cloud services; app runtime never depends on the
+      warehouse; pure modules stay engine-free
+- [ ] **P3. Dagster orchestration of the real jobs** — problem: DAG/
+      orchestration skill unproven; the app already has a real multi-stage
+      flow with real failure modes (import → background engine analysis →
+      now dbt refresh) · outcome-link: N4 · scope: Dagster OSS
+      software-defined assets wrapping event-log extract, games.db extract,
+      dbt models (dagster-dbt), freshness/row-count checks; retries + alerts
+      on the engine-analysis dependency; GitHub Actions CI runs `dbt build`
+      + contract tests on PRs; README section justifying Dagster-not-Airflow
+      at this scale (the justification IS the signal); **spec must draw the
+      production boundary explicitly (Codex 2026-07-18): the app's own
+      import/background-analysis stays app-owned — Dagster assets observe
+      and consume (extract, transform, check freshness), they do not
+      re-trigger app-runtime work; every asset idempotent with stated
+      ownership/handoff semantics so retries can't duplicate work; all five
+      tools (duckdb, dbt-core, dbt-duckdb, dagster, dagster-dbt)
+      version-pinned with a one-paragraph upgrade policy** · pass/fail: one
+      command materializes the full asset graph; a killed engine mid-run
+      shows a failed asset + successful retry without duplicate rows; CI red
+      on a broken model · appetite: 2 days · no-gos: no always-on daemon
+      requirement; no Airflow; Dagster never writes to app-owned state
+- [ ] **P4a. Tournament harness + A/A validation** (prove the measurement
+      machine before any experiment) — problem: synthetic-population
+      experiments are valid ONLY with fishtest-style discipline, and the
+      harness itself must be validated first · outcome-link: N4 + N3 ·
+      scope: scheduled bot-vs-bot tournament harness (personas from Chapters
+      3–4) writing games to the warehouse as `user_type='bot'`; **wall-clock
+      honesty (Codex 2026-07-18): at fast-preset speeds throughput is
+      ~50–120 games/hour on one engine — the harness reports projected
+      run-time per design, and experiments are scoped to LARGE effects or
+      bounded max-N**; A/A validation with teeth (not
+      absence-of-significance): repeated A/A batches under the final config
+      must show empirical false-positive rate consistent with the declared
+      α AND the outcome metric inside a pre-stated equivalence margin;
+      sample-ratio (SRM) chi-square check; one permanently-frozen held-out
+      persona as instrument-stability baseline · pass/fail: A/A report
+      meets the margin + FPR criteria; SRM clean; harness one-command
+      re-runnable · appetite: 2–3 days · no-gos: no experiment claims from
+      this slice; dials frozen during validation runs
+- [ ] **P4b. Lichess calibration + first pre-registered experiment** —
+      problem: the flagship walkthrough-able experiment a practitioner
+      respects · outcome-link: N4 + N3 · scope: calibration layer: one
+      rating-band-filtered lichess monthly dump slice (~1.5GB zst → parquet
+      on R2, ~$5/mo) proving the bot population's move/error distributions
+      track real players; then ONE experiment: **treatment = a PROSPECTIVE
+      product feature (Codex: NOT the already-shipped Maia switch — e.g. a
+      new matchmaking/difficulty policy or opening-variety change), dated
+      pre-registration committed BEFORE the run (hypothesis, primary metric
+      on the M3 SEALED versioned instrument, SPRT bounds + a max-N budget
+      sized to harness throughput — "inconclusive at max-N" is a valid,
+      publishable outcome)**; write-up includes an explicit "claims we
+      cannot make from synthetic data" box (no human engagement/retention
+      claims) · pass/fail: calibration report within stated tolerance of
+      the lichess band; experiment reaches SPRT stopping rule OR its
+      pre-declared max-N with an honest inconclusive verdict; write-up
+      survives a refuter posing as a skeptical DS interviewer ·
+      appetite: 3–4 days · no-gos: never tune dials and test them in the
+      same experiment; no post-hoc metric switches; synthetic data never
+      blended unlabeled into real-data artifacts
+- [ ] **P5. Training-effectiveness study (comparative interrupted time
+      series)** — problem: the flagship "insight that drives value" artifact;
+      plain pre/post on n=1 has confounds the user explicitly flagged ·
+      outcome-link: N4 + N1 · scope: **comparative ITS** per the user's
+      quasi-experimental guide: treated series = weekly blunder rate on
+      TRAINED motifs (hanging pieces — the blunder trainer's target),
+      control series = untrained-motif blunder rate (global confounds hit
+      both; only the trainer bends the treated series); segmented regression
+      (level + slope change) with Newey-West/autocorrelation correction,
+      ≥8–12 points per side; intervention dates from trainer_attempts
+      timestamps + git ship history; robustness: placebo intervention dates,
+      opponent-strength covariate (per-game bot Elo now recorded),
+      bin-width sensitivity; dated pre-registered analysis plan committed
+      before running; data via P2 marts (`user_type='real'`) ·
+      **data-sufficiency gate (refuter 2026-07-18): DB today has only 15
+      trainer_attempts, all on ONE day (2026-07-06), 150 games — nowhere
+      near 8–12 weekly points/side. P5 does NOT start until ≥8 weekly bins
+      of post-intervention games exist (or the spec re-bases the
+      intervention on a later, better-instrumented feature ship — e.g. the
+      Chapter-4 Maia switch — with the same gate); if still short at
+      Chapter-5 time, P5 demotes to NEXT rather than shipping a
+      hollow study (calendar reality: ≥8 weekly bins ≈ 2–3 months of
+      post-intervention play — plan around it, don't fake it)** · pass/fail:
+      analysis reproducible one-command from the warehouse; write-up states
+      assumption + how tested + limitations (the guide's interview rubric);
+      pre-registration commit predates the results commit · appetite: 2–3
+      days · no-gos: no causal language beyond what the design supports;
+      no cherry-picked windows
+- [ ] **P6. Synthetic warehouse patterns lab** (clearly-labeled, separate) —
+      problem: cohort retention/segment joins/funnel SQL patterns need
+      multi-user volume one real user can't produce; highest smells-fake
+      risk of the chapter (refuter) — survives only with unmissable labeling
+      · outcome-link: N4 (breadth) · scope: generator for ~500 synthetic
+      users' game/session histories **calibrated against the P4 lichess
+      distributions** (generator code + calibration report public);
+      `user_type='synthetic'` end-to-end; dbt patterns the real app can't
+      exercise: cohort retention models, funnels, snapshots (SCD-2 on a
+      mutable synthetic profile table — the ONE legitimate snapshot use),
+      exposures + dbt docs site; README + docs make the synthetic/real split
+      unmissable in the first 10 seconds; hard-separated marts (never joined
+      into real-data artifacts except through the explicit user_type
+      dimension); **honesty split in the calibration report (Codex
+      2026-07-18): game-level parameters (move/error/rating distributions)
+      tie to lichess-derived sources; product-behavior parameters (sessions,
+      funnels, retention, profile changes) CANNOT come from game dumps and
+      are declared as stylized assumptions in their own labeled table —
+      claiming lichess grounding for those would itself be a red flag** ·
+      pass/fail: docs site published; a reviewer-simulating refuter pass
+      confirms no real/synthetic ambiguity anywhere; calibration report's
+      lichess-derived vs stylized-assumption split is complete (every
+      generator parameter appears in exactly one) · appetite: 3 days ·
+      no-gos: synthetic rows never counted in any real-metric artifact;
+      labeling never below h2 prominence
+
 ## NEXT (validated problems · not yet spec'd)
 
 - **Self-hang narration gap** — evidence: self-hang blunders currently narrated
@@ -446,8 +786,12 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 
 ## Out of scope / no-gos (global)
 
-- **No dbt/warehouse toolchain** (user decision 2026-07-12 — analytics story told
-  through analysis artifacts, not tooling).
+- ~~**No dbt/warehouse toolchain** (user decision 2026-07-12)~~ — **REVERSED
+  2026-07-18** (user decision: target roles now require dbt/warehouse/DAG
+  skills demonstrated; Chapter 5 is the sanctioned home). Chapter-5 guardrails
+  replace it: no pipeline-for-pipeline's-sake, app runtime never depends on
+  the warehouse, over-engineering red flags (CDC/quarantine at one-user
+  scale, Airflow) stay banned.
 - **No hosted/cloud demo; app stays local-first.** No notebooks-as-deliverable;
   no auto-generated reports.
 - **No OAuth anywhere** (API keys only — Anthropic ToS).
@@ -469,9 +813,21 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
 
 - [ ] Real-key smoke test of AI commentary: `export ANTHROPIC_API_KEY=…`,
       restart, Generate commentary once on a reviewed game (README setup §5).
-- [ ] If B1 recommends Maia/lc0: install `lc0` + Maia weights in your own
-      terminal (network installs are sandbox-blocked for Claude) — exact
-      commands will land in the B1 research doc.
+- [x] If B1 recommends Maia/lc0: install `lc0` + Maia weights — DONE
+      2026-07-18 (lc0 0.32.1 via brew + nine maia-1100…1900 nets in
+      `~/maia_weights/`; `detect_maia()` verified ready).
+- [ ] Chapter 4 / M6: generate ~10–12 new persona avatar images (ChatGPT,
+      as before) and drop them id-keyed into `data/avatars/` — ids land in
+      the M6 spec.
+- [ ] Chapter 5 wrap-up (after ALL slices ship): build the comprehensive
+      **Analytics Engineer Playbook wiki** at
+      `/Users/johncabiles/Documents/Obsidian/Analytics Engineer Playbook/`
+      from the accumulated dossiers in
+      `docs/ai-dlc/research/analytics-portfolio/` (foundations, SOPs,
+      patterns, best practices), emulating the structure of
+      `/Users/johncabiles/Documents/Obsidian/dbt Certification Test Prep/`.
+      Process rule until then: every research session ends with a dossier so
+      nothing needs re-research.
 
 ## Process notes
 
