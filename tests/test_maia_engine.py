@@ -273,3 +273,90 @@ def test_live_top_move_legal_and_argmax(monkeypatch):
     assert len(r1["priors"]) == board.legal_moves.count()
     assert r1["priors"][0]["uci"] == r1["uci"]
     assert 0.0 < r1["priors"][0]["p"] <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# pick_from_priors (M2 variety — pure, failure-soft by contract)
+# ---------------------------------------------------------------------------
+
+from app.maia_engine import MAIA_MIN_PRIOR, pick_from_priors  # noqa: E402
+
+STARTPOS_PRIORS = [
+    {"uci": "e2e4", "p": 0.6553},
+    {"uci": "d2d4", "p": 0.2231},
+    {"uci": "c2c4", "p": 0.0277},
+    {"uci": "g1f3", "p": 0.0199},  # just under the 0.02 cutoff
+    {"uci": "b1a3", "p": 0.0001},
+]
+
+
+def test_pick_same_seed_same_move():
+    a = pick_from_priors(STARTPOS_PRIORS, 12345)
+    b = pick_from_priors(STARTPOS_PRIORS, 12345)
+    assert a == b
+
+
+def test_pick_variety_across_seeds():
+    picks = {pick_from_priors(STARTPOS_PRIORS, s) for s in range(10)}
+    assert len(picks) >= 2  # smoke: possibility of variety
+
+
+def test_pick_frequency_sweep_and_exclusions():
+    """2000-draw sweep: renormalized frequencies within broad tolerance,
+    ZERO picks of sub-cutoff moves (review fold — beats possibility-only)."""
+    n = 2000
+    counts: dict = {}
+    for s in range(n):
+        u = pick_from_priors(STARTPOS_PRIORS, s)
+        counts[u] = counts.get(u, 0) + 1
+    assert set(counts) <= {"e2e4", "d2d4", "c2c4"}  # g1f3/b1a3 excluded
+    total_mass = 0.6553 + 0.2231 + 0.0277
+    assert counts["e2e4"] / n == pytest.approx(0.6553 / total_mass, abs=0.05)
+    assert counts["d2d4"] / n == pytest.approx(0.2231 / total_mass, abs=0.05)
+
+
+def test_pick_boundary_exactly_at_cutoff_included():
+    priors = [{"uci": "a2a3", "p": 0.98}, {"uci": "h2h4", "p": MAIA_MIN_PRIOR}]
+    picks = {pick_from_priors(priors, s) for s in range(300)}
+    assert picks == {"a2a3", "h2h4"}
+
+
+def test_pick_all_sub_cutoff_returns_argmax_only():
+    priors = [{"uci": "a2a3", "p": 0.019}, {"uci": "h2h4", "p": 0.01}]
+    picks = {pick_from_priors(priors, s) for s in range(50)}
+    assert picks == {"a2a3"}  # argmax always eligible; tail stays excluded
+
+
+def test_pick_empty_and_no_positive_mass_return_none():
+    assert pick_from_priors([], 1) is None
+    assert pick_from_priors([{"uci": "a2a3", "p": 0.0}], 1) is None
+    assert pick_from_priors([{"uci": "a2a3", "p": -0.5}], 1) is None
+
+
+def test_pick_garbage_entries_dropped_never_raise():
+    priors = [
+        {"uci": "e2e4", "p": 0.9},
+        {"p": 0.5},                      # missing uci
+        {"uci": "d2d4"},                 # missing p
+        {"uci": "c2c4", "p": "high"},    # non-numeric
+        {"uci": "g1f3", "p": float("nan")},
+        {"uci": "b1c3", "p": float("inf")},
+        {"uci": 42, "p": 0.3},           # non-str uci
+        None if False else {"uci": "h2h4", "p": -1.0},
+    ]
+    assert pick_from_priors(priors, 7) == "e2e4"
+
+
+def test_pick_duplicate_uci_deduped_not_double_weighted():
+    # e2e4 duplicated at lower p must NOT gain weight; highest-p copy kept.
+    priors = [
+        {"uci": "e2e4", "p": 0.40},
+        {"uci": "e2e4", "p": 0.35},
+        {"uci": "d2d4", "p": 0.40},
+    ]
+    n = 2000
+    counts = {"e2e4": 0, "d2d4": 0}
+    for s in range(n):
+        counts[pick_from_priors(priors, s)] += 1
+    # Deduped weights 0.40/0.40 → ~50/50 (double-weighting would give ~65/35).
+    assert counts["e2e4"] / n == pytest.approx(0.5, abs=0.05)

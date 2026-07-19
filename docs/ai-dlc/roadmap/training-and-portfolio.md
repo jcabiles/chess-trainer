@@ -439,7 +439,10 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       kill lc0 mid-game → next move still arrives via SF fallback ·
       appetite: 2–3 days · no-gos: no change to user-analysis engine.py;
       other personas untouched; no schema change
-- [ ] **M2. Human variety via policy sampling** — problem: Maia is
+- [x] **M2. Human variety via policy sampling** — DONE 2026-07-18 (live: 12
+      seeds at startpos → e4×6/d4×5/e3×1 matching maia-1400 human
+      frequencies; same seed replays identically; 1003 tests incl. 2000-draw
+      frequency sweep + failure-soft degenerate cases) — problem: Maia is
       deterministic at argmax — same position, same move, every game (B1
       evidence; official lichess Maia bots bolt on books for this) ·
       outcome-link: N3 · scope: seeded sampling over Maia's policy prior

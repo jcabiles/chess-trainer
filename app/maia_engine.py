@@ -43,7 +43,9 @@ centipawns and must not flow into the sampling/mistake-band machinery.
 from __future__ import annotations
 
 import asyncio
+import math
 import os
+import random
 import re
 import shutil
 import signal
@@ -157,6 +159,64 @@ def parse_movestats(lines: List[str]) -> List[dict]:
             continue
     out.sort(key=lambda d: d["p"], reverse=True)
     return out
+
+
+#: Howler CUTOFF for policy sampling (M2) — a hard threshold, not a
+#: probability floor: moves under 2% policy weight are excluded (junk tail),
+#: which deliberately sharpens low-entropy positions toward the argmax while
+#: barely touching broad ones. The argmax is always eligible.
+MAIA_MIN_PRIOR: float = 0.02
+
+
+def pick_from_priors(priors: List[dict], seed) -> Optional[str]:
+    """Seeded sample from a Maia policy distribution (M2 variety). Pure.
+
+    Candidate set = entries with ``p >= MAIA_MIN_PRIOR`` plus the argmax
+    (``priors[0]`` after ``parse_movestats``'s descending STABLE sort — equal
+    p keeps parse order, which is what makes ties deterministic); weights are
+    renormalized and one uci is drawn via ``random.Random(seed)``.
+
+    Failure-soft by contract (review fold): entries with missing/non-numeric/
+    non-finite/non-positive ``p`` are dropped; duplicate uci entries are
+    deduped keeping the highest-p one; no usable positive mass (or an empty
+    list) returns ``None`` — this function never raises on garbage input.
+    Deterministic for a fixed *seed*.
+    """
+    cleaned: List[dict] = []
+    seen: dict = {}
+    for entry in priors:
+        try:
+            uci = entry["uci"]
+            p = float(entry["p"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not isinstance(uci, str) or not math.isfinite(p) or p <= 0.0:
+            continue
+        # Dedupe by uci, keeping the highest-p occurrence (never double-weight).
+        prev = seen.get(uci)
+        if prev is not None:
+            if p > cleaned[prev]["p"]:
+                cleaned[prev] = {"uci": uci, "p": p}
+            continue
+        seen[uci] = len(cleaned)
+        cleaned.append({"uci": uci, "p": p})
+
+    if not cleaned:
+        return None
+
+    top = max(cleaned, key=lambda d: d["p"])
+    pool = [d for d in cleaned if d["p"] >= MAIA_MIN_PRIOR]
+    if top not in pool:
+        pool.append(top)  # argmax always eligible, even when all sub-floor
+
+    total = sum(d["p"] for d in pool)
+    r = random.Random(seed).random() * total
+    acc = 0.0
+    for d in pool:
+        acc += d["p"]
+        if r < acc:
+            return d["uci"]
+    return pool[-1]["uci"]  # float-rounding guard
 
 
 class MaiaEngine:

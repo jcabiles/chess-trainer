@@ -351,3 +351,79 @@ def test_maia_not_ready_uses_sf_directly(monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["engine"] == "stockfish"
     assert maia.calls == []
+
+
+# --- Maia variety (M2): sampling at the route level -------------------------
+
+
+class PriorsFakeMaia:
+    """FakeMaia returning a realistic priors distribution; argmax may differ
+    from the reported uci (route must stay self-consistent from chosen_uci)."""
+
+    def __init__(self, priors, uci="e2e4"):
+        self._priors = priors
+        self._uci = uci
+
+    async def top_move(self, fen: str, persona_id: str) -> dict:
+        board = chess.Board(fen)
+        move = chess.Move.from_uci(self._uci)
+        return {"uci": move.uci(), "san": board.san(move), "priors": self._priors}
+
+    async def close(self) -> None:  # pragma: no cover
+        pass
+
+
+def _priors_client(monkeypatch, maia):
+    monkeypatch.setattr(main, "maia_ready_for", lambda pid: pid == "casey")
+    monkeypatch.setattr(main, "get_maia_engine", lambda: maia)
+    app.dependency_overrides[get_bot_engine] = lambda: FakeBot()
+
+
+def _casey_move(c, seed, ply=0):
+    return c.post(
+        "/api/bot/move",
+        json={"fen": START_FEN, "personaId": "casey", "ply": ply, "seed": seed},
+    ).json()
+
+
+def test_maia_sampling_deterministic_and_varied(monkeypatch):
+    priors = [
+        {"uci": "e2e4", "p": 0.50},
+        {"uci": "d2d4", "p": 0.30},
+        {"uci": "c2c4", "p": 0.20},
+    ]
+    _priors_client(monkeypatch, PriorsFakeMaia(priors))
+    with TestClient(app) as c:
+        replay = [_casey_move(c, 42)["moveUci"] for _ in range(2)]
+        spread = {_casey_move(c, s)["moveUci"] for s in range(12)}
+        engines = {_casey_move(c, s)["engine"] for s in range(3)}
+    app.dependency_overrides.clear()
+    assert replay[0] == replay[1]  # same request replays identically
+    assert len(spread) >= 2  # different seeds diverge
+    assert spread <= {"e2e4", "d2d4", "c2c4"}
+    assert engines == {"maia"}
+
+
+def test_maia_sampled_move_consistent_triple(monkeypatch):
+    # Whatever move is sampled, SAN + resulting FEN must derive from IT.
+    priors = [{"uci": "d2d4", "p": 0.99}]  # forces the sampled move \!= argmax uci
+    _priors_client(monkeypatch, PriorsFakeMaia(priors, uci="e2e4"))
+    with TestClient(app) as c:
+        body = _casey_move(c, 1)
+    app.dependency_overrides.clear()
+    assert body["moveUci"] == "d2d4"
+    board = chess.Board(START_FEN)
+    mv = chess.Move.from_uci("d2d4")
+    assert body["moveSan"] == board.san(mv)
+    board.push(mv)
+    assert body["fen"] == board.fen()
+
+
+def test_maia_illegal_or_malformed_sample_falls_back_to_argmax(monkeypatch):
+    for bad in ("e7e5", "zz9x"):  # illegal-in-position, unparseable
+        _priors_client(monkeypatch, PriorsFakeMaia([{"uci": bad, "p": 0.99}]))
+        with TestClient(app) as c:
+            body = _casey_move(c, 1)
+        app.dependency_overrides.clear()
+        assert body["moveUci"] == "e2e4"  # engine-guaranteed argmax
+        assert body["engine"] == "maia"  # never a 500, never SF fallback
