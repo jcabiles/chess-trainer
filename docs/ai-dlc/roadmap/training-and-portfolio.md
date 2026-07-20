@@ -472,6 +472,14 @@ unchecked box. Idea pool for anything not promoted here: [`../backlog.md`](../ba
       live-server dependency; engine calls only through the existing
       bot/maia engine modules; eval-set positions never enter any tuning
       loop
+      · **build status 2026-07-19: harness + tests + spec SHIPPED**
+      (`tools/realism_audit.py` — shared `select_persona_move`, independent
+      depth-14 loss oracle, Wilson CIs, sf-only/current modes; 19 engine-free
+      tests on synthetic ECO-disjoint fixtures; verified offline against real
+      weak-SF bot + strong-SF oracle). REMAINING before checkbox: run
+      `tools/fetch_lichess_sample.py` against one lichess month (network) to
+      populate `data/realism/`, then commit `docs/analytics/realism-baseline.md`
+      with real eval-set numbers + eval hash.
 - [ ] **M4. Switch the ladder to band-matched Maia** — problem: P5 across
       the whole existing roster · outcome-link: N3 · scope: personas ≤1900
       get `maiaBand` (Ming Ling/Nina/Amanda 1350-band → 1300/1400 nets,

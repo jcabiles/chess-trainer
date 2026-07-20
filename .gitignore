@@ -33,6 +33,10 @@ data/games.db
 data/games/*
 !data/games/.gitkeep
 
+# Realism audit (M3): raw lichess stream cache — never committed. The small
+# derived audit sets (data/realism/*.jsonl + EVAL_SHA256) ARE committed.
+data/lichess/
+
 # Local machine-specific helper script (hardcoded ~/Downloads paths)
 scripts/bulk_import.py
 

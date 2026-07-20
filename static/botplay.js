@@ -820,7 +820,10 @@ function startGame() {
   });
   hub().setMode('bot-play');
   hub().setOrientation(userColor);
-  hub().setBoardPosition(INITIAL_FEN);
+  // Full sync resets Chessground's board, turnColor, last-move highlight, and
+  // legal dests. A board-only FEN reset can leave a stale turnColor from the
+  // prior analysis position, which makes White's first bot-game move snap back.
+  hub().syncBoard();
 
   resetTick();
   renderClocks();
@@ -999,6 +1002,7 @@ async function requestBotMove(myToken, fen) {
   // Apply the bot move. ORDERING CONTRACT (T3): botAppendMove →
   // botSetResult(if terminal) → persist → refreshAnalysis → hand turn back.
   hub().botAppendMove(data.moveUci);
+  hub().syncBoard();
   const after = currentPos();
   const outcome = autoOutcome(after);
   if (outcome) hub().botSetResult(outcome.result);
