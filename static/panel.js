@@ -307,14 +307,16 @@ export function renderAnalysisPanel(a, opts = {}) {
   }
 
   // --- Best move ---
+  // suppressBest (blunders-only, non-blunder move) blanks the engine's best move
+  // and PV so a quiet move never reveals the top line — only actual blunders coach.
   const bmEl = byId('best-move');
-  if (bmEl) bmEl.textContent = (a && a.bestMoveSan) || '—';
+  if (bmEl) bmEl.textContent = (!opts.suppressBest && a && a.bestMoveSan) || '—';
 
   // --- PV (numbered, tokenized) ---
   const pvEl = byId('pv');
   if (pvEl) {
     pvEl.textContent = '';
-    if (a && a.pvSan && a.pvSan.length) {
+    if (!opts.suppressBest && a && a.pvSan && a.pvSan.length) {
       // Derive the fullmove + side-to-move at the current position.
       // The PV describes moves from THIS resulting position onward.
       let fullMove = 1;

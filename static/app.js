@@ -919,12 +919,13 @@ function renderAnalysis(a, opts = {}) {
 // never a flag inside panel.js, which is shared with review replay (via
 // hub.renderAnalysis) and trap practice (direct renderAnalysisPanel calls);
 // those paths must not inherit the filter. Checkmate/Draw stay visible (they
-// are game-enders, not quality coaching); eval number/bar/best-line stay too.
+// are game-enders, not quality coaching); eval number/bar stay too, but the
+// best move + PV are suppressed so a quiet non-blunder never reveals the top line.
 function analysisOpts(a) {
   if (analysisMode !== 'blunders') return {};
   const q = a && a.quality;
   if (q === 'blunder' || q === 'checkmate' || q === 'draw') return {};
-  return { suppressQuality: true, suppressRetro: true };
+  return { suppressQuality: true, suppressRetro: true, suppressBest: true };
 }
 
 // Book move: the server skipped Stockfish (the line is known theory), so there is
